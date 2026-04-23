@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
 import { Head, router } from '@inertiajs/vue3';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onBeforeMount, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps<{
     funnel: {
@@ -17,18 +17,74 @@ const props = defineProps<{
     };
 }>();
 
-const pageContainer = ref<HTMLElement | null>(null);
-const submitting = ref(false);
-const submitError = ref('');
-let styleEl: HTMLStyleElement | null = null;
+const GFONTS_URL =
+    'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900' +
+    '&family=Roboto:wght@400;700&family=Open+Sans:wght@400;600;700' +
+    '&family=Lato:wght@400;700&family=Montserrat:wght@400;600;700;900' +
+    '&family=Poppins:wght@400;600;700;900&family=Raleway:wght@400;600;700' +
+    '&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700' +
+    '&family=Plus+Jakarta+Sans:wght@400;600;700&family=Outfit:wght@400;600;700;900' +
+    '&family=Nunito:wght@400;600;700&family=Oswald:wght@400;500;600;700' +
+    '&family=Source+Sans+3:wght@400;600;700' +
+    '&family=Playfair+Display:ital,wght@0,400;0,700;1,400' +
+    '&family=Merriweather:ital,wght@0,400;0,700;1,400' +
+    '&family=Lora:ital,wght@0,400;0,700;1,400&display=swap';
 
-/* ── Inject GrapesJS CSS into <head> ───────────────────── */
-const injectCss = (css: string): void => {
-    styleEl = document.createElement('style');
-    styleEl.setAttribute('data-dfy-optin', '1');
-    styleEl.textContent = css;
-    document.head.appendChild(styleEl);
-};
+const pageContainer = ref<HTMLElement | null>(null);
+const submitting    = ref(false);
+const submitError   = ref('');
+
+/* ── Injected <head> elements (kept for cleanup) ─────── */
+let elPreconnect1: HTMLLinkElement | null  = null;
+let elPreconnect2: HTMLLinkElement | null  = null;
+let elFontLink: HTMLLinkElement | null     = null;
+let elReset: HTMLStyleElement | null       = null;
+let elPageCss: HTMLStyleElement | null     = null;
+
+/**
+ * Inject all styles BEFORE the component's DOM is inserted so the browser
+ * never paints unstyled HTML (eliminates FOUC completely).
+ */
+onBeforeMount(() => {
+    if (!props.pageHtml) {
+        return;
+    }
+
+    elPreconnect1 = document.createElement('link');
+    elPreconnect1.rel = 'preconnect';
+    elPreconnect1.href = 'https://fonts.googleapis.com';
+    document.head.appendChild(elPreconnect1);
+
+    elPreconnect2 = document.createElement('link');
+    elPreconnect2.rel = 'preconnect';
+    elPreconnect2.href = 'https://fonts.gstatic.com';
+    elPreconnect2.crossOrigin = 'anonymous';
+    document.head.appendChild(elPreconnect2);
+
+    elFontLink = document.createElement('link');
+    elFontLink.rel = 'stylesheet';
+    elFontLink.href = GFONTS_URL;
+    document.head.appendChild(elFontLink);
+
+    /* Strip app-shell margins so the page fills the viewport edge-to-edge */
+    elReset = document.createElement('style');
+    elReset.textContent = 'html,body,#app{margin:0!important;padding:0!important;width:100%!important;background:transparent!important;}';
+    document.head.appendChild(elReset);
+
+    if (props.pageCss) {
+        elPageCss = document.createElement('style');
+        elPageCss.textContent = props.pageCss;
+        document.head.appendChild(elPageCss);
+    }
+});
+
+onUnmounted(() => {
+    elPreconnect1?.remove();
+    elPreconnect2?.remove();
+    elFontLink?.remove();
+    elReset?.remove();
+    elPageCss?.remove();
+});
 
 /* ── Intercept the form and submit via Inertia ─────────── */
 const wireForm = (): void => {
@@ -44,7 +100,6 @@ const wireForm = (): void => {
         return;
     }
 
-    /* Prevent native submit */
     form.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
 
@@ -64,7 +119,7 @@ const wireForm = (): void => {
         }
 
         submitError.value = '';
-        submitting.value = true;
+        submitting.value  = true;
 
         const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
 
@@ -78,7 +133,7 @@ const wireForm = (): void => {
             { name, email },
             {
                 onError: () => {
-                    submitting.value = false;
+                    submitting.value  = false;
                     submitError.value = 'Something went wrong. Please try again.';
 
                     if (btn) {
@@ -92,16 +147,7 @@ const wireForm = (): void => {
 };
 
 onMounted(() => {
-    if (props.pageCss) {
-        injectCss(props.pageCss);
-    }
-
     wireForm();
-});
-
-onUnmounted(() => {
-    /* Clean up injected style when navigating away */
-    styleEl?.remove();
 });
 </script>
 
@@ -109,10 +155,15 @@ onUnmounted(() => {
     <Head :title="page?.hero?.headline ?? funnel.name" />
 
     <!--
-        If the funnel has GrapesJS-saved HTML, render it raw.
-        The CSS has already been injected into <head> in onMounted.
+        GrapesJS pages: styles are injected into <head> via onBeforeMount so the
+        browser never paints unstyled HTML (no FOUC).
     -->
-    <div v-if="pageHtml" ref="pageContainer" v-html="pageHtml" />
+    <div
+        v-if="pageHtml"
+        ref="pageContainer"
+        v-html="pageHtml"
+        style="margin:0;padding:0;width:100%;min-height:100vh;overflow-x:hidden;"
+    />
 
     <!--
         Legacy fallback: old funnels that still use the hero-object schema

@@ -49,31 +49,51 @@ const props = defineProps<{
 }>();
 
 const optinPage = props.funnel.pages.find((p) => p.page_type === 'optin');
-const editorContainer = ref<HTMLElement | null>(null);
-const copiedLink = ref<'optin' | 'webinar' | null>(null);
-const savingPage = ref(false);
-const savingSettings = ref(false);
-const publishing = ref(false);
-const activeTab = ref('optin');
 
-/*
- * When the user navigates away from the optin tab and back, GrapesJS's
- * internal iframe is painted at 0×0 while the panel is hidden. Calling
- * editor.refresh() after the next DOM tick forces a full canvas repaint.
- */
+/* ─── Editor refs ──────────────────────────────────────────────────────── */
+const editorContainer = ref<HTMLElement | null>(null);
+const blocksContainer = ref<HTMLElement | null>(null);
+const stylesContainer = ref<HTMLElement | null>(null);
+const gjsEditor        = ref<any>(null);
+const showStyles       = ref(true);
+const activeDevice     = ref<'desktop' | 'mobile'>('desktop');
+const isFullscreen     = ref(false);
+
+const copiedLink    = ref<'optin' | 'webinar' | null>(null);
+const savingPage    = ref(false);
+const savingSettings = ref(false);
+const publishing    = ref(false);
+const activeTab     = ref('optin');
+
+/* Refresh canvas when returning to optin tab (hidden iframe collapses to 0×0) */
 watch(activeTab, (tab) => {
     if (tab !== 'optin') {
         return;
     }
 
     nextTick(() => {
-        const editor = editorContainer.value && (editorContainer.value as any).__gjsEditor;
-
-        if (editor) {
-            editor.refresh();
+        if (gjsEditor.value) {
+            gjsEditor.value.refresh();
         }
     });
 });
+
+/* ─── Toolbar actions ──────────────────────────────────────────────────── */
+const editorUndo = () => gjsEditor.value?.runCommand('core:undo');
+const editorRedo = () => gjsEditor.value?.runCommand('core:redo');
+
+function setDevice(device: 'desktop' | 'mobile'): void {
+    activeDevice.value = device;
+    gjsEditor.value?.setDevice(device === 'desktop' ? 'Desktop' : 'Mobile');
+}
+
+function toggleFullscreen(): void {
+    isFullscreen.value = !isFullscreen.value;
+    // Recalculate canvas dimensions after the DOM updates
+    nextTick(() => {
+        gjsEditor.value?.refresh();
+    });
+}
 
 const pageForm = useForm<{ page_type: 'optin' | 'webinar'; schema: any }>({
     page_type: 'optin',
@@ -167,13 +187,12 @@ function providerIcon(provider: string): string {
 }
 
 onMounted(() => {
-    if (!editorContainer.value) {
+    if (!editorContainer.value || !blocksContainer.value || !stylesContainer.value) {
         return;
     }
 
     const schema = pageForm.schema as any;
 
-    /* Use saved GrapesJS HTML, or fall back to the template default HTML */
     const initialHtml = schema?.html ?? `
 <div class="dfy-page">
   <section class="dfy-hero">
@@ -190,7 +209,6 @@ onMounted(() => {
   </section>
 </div>`;
 
-    /* Use saved GrapesJS CSS, or fall back to a basic starter style */
     const initialCss = schema?.css ?? `
 .dfy-page{min-height:100vh;background:linear-gradient(140deg,#060d1a 0%,#0d2039 100%);display:flex;align-items:center;justify-content:center;padding:40px 16px}
 .dfy-inner{max-width:520px;width:100%;text-align:center}
@@ -202,21 +220,360 @@ onMounted(() => {
 .dfy-input::placeholder{color:rgba(255,255,255,.35)}
 .dfy-btn{width:100%;padding:15px;background:linear-gradient(135deg,#40E0D0,#2dc4b5);color:#060d1a;font-size:16px;font-weight:800;border:none;border-radius:8px;cursor:pointer}`;
 
+    /* ── Inline SVG icons for blocks ─────────────────────────────────────── */
+    const svg = (path: string) =>
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+
+    /* ── GrapesJS init ───────────────────────────────────────────────────── */
     const editor = grapesjs.init({
         container: editorContainer.value,
         fromElement: false,
-        height: '480px',
+        height: '100%',
+        width: 'auto',
         storageManager: false,
         components: initialHtml,
         style: initialCss,
+
+        /* Disable ALL default panels — we build our own toolbar in Vue */
+        panels: { defaults: [] },
+
+        deviceManager: {
+            devices: [
+                { name: 'Desktop', width: '' },
+                { name: 'Mobile',  width: '375px', widthMedia: '480px' },
+            ],
+        },
+
+        /* Inject into the canvas iframe: fill height + load Google Fonts */
+        canvas: {
+            styles: [
+                'data:text/css,html,body{min-height:100%;height:100%;}',
+                'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=Roboto:wght@400;700&family=Open+Sans:wght@400;600;700&family=Lato:wght@400;700&family=Montserrat:wght@400;600;700;900&family=Poppins:wght@400;600;700;900&family=Raleway:wght@400;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700&family=Plus+Jakarta+Sans:wght@400;600;700&family=Outfit:wght@400;600;700;900&family=Nunito:wght@400;600;700&family=Oswald:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Merriweather:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,700;1,400&display=swap',
+            ],
+        },
+
+        /* Put the block picker in our custom left sidebar */
+        blockManager: {
+            appendTo: blocksContainer.value,
+        },
+
+        /* Put the style editor in our custom right sidebar */
+        styleManager: ({
+            appendTo: stylesContainer.value,
+            sectors: [
+                {
+                    name: 'Typography', open: true,
+                    properties: [
+                        { label: 'Font Family', property: 'font-family', type: 'select', defaults: 'inherit',
+                            options: [
+                                { value: 'inherit',                                    name: '— Default —' },
+                                /* ── Sans-serif ── */
+                                { value: "'Inter', sans-serif",                        name: 'Inter' },
+                                { value: "'Roboto', sans-serif",                       name: 'Roboto' },
+                                { value: "'Open Sans', sans-serif",                    name: 'Open Sans' },
+                                { value: "'Lato', sans-serif",                         name: 'Lato' },
+                                { value: "'Montserrat', sans-serif",                   name: 'Montserrat' },
+                                { value: "'Poppins', sans-serif",                      name: 'Poppins' },
+                                { value: "'Raleway', sans-serif",                      name: 'Raleway' },
+                                { value: "'DM Sans', sans-serif",                      name: 'DM Sans' },
+                                { value: "'Plus Jakarta Sans', sans-serif",            name: 'Plus Jakarta Sans' },
+                                { value: "'Outfit', sans-serif",                       name: 'Outfit' },
+                                { value: "'Nunito', sans-serif",                       name: 'Nunito' },
+                                { value: "'Oswald', sans-serif",                       name: 'Oswald' },
+                                { value: "'Source Sans 3', sans-serif",                name: 'Source Sans 3' },
+                                /* ── Serif ── */
+                                { value: "'Playfair Display', serif",                  name: 'Playfair Display' },
+                                { value: "'Merriweather', serif",                      name: 'Merriweather' },
+                                { value: "'Lora', serif",                              name: 'Lora' },
+                                { value: "Georgia, serif",                             name: 'Georgia' },
+                                /* ── System ── */
+                                { value: "Arial, Helvetica, sans-serif",              name: 'Arial' },
+                                { value: "'Helvetica Neue', Helvetica, sans-serif",   name: 'Helvetica Neue' },
+                                { value: "'Trebuchet MS', sans-serif",                name: 'Trebuchet MS' },
+                                { value: "'Times New Roman', Times, serif",           name: 'Times New Roman' },
+                            ],
+                        },
+                        { label: 'Size',        property: 'font-size',   type: 'integer', units: ['px','rem','em','%'], defaults: '16px' },
+                        { label: 'Weight',      property: 'font-weight', type: 'select',  defaults: '400',
+                            options: [{ value: '300', name: 'Light' }, { value: '400', name: 'Regular' }, { value: '600', name: 'Semi-Bold' }, { value: '700', name: 'Bold' }, { value: '900', name: 'Black' }] },
+                        { label: 'Color',       property: 'color',       type: 'color' },
+                        { label: 'Align',       property: 'text-align',  type: 'radio',   defaults: 'left',
+                            options: [{ value: 'left', name: 'L' }, { value: 'center', name: 'C' }, { value: 'right', name: 'R' }] },
+                        { label: 'Line Height', property: 'line-height', type: 'integer', units: ['','px','em'], defaults: '1.5' },
+                    ],
+                },
+                {
+                    name: 'Background', open: false,
+                    properties: [
+                        { label: 'Color',    property: 'background-color', type: 'color' },
+                    ],
+                },
+                {
+                    name: 'Spacing', open: false,
+                    properties: [
+                        { property: 'padding', type: 'composite',
+                            properties: [
+                                { property: 'padding-top',    type: 'integer', units: ['px','%','em'], defaults: '0' },
+                                { property: 'padding-right',  type: 'integer', units: ['px','%','em'], defaults: '0' },
+                                { property: 'padding-bottom', type: 'integer', units: ['px','%','em'], defaults: '0' },
+                                { property: 'padding-left',   type: 'integer', units: ['px','%','em'], defaults: '0' },
+                            ]},
+                        { property: 'margin', type: 'composite',
+                            properties: [
+                                { property: 'margin-top',    type: 'integer', units: ['px','%','em','auto'], defaults: '0' },
+                                { property: 'margin-right',  type: 'integer', units: ['px','%','em','auto'], defaults: '0' },
+                                { property: 'margin-bottom', type: 'integer', units: ['px','%','em','auto'], defaults: '0' },
+                                { property: 'margin-left',   type: 'integer', units: ['px','%','em','auto'], defaults: '0' },
+                            ]},
+                    ],
+                },
+                {
+                    name: 'Border', open: false,
+                    properties: [
+                        { label: 'Radius', property: 'border-radius', type: 'integer', units: ['px','%'] },
+                        { label: 'Width',  property: 'border-width',  type: 'integer', units: ['px'] },
+                        { label: 'Color',  property: 'border-color',  type: 'color' },
+                        { label: 'Style',  property: 'border-style',  type: 'select',
+                            options: [{ value: 'none', name: 'None' }, { value: 'solid', name: 'Solid' }, { value: 'dashed', name: 'Dashed' }, { value: 'dotted', name: 'Dotted' }] },
+                    ],
+                },
+                {
+                    name: 'Size', open: false,
+                    properties: [
+                        { label: 'Width',     property: 'width',     type: 'integer', units: ['px','%','vw','auto'] },
+                        { label: 'Max Width', property: 'max-width', type: 'integer', units: ['px','%','none'] },
+                        { label: 'Height',    property: 'height',    type: 'integer', units: ['px','%','vh','auto'] },
+                    ],
+                },
+            ],
+        } as any),
     });
 
-    editor.on('component:remove:before', (component: any, remove: () => void, opts: any) => {
+    /* ── Pre-built drag-and-drop blocks ──────────────────────────────────── */
+    const BLOCKS = [
+        {
+            id: 'heading', label: 'Heading', category: 'Content',
+            media: svg('<path d="M4 6h16M4 12h10M4 18h7"/>'),
+            content: '<h2 style="font-size:2rem;font-weight:800;color:#111827;margin:0 0 8px;line-height:1.2;">Your Headline Here</h2>',
+        },
+        {
+            id: 'paragraph', label: 'Paragraph', category: 'Content',
+            media: svg('<path d="M4 6h16M4 10h16M4 14h12M4 18h9"/>'),
+            content: '<p style="font-size:1rem;color:#4B5563;line-height:1.7;margin:0 0 16px;">Click to edit this paragraph. Write something compelling about your webinar or offer.</p>',
+        },
+        {
+            id: 'button', label: 'Button', category: 'Content',
+            media: svg('<rect x="2" y="7" width="20" height="10" rx="3"/><path d="M9 12h6"/>'),
+            content: '<a href="#" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#40E0D0,#2dc4b5);color:#060d1a;font-size:15px;font-weight:700;border-radius:8px;text-decoration:none;">Register Now →</a>',
+        },
+        {
+            id: 'badge', label: 'Badge', category: 'Content',
+            media: svg('<rect x="3" y="8" width="18" height="8" rx="4"/><path d="M9 12h6"/>'),
+            content: '<span style="display:inline-block;background:rgba(64,224,208,0.12);border:1px solid rgba(64,224,208,0.3);color:#0d9488;padding:6px 16px;border-radius:100px;font-size:12px;font-weight:700;letter-spacing:0.06em;">🎓 FREE WEBINAR</span>',
+        },
+        {
+            id: 'list', label: 'Check List', category: 'Content',
+            media: svg('<path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138"/>'),
+            content: `<ul style="list-style:none;padding:0;margin:0;">
+<li style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;font-size:15px;color:#374151;"><span style="color:#40E0D0;font-weight:800;font-size:16px;line-height:1.5;">✓</span>First benefit or feature here</li>
+<li style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;font-size:15px;color:#374151;"><span style="color:#40E0D0;font-weight:800;font-size:16px;line-height:1.5;">✓</span>Second benefit or feature here</li>
+<li style="display:flex;align-items:flex-start;gap:10px;font-size:15px;color:#374151;"><span style="color:#40E0D0;font-weight:800;font-size:16px;line-height:1.5;">✓</span>Third benefit or feature here</li>
+</ul>`,
+        },
+        {
+            id: 'testimonial', label: 'Testimonial', category: 'Content',
+            media: svg('<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>'),
+            content: `<blockquote style="background:rgba(64,224,208,0.07);border-left:4px solid #40E0D0;padding:20px 24px;border-radius:0 12px 12px 0;margin:0;">
+<p style="font-size:1rem;color:#374151;font-style:italic;line-height:1.7;margin:0 0 10px;">"This webinar completely changed how I approach my business. Practical, actionable, and incredibly valuable!"</p>
+<cite style="font-size:0.85rem;font-weight:600;color:#111827;font-style:normal;">— Jane Smith, CEO at Example Co.</cite>
+</blockquote>`,
+        },
+        {
+            id: 'image', label: 'Image', category: 'Media',
+            media: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>'),
+            content: '<img src="https://placehold.co/800x400/40E0D0/060d1a?text=Your+Image" style="max-width:100%;height:auto;display:block;border-radius:10px;" alt="Image"/>',
+        },
+        {
+            id: 'video', label: 'Video', category: 'Media',
+            media: svg('<rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10 9 16 12 10 15 10 9"/>'),
+            content: '<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;background:#000;"><iframe style="position:absolute;top:0;left:0;width:100%;height:100%;" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allowfullscreen></iframe></div>',
+        },
+        {
+            id: 'cols-2', label: '2 Columns', category: 'Layout',
+            media: svg('<rect x="2" y="4" width="9" height="16" rx="1.5"/><rect x="13" y="4" width="9" height="16" rx="1.5"/>'),
+            content: '<div style="display:flex;gap:16px;"><div style="flex:1;padding:20px 16px;background:rgba(0,0,0,0.03);border-radius:8px;min-height:80px;"><p style="color:#374151;margin:0;">Column 1</p></div><div style="flex:1;padding:20px 16px;background:rgba(0,0,0,0.03);border-radius:8px;min-height:80px;"><p style="color:#374151;margin:0;">Column 2</p></div></div>',
+        },
+        {
+            id: 'cols-3', label: '3 Columns', category: 'Layout',
+            media: svg('<rect x="2" y="4" width="6" height="16" rx="1.5"/><rect x="9" y="4" width="6" height="16" rx="1.5"/><rect x="16" y="4" width="6" height="16" rx="1.5"/>'),
+            content: '<div style="display:flex;gap:12px;"><div style="flex:1;padding:16px 12px;background:rgba(0,0,0,0.03);border-radius:8px;min-height:70px;"><p style="color:#374151;margin:0;font-size:14px;">Col 1</p></div><div style="flex:1;padding:16px 12px;background:rgba(0,0,0,0.03);border-radius:8px;min-height:70px;"><p style="color:#374151;margin:0;font-size:14px;">Col 2</p></div><div style="flex:1;padding:16px 12px;background:rgba(0,0,0,0.03);border-radius:8px;min-height:70px;"><p style="color:#374151;margin:0;font-size:14px;">Col 3</p></div></div>',
+        },
+        {
+            id: 'section', label: 'Section', category: 'Layout',
+            media: svg('<rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 9h20"/>'),
+            content: '<section style="padding:60px 24px;background:linear-gradient(135deg,#060d1a,#0d2039);text-align:center;"><h2 style="font-size:2rem;font-weight:900;color:#fff;margin:0 0 12px;">Section Heading</h2><p style="font-size:1rem;color:rgba(255,255,255,0.6);margin:0 auto;max-width:480px;line-height:1.7;">Add your description here to tell visitors what this section is about.</p></section>',
+        },
+        {
+            id: 'divider', label: 'Divider', category: 'Layout',
+            media: svg('<line x1="5" y1="12" x2="19" y2="12"/>'),
+            content: '<hr style="border:none;border-top:1px solid rgba(0,0,0,0.1);margin:24px 0;"/>',
+        },
+        {
+            id: 'spacer', label: 'Spacer', category: 'Layout',
+            media: svg('<path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/>'),
+            content: '<div style="height:48px;"></div>',
+        },
+    ];
+
+    BLOCKS.forEach((b) => {
+        editor.BlockManager.add(b.id, { label: b.label, category: b.category, media: b.media, content: b.content });
+    });
+
+    /* ── Lock the opt-in form ─────────────────────────────────────────────── */
+    editor.on('component:remove:before', (component: any, _remove: () => void, opts: any) => {
         if (component?.getAttributes()?.['data-locked-form']) {
             opts.abort = true;
         }
     });
 
+    /* ── Inject a modern light theme over GrapesJS defaults ──────────────── */
+    if (!document.getElementById('gjs-dfy-theme')) {
+        const s = document.createElement('style');
+        s.id = 'gjs-dfy-theme';
+        s.textContent = `
+/* ──────────────────────────────────────────────────────────────────────────
+   DFY GrapesJS Light Theme — overrides the default dark gray UI
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Canvas — force full-width AND full-height fill of the container */
+.gjs-cv-canvas {
+  background: #111827 !important;
+  width: 100% !important;
+  height: 100% !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+}
+.gjs-cv-canvas__frames {
+  width: 100% !important;
+  height: 100% !important;
+}
+/* Do NOT force width on frame-wrapper/frame — GrapesJS needs to set 375px for mobile */
+.gjs-frame-wrapper { height: 100% !important; }
+.gjs-frame          { height: 100% !important; min-height: 100% !important; }
+
+/* Hide built-in GrapesJS panel bar (we replaced it with our Vue toolbar) */
+.gjs-pn-panels { display: none !important; }
+
+/* Block categories */
+.gjs-block-category .gjs-title {
+  background: transparent !important;
+  color: #9ca3af !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  padding: 12px 10px 4px !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+.gjs-block-category .gjs-caret-icon { color: #9ca3af !important; }
+
+/* Block grid */
+.gjs-blocks-c {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 5px !important;
+  padding: 8px !important;
+}
+
+/* Single block tile */
+.gjs-block {
+  background: #fff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  padding: 10px 4px 7px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 5px !important;
+  cursor: grab !important;
+  transition: border-color .15s, box-shadow .15s, transform .15s !important;
+  min-height: unset !important;
+  width: auto !important;
+}
+.gjs-block:hover {
+  border-color: #40E0D0 !important;
+  background: rgba(64,224,208,.06) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 3px 10px rgba(64,224,208,.18) !important;
+}
+.gjs-block svg {
+  width: 22px !important; height: 22px !important;
+  color: #9ca3af !important;
+  transition: color .15s !important;
+}
+.gjs-block:hover svg { color: #0d9488 !important; }
+
+/* Block label */
+.gjs-block-label {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+  text-align: center !important;
+  line-height: 1.2 !important;
+}
+
+/* Style manager sectors */
+.gjs-sm-sector {
+  border: none !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+  background: transparent !important;
+}
+.gjs-sm-sector .gjs-sm-title {
+  background: transparent !important;
+  padding: 10px 12px 8px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #9ca3af !important;
+  text-transform: uppercase !important;
+  letter-spacing: .06em !important;
+  border: none !important;
+}
+.gjs-sm-properties { padding: 4px 10px 12px !important; }
+
+/* Style inputs */
+.gjs-field {
+  background: #fff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  color: #111827 !important;
+  font-size: 12px !important;
+}
+.gjs-field:focus-within { border-color: #40E0D0 !important; box-shadow: 0 0 0 2px rgba(64,224,208,.15) !important; }
+.gjs-sm-label { font-size: 11px !important; color: #6b7280 !important; font-weight: 500 !important; margin-bottom: 3px !important; }
+
+/* Select element highlight */
+.gjs-selected { outline: 2px solid #40E0D0 !important; }
+
+/* Floating element toolbar (del, move, etc.) */
+.gjs-toolbar { background: #111827 !important; border-radius: 8px !important; box-shadow: 0 4px 12px rgba(0,0,0,.3) !important; }
+.gjs-toolbar-item { border-right: 1px solid rgba(255,255,255,.08) !important; }
+.gjs-toolbar-item:hover { background: rgba(64,224,208,.15) !important; }
+.gjs-toolbar-item svg { color: #fff !important; }
+
+/* Drop placeholder */
+.gjs-placeholder { background: #40E0D0 !important; opacity: .4 !important; }
+.gjs-placeholder-int { background: #2dc4b5 !important; }
+
+/* Scrollbar */
+.gjs-blocks-c::-webkit-scrollbar, .gjs-sm-properties::-webkit-scrollbar { width: 3px !important; }
+.gjs-blocks-c::-webkit-scrollbar-thumb, .gjs-sm-properties::-webkit-scrollbar-thumb { background: #d1d5db !important; border-radius: 2px !important; }
+        `;
+        document.head.appendChild(s);
+    }
+
+    gjsEditor.value = editor;
     (editorContainer.value as any).__gjsEditor = editor;
 });
 </script>
@@ -314,42 +671,143 @@ onMounted(() => {
             </TabsList>
 
             <!-- ── Tab: Opt-in Editor ── -->
-            <TabsContent value="optin" class="space-y-4">
-                <Card class="border shadow-sm">
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-base font-semibold">Opt-in Page Editor</CardTitle>
-                        <CardDescription class="text-xs">
-                            Drag and drop to customise your opt-in page. The lead capture form is locked.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent class="space-y-4">
-                        <!-- GrapesJS canvas -->
-                        <div ref="editorContainer" class="overflow-hidden rounded-lg border" />
+            <TabsContent value="optin" class="m-0 p-0">
+                <!-- Full-height 3-pane editor workspace -->
+                <div
+                    class="flex flex-col overflow-hidden border shadow-sm"
+                    :class="isFullscreen
+                        ? 'fixed inset-0 z-50 rounded-none'
+                        : 'rounded-xl'"
+                    :style="isFullscreen ? '' : 'height: calc(100vh - 210px); min-height: 520px;'"
+                >
+                    <!-- ── Toolbar ── -->
+                    <div class="flex shrink-0 items-center gap-1 border-b bg-card px-3 py-1.5">
 
-                        <!-- Tip -->
-                        <div class="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-2.5 text-xs text-muted-foreground">
-                            <Icon icon="heroicons:information-circle" class="size-4 shrink-0 text-primary mt-0.5" />
-                            <span>Edit your opt-in page directly in the canvas above. The form (name &amp; email fields) is locked to prevent accidental deletion. Click <strong>Save</strong> when done — your design will appear on the public page exactly as shown.</span>
+                        <!-- Undo / Redo -->
+                        <button
+                            title="Undo"
+                            class="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            @click="editorUndo"
+                        >
+                            <Icon icon="heroicons:arrow-uturn-left" class="size-3.5" />
+                        </button>
+                        <button
+                            title="Redo"
+                            class="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            @click="editorRedo"
+                        >
+                            <Icon icon="heroicons:arrow-uturn-right" class="size-3.5" />
+                        </button>
+
+                        <div class="mx-1.5 h-4 w-px bg-border" />
+
+                        <!-- Device switcher -->
+                        <button
+                            title="Desktop preview"
+                            class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
+                            :class="activeDevice === 'desktop' ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            @click="setDevice('desktop')"
+                        >
+                            <Icon icon="heroicons:computer-desktop" class="size-3.5" />
+                            Desktop
+                        </button>
+                        <button
+                            title="Mobile preview"
+                            class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
+                            :class="activeDevice === 'mobile' ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            @click="setDevice('mobile')"
+                        >
+                            <Icon icon="heroicons:device-phone-mobile" class="size-3.5" />
+                            Mobile
+                        </button>
+
+                        <div class="flex-1" />
+
+                        <!-- Lock indicator -->
+                        <div class="mr-1 flex items-center gap-1 text-[0.68rem] text-muted-foreground">
+                            <Icon icon="heroicons:lock-closed" class="size-3 text-[#FFAD00]" />
+                            Form locked
                         </div>
 
-                        <div class="flex justify-end">
-                            <Button
-                                size="sm"
-                                class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
-                                :disabled="savingPage || pageForm.processing"
-                                @click="savePage"
-                            >
-                                <Icon
-                                    v-if="savingPage"
-                                    icon="heroicons:arrow-path"
-                                    class="size-3.5 animate-spin"
-                                />
-                                <Icon v-else icon="heroicons:check" class="size-3.5" />
-                                {{ savingPage ? 'Saving…' : 'Save opt-in page' }}
-                            </Button>
+                        <!-- Toggle styles panel -->
+                        <button
+                            title="Toggle Styles panel"
+                            class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
+                            :class="showStyles ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            @click="showStyles = !showStyles"
+                        >
+                            <Icon icon="heroicons:paint-brush" class="size-3.5" />
+                            Styles
+                        </button>
+
+                        <!-- Fullscreen toggle -->
+                        <button
+                            :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+                            class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
+                            :class="isFullscreen ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            @click="toggleFullscreen"
+                        >
+                            <Icon
+                                :icon="isFullscreen ? 'heroicons:arrows-pointing-in' : 'heroicons:arrows-pointing-out'"
+                                class="size-3.5"
+                            />
+                            {{ isFullscreen ? 'Exit' : 'Expand' }}
+                        </button>
+
+                        <div class="mx-1.5 h-4 w-px bg-border" />
+
+                        <!-- Save button -->
+                        <Button
+                            size="sm"
+                            class="h-7 gap-1.5 bg-primary text-xs text-primary-foreground hover:opacity-90"
+                            :disabled="savingPage || pageForm.processing"
+                            @click="savePage"
+                        >
+                            <Icon v-if="savingPage" icon="heroicons:arrow-path" class="size-3 animate-spin" />
+                            <Icon v-else icon="heroicons:cloud-arrow-up" class="size-3" />
+                            {{ savingPage ? 'Saving…' : 'Save Page' }}
+                        </Button>
+                    </div>
+
+                    <!-- ── Main editor area ── -->
+                    <div class="flex min-h-0 flex-1 overflow-hidden">
+
+                        <!-- Left: Blocks panel -->
+                        <div class="flex w-40 shrink-0 flex-col border-r bg-card">
+                            <div class="shrink-0 border-b px-3 py-2">
+                                <p class="text-[0.63rem] font-bold uppercase tracking-widest text-muted-foreground">Elements</p>
+                                <p class="mt-0.5 text-[0.6rem] text-muted-foreground/70">Drag onto canvas</p>
+                            </div>
+                            <!-- GrapesJS BlockManager appended here -->
+                            <div ref="blocksContainer" class="flex-1 overflow-y-auto" />
                         </div>
-                    </CardContent>
-                </Card>
+
+                        <!-- Center: Canvas -->
+                        <div ref="editorContainer" class="relative min-h-0 flex-1 overflow-hidden bg-slate-100" />
+
+                        <!-- Right: Styles panel (toggleable) -->
+                        <Transition
+                            enter-active-class="transition-all duration-200 ease-out"
+                            enter-from-class="opacity-0 translate-x-3"
+                            leave-active-class="transition-all duration-150 ease-in"
+                            leave-to-class="opacity-0 translate-x-3"
+                        >
+                            <div v-show="showStyles" class="flex w-52 shrink-0 flex-col border-l bg-card">
+                                <div class="flex shrink-0 items-center justify-between border-b px-3 py-2">
+                                    <p class="text-[0.63rem] font-bold uppercase tracking-widest text-muted-foreground">Styles</p>
+                                    <button
+                                        class="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        @click="showStyles = false"
+                                    >
+                                        <Icon icon="heroicons:x-mark" class="size-3" />
+                                    </button>
+                                </div>
+                                <!-- GrapesJS StyleManager appended here -->
+                                <div ref="stylesContainer" class="flex-1 overflow-y-auto" />
+                            </div>
+                        </Transition>
+                    </div>
+                </div>
             </TabsContent>
 
             <!-- ── Tab: Webinar Room ── -->
