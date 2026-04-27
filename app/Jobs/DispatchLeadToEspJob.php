@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 class DispatchLeadToEspJob implements ShouldQueue
 {
@@ -18,11 +19,15 @@ class DispatchLeadToEspJob implements ShouldQueue
     use SerializesModels;
 
     public int $tries = 3;
+    public int $backoff = 30;
+    public int $timeout = 45;
 
     public function __construct(
         public int $leadEventId,
         public int $funnelIntegrationId
-    ) {}
+    ) {
+        $this->onQueue('esp-dispatch');
+    }
 
     public function handle(EspDispatcher $dispatcher): void
     {
@@ -77,5 +82,32 @@ class DispatchLeadToEspJob implements ShouldQueue
 
             throw $exception;
         }
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        $leadEvent = LeadEvent::query()->find($this->leadEventId);
+        if (! $leadEvent) {
+            return;
+        }
+
+        $provider = FunnelIntegration::query()
+            ->with('integrationAccount:id,provider')
+            ->find($this->funnelIntegrationId)?->integrationAccount?->provider ?? 'unknown';
+
+        DispatchJobLog::query()->create([
+            'lead_event_id' => $leadEvent->id,
+            'provider' => $provider,
+            'status' => 'failed',
+            'attempt' => $this->attempts(),
+            'request_payload' => [
+                'funnel_integration_id' => $this->funnelIntegrationId,
+                'lead_event_id' => $this->leadEventId,
+            ],
+            'error_message' => $exception->getMessage(),
+            'response_payload' => [
+                'message' => 'Queue job exhausted all retries.',
+            ],
+        ]);
     }
 }

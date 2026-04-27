@@ -36,7 +36,7 @@ class FunnelFlowTest extends TestCase
             'version' => 1,
             'optin_schema' => ['hero' => ['headline' => 'H1']],
             'webinar_schema' => ['title' => 'W1'],
-            'default_settings' => ['chat_mode' => 'simulated', 'allow_replay' => true, 'double_opt_in' => false],
+            'default_settings' => ['chat_mode' => 'simulated', 'allow_replay' => true],
             'is_current' => true,
         ]);
 

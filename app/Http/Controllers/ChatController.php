@@ -19,28 +19,7 @@ class ChatController extends Controller
         $funnel->load(['user:id,username']);
 
         $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
-        $conversations = $funnel->chatRoom?->messages()
-            ->selectRaw('conversation_key, MAX(id) as latest_id')
-            ->groupBy('conversation_key')
-            ->orderByDesc('latest_id')
-            ->limit(500)
-            ->get()
-            ->map(function ($row) use ($funnel) {
-                $latestMessage = ChatMessage::query()->whereKey((int) $row->latest_id)->first();
-                $count = $funnel->chatRoom?->messages()
-                    ->where('conversation_key', $row->conversation_key)
-                    ->count() ?? 0;
-
-                return [
-                    'conversation_key' => $row->conversation_key,
-                    'attendee_name' => $latestMessage?->attendee_name ?? 'Anonymous attendee',
-                    'attendee_email' => $latestMessage?->attendee_email,
-                    'latest_message' => $latestMessage?->message,
-                    'message_count' => $count,
-                    'latest_id' => $latestMessage?->id,
-                ];
-            })
-            ->values() ?? collect();
+        $conversations = $this->buildConversationsSummary($funnel, 500);
 
         return Inertia::render('funnels/Chat', [
             'funnel' => [
@@ -75,28 +54,7 @@ class ChatController extends Controller
     {
         $this->authorizeFunnel($funnel);
 
-        $conversations = $funnel->chatRoom?->messages()
-            ->selectRaw('conversation_key, MAX(id) as latest_id')
-            ->groupBy('conversation_key')
-            ->orderByDesc('latest_id')
-            ->limit(500)
-            ->get()
-            ->map(function ($row) use ($funnel) {
-                $latestMessage = ChatMessage::query()->whereKey((int) $row->latest_id)->first();
-                $count = $funnel->chatRoom?->messages()
-                    ->where('conversation_key', $row->conversation_key)
-                    ->count() ?? 0;
-
-                return [
-                    'conversation_key' => $row->conversation_key,
-                    'attendee_name' => $latestMessage?->attendee_name ?? 'Anonymous attendee',
-                    'attendee_email' => $latestMessage?->attendee_email,
-                    'latest_message' => $latestMessage?->message,
-                    'message_count' => $count,
-                    'latest_id' => $latestMessage?->id,
-                ];
-            })
-            ->values() ?? collect();
+        $conversations = $this->buildConversationsSummary($funnel, 500);
 
         return response()->json([
             'conversations' => $conversations,
@@ -236,5 +194,43 @@ class ChatController extends Controller
             'attendee_name' => $name,
             'attendee_email' => $email,
         ];
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function buildConversationsSummary(Funnel $funnel, int $limit)
+    {
+        $chatRoomId = $funnel->chatRoom?->id;
+        if (! $chatRoomId) {
+            return collect();
+        }
+
+        $rows = ChatMessage::query()
+            ->where('chat_room_id', $chatRoomId)
+            ->whereNotNull('conversation_key')
+            ->selectRaw('conversation_key, MAX(id) as latest_id, COUNT(*) as message_count')
+            ->groupBy('conversation_key')
+            ->orderByDesc('latest_id')
+            ->limit($limit)
+            ->get();
+
+        $latestMessages = ChatMessage::query()
+            ->whereIn('id', $rows->pluck('latest_id')->all())
+            ->get()
+            ->keyBy('id');
+
+        return $rows->map(function ($row) use ($latestMessages) {
+            $latestMessage = $latestMessages->get((int) $row->latest_id);
+
+            return [
+                'conversation_key' => $row->conversation_key,
+                'attendee_name' => $latestMessage?->attendee_name ?? 'Anonymous attendee',
+                'attendee_email' => $latestMessage?->attendee_email,
+                'latest_message' => $latestMessage?->message,
+                'message_count' => (int) $row->message_count,
+                'latest_id' => $latestMessage?->id,
+            ];
+        })->values();
     }
 }

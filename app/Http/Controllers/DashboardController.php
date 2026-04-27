@@ -21,6 +21,10 @@ class DashboardController extends Controller
             ->where('user_id', $userId)
             ->where('status', 'published')
             ->count();
+        $draftCount = Funnel::query()
+            ->where('user_id', $userId)
+            ->where('status', 'draft')
+            ->count();
 
         $leadCount = Lead::query()
             ->whereHas('funnel', fn ($q) => $q->where('user_id', $userId))
@@ -42,10 +46,13 @@ class DashboardController extends Controller
         $topFunnels = Funnel::query()
             ->where('user_id', $userId)
             ->withCount('leads')
-            ->having('leads_count', '>', 0)
             ->orderByDesc('leads_count')
-            ->limit(5)
+            ->limit(12)
             ->get(['id', 'name', 'slug', 'status']);
+        $topFunnels = $topFunnels
+            ->filter(fn ($funnel) => (int) $funnel->leads_count > 0)
+            ->take(5)
+            ->values();
 
         $recentFunnels = Funnel::query()
             ->where('user_id', $userId)
@@ -58,7 +65,7 @@ class DashboardController extends Controller
             'metrics' => [
                 'funnelCount'       => $funnelCount,
                 'publishedCount'    => $publishedCount,
-                'draftCount'        => $funnelCount - $publishedCount,
+                'draftCount'        => $draftCount,
                 'leadCount'         => $leadCount,
                 'recentLeads'       => $recentLeads,
                 'previousWeekLeads' => $previousWeekLeads,

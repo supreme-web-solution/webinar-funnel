@@ -35,11 +35,18 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $adminEmails = collect(explode(',', (string) env('ADMIN_EMAILS', '')))
+            ->map(fn ($item) => strtolower(trim($item)))
+            ->filter()
+            ->values();
+        $currentEmail = strtolower((string) optional($request->user())->email);
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
                 'user' => $request->user(),
+                'is_admin' => $currentEmail !== '' && $adminEmails->contains($currentEmail),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

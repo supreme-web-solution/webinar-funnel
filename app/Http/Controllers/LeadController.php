@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LeadCaptureRequest;
 use App\Jobs\DispatchLeadToEspJob;
+use App\Models\DispatchJobLog;
 use App\Models\Funnel;
 use App\Models\Lead;
 use App\Models\LeadEvent;
@@ -105,18 +106,36 @@ class LeadController extends Controller
             ],
         ]);
 
-        $integrationIds = $funnel->integrations()
+        $enabledIntegrations = $funnel->integrations()
             ->where('enabled', true)
-            ->pluck('id');
+            ->with('integrationAccount:id,provider')
+            ->get(['id', 'integration_account_id']);
 
-        foreach ($integrationIds as $funnelIntegrationId) {
-            DispatchLeadToEspJob::dispatch($leadEvent->id, (int) $funnelIntegrationId);
+        foreach ($enabledIntegrations as $funnelIntegration) {
+            $funnelIntegrationId = (int) $funnelIntegration->id;
+            $provider = $funnelIntegration->integrationAccount?->provider ?? 'unknown';
+
+            DispatchJobLog::query()->create([
+                'lead_event_id' => $leadEvent->id,
+                'provider' => $provider,
+                'status' => 'queued',
+                'attempt' => 0,
+                'request_payload' => [
+                    'funnel_integration_id' => (int) $funnelIntegrationId,
+                    'lead_id' => $lead->id,
+                    'queued_at' => now()->toIso8601String(),
+                ],
+                'response_payload' => ['message' => 'Job queued for processing.'],
+            ]);
+
+            DispatchLeadToEspJob::dispatch($leadEvent->id, (int) $funnelIntegrationId)
+                ->onQueue('esp-dispatch');
         }
 
         Log::info('Lead captured', [
             'funnel_id' => $funnel->id,
             'lead_id' => $lead->id,
-            'integration_count' => count($integrationIds),
+            'integration_count' => $enabledIntegrations->count(),
         ]);
 
         $request->session()->put("funnel_lead.{$funnel->id}", [

@@ -13,6 +13,25 @@ class CreateNewUser implements CreatesNewUsers
 {
     use PasswordValidationRules, ProfileValidationRules;
 
+    private const RESERVED_USERNAMES = [
+        'dashboard',
+        'templates',
+        'funnels',
+        'integrations',
+        'settings',
+        'login',
+        'register',
+        'password',
+        'verification',
+        'confirm-password',
+        'logout',
+        'sanctum',
+        'api',
+        'storage',
+        'up',
+        'leads',
+    ];
+
     /**
      * Validate and create a newly registered user.
      *
@@ -29,7 +48,10 @@ class CreateNewUser implements CreatesNewUsers
         $username = $baseUsername !== '' ? $baseUsername : 'user';
         $counter = 1;
 
-        while (User::query()->where('username', $username)->exists()) {
+        while (
+            in_array($username, self::RESERVED_USERNAMES, true)
+            || User::query()->where('username', $username)->exists()
+        ) {
             $counter++;
             $username = "{$baseUsername}_{$counter}";
         }

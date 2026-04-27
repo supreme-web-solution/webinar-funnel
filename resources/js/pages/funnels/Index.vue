@@ -24,11 +24,12 @@ const props = defineProps<{
         total: number;
         published: number;
         draft: number;
+        archived: number;
     };
 }>();
 
 const search = ref('');
-const activeFilter = ref<'all' | 'published' | 'draft'>('all');
+const activeFilter = ref<'all' | 'published' | 'draft' | 'archived'>('all');
 
 const filtered = computed(() => {
     let list = props.funnels;
@@ -55,10 +56,11 @@ function fmtDate(iso: string): string {
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-const filterTabs: Array<{ key: 'all' | 'published' | 'draft'; label: string; count: number }> = [
+const filterTabs: Array<{ key: 'all' | 'published' | 'draft' | 'archived'; label: string; count: number }> = [
     { key: 'all', label: 'All', count: props.stats.total },
     { key: 'published', label: 'Published', count: props.stats.published },
     { key: 'draft', label: 'Draft', count: props.stats.draft },
+    { key: 'archived', label: 'Archived', count: props.stats.archived },
 ];
 </script>
 
@@ -74,7 +76,8 @@ const filterTabs: Array<{ key: 'all' | 'published' | 'draft'; label: string; cou
                 <p class="text-sm text-muted-foreground mt-0.5">
                     {{ stats.total }} funnel{{ stats.total !== 1 ? 's' : '' }} ·
                     {{ stats.published }} published ·
-                    {{ stats.draft }} draft
+                    {{ stats.draft }} draft ·
+                    {{ stats.archived }} archived
                 </p>
             </div>
             <Button as-child size="sm" class="self-start sm:self-auto gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shadow-sm">
@@ -162,12 +165,24 @@ const filterTabs: Array<{ key: 'all' | 'published' | 'draft'; label: string; cou
                 <!-- Icon -->
                 <div
                     class="flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors"
-                    :class="funnel.status === 'published' ? 'bg-emerald-50' : 'bg-amber-50'"
+                        :class="funnel.status === 'published'
+                            ? 'bg-emerald-50'
+                            : funnel.status === 'archived'
+                                ? 'bg-slate-100'
+                                : 'bg-amber-50'"
                 >
                     <Icon
-                        :icon="funnel.status === 'published' ? 'heroicons:globe-alt' : 'heroicons:pencil-square'"
+                        :icon="funnel.status === 'published'
+                            ? 'heroicons:globe-alt'
+                            : funnel.status === 'archived'
+                                ? 'heroicons:archive-box'
+                                : 'heroicons:pencil-square'"
                         class="size-5"
-                        :class="funnel.status === 'published' ? 'text-emerald-600' : 'text-amber-600'"
+                        :class="funnel.status === 'published'
+                            ? 'text-emerald-600'
+                            : funnel.status === 'archived'
+                                ? 'text-slate-600'
+                                : 'text-amber-600'"
                     />
                 </div>
 
@@ -179,7 +194,9 @@ const filterTabs: Array<{ key: 'all' | 'published' | 'draft'; label: string; cou
                             class="capitalize text-[0.6rem] px-2 py-0.5 shrink-0"
                             :class="funnel.status === 'published'
                                 ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border-amber-200'"
+                                : funnel.status === 'archived'
+                                    ? 'bg-slate-100 text-slate-700 border-slate-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'"
                         >
                             <span
                                 v-if="funnel.status === 'published'"

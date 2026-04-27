@@ -10,6 +10,8 @@ const props = defineProps<{
             webinar_title?: string | null;
             webinar_description?: string | null;
             video_url?: string | null;
+            webinar_cta_label?: string | null;
+            webinar_cta_url?: string | null;
         } | null;
     };
     chatMessages: Array<{
@@ -32,6 +34,9 @@ let poller: number | undefined;
 
 const webinarTitle = computed(() => props.funnel.settings?.webinar_title ?? `${props.funnel.name} Webinar`);
 const webinarDesc = computed(() => props.funnel.settings?.webinar_description ?? 'Watch the exclusive webinar training below.');
+const webinarCtaLabel = computed(() => props.funnel.settings?.webinar_cta_label?.trim() || 'Claim Your Spot');
+const webinarCtaUrl = computed(() => props.funnel.settings?.webinar_cta_url?.trim() || '');
+const hasWebinarCta = computed(() => webinarCtaUrl.value.length > 0);
 
 const scrollToBottom = async (): Promise<void> => {
     await nextTick();
@@ -167,6 +172,29 @@ onUnmounted(() => {
                         Limited availability
                     </span>
                 </div>
+
+                <!-- Primary CTA -->
+                <div
+                    v-if="hasWebinarCta"
+                    class="rounded-xl border border-primary/25 bg-primary/10 p-4"
+                >
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-white">Ready for the next step?</p>
+                            <p class="text-xs text-white/60 mt-0.5">Use the button below to continue after watching the training.</p>
+                        </div>
+                        <a
+                            :href="webinarCtaUrl"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition hover:opacity-90"
+                            style="background:#40E0D0;color:#0a0f1e;"
+                        >
+                            <Icon icon="heroicons:rocket-launch" class="size-4" />
+                            {{ webinarCtaLabel }}
+                        </a>
+                    </div>
+                </div>
             </main>
 
             <!-- ── Chat sidebar ── -->
@@ -178,6 +206,28 @@ onUnmounted(() => {
                         <span class="text-sm font-semibold text-white/80">Webinar Chat</span>
                     </div>
                     <span class="text-xs text-white/40">{{ messages.length }} messages</span>
+                </div>
+
+                <!-- Pinned CTA in chat -->
+                <div
+                    v-if="hasWebinarCta"
+                    class="border-b border-primary/20 bg-primary/10 px-3 py-2"
+                >
+                    <a
+                        :href="webinarCtaUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-[#0d1424] px-3 py-2 text-xs"
+                    >
+                        <span class="flex items-center gap-1.5 text-white/85">
+                            <Icon icon="heroicons:megaphone" class="size-3.5 text-primary" style="color:#40E0D0" />
+                            Pinned CTA: {{ webinarCtaLabel }}
+                        </span>
+                        <span class="inline-flex items-center gap-1 font-semibold text-primary" style="color:#40E0D0">
+                            Open
+                            <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
+                        </span>
+                    </a>
                 </div>
 
                 <!-- Messages -->

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -42,7 +43,27 @@ const mainNavItems: NavItem[] = [
         href: '/integrations',
         icon: 'heroicons:puzzle-piece',
     },
+    {
+        title: 'Mentions',
+        href: '/mentions',
+        icon: 'heroicons:chat-bubble-left-right',
+    },
 ];
+
+const page = usePage<{ auth?: { is_admin?: boolean } }>();
+const navItems = computed<NavItem[]>(() => {
+    const items = [...mainNavItems];
+
+    if (page.props.auth?.is_admin) {
+        items.push({
+            title: 'Users',
+            href: '/users',
+            icon: 'heroicons:user-group',
+        });
+    }
+
+    return items;
+});
 
 const footerNavItems: NavItem[] = [
     {
@@ -81,7 +102,7 @@ const footerNavItems: NavItem[] = [
 
         <!-- Main nav -->
         <SidebarContent class="mt-2 gap-0">
-            <NavMain :items="mainNavItems" label="Navigation" />
+            <NavMain :items="navItems" label="Navigation" />
         </SidebarContent>
 
         <!-- Footer -->

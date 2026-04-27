@@ -16,10 +16,11 @@ class FunnelSetting extends Model
         'webinar_title',
         'webinar_description',
         'video_url',
+        'webinar_cta_label',
+        'webinar_cta_url',
         'chat_mode',
         'countdown_seconds',
         'allow_replay',
-        'double_opt_in',
         'chat_seed_messages',
         'branding',
     ];
@@ -29,7 +30,6 @@ class FunnelSetting extends Model
         return [
             'uuid' => 'string',
             'allow_replay' => 'boolean',
-            'double_opt_in' => 'boolean',
             'chat_seed_messages' => 'array',
             'branding' => 'array',
         ];

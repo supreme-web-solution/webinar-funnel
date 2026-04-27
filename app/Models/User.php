@@ -44,4 +44,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(IntegrationAccount::class);
     }
+
+    public function keywords(): HasMany
+    {
+        return $this->hasMany(Keyword::class);
+    }
 }

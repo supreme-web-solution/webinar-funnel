@@ -35,6 +35,7 @@ class FunnelController extends Controller
             'total'     => $funnels->count(),
             'published' => $funnels->where('status', 'published')->count(),
             'draft'     => $funnels->where('status', 'draft')->count(),
+            'archived'  => $funnels->where('status', 'archived')->count(),
         ];
 
         return Inertia::render('funnels/Index', [
@@ -88,7 +89,6 @@ class FunnelController extends Controller
         $funnel->settings()->create($currentVersion->default_settings ?? [
             'chat_mode' => 'simulated',
             'allow_replay' => true,
-            'double_opt_in' => false,
         ]);
 
         ChatRoom::query()->create([
@@ -104,32 +104,12 @@ class FunnelController extends Controller
     {
         $this->authorizeFunnel($funnel);
 
-        $funnel->load(['template', 'pages', 'settings', 'integrations.integrationAccount']);
+        $funnel->load(['template', 'pages', 'settings', 'chatRoom', 'integrations.integrationAccount']);
         $integrationAccounts = IntegrationAccount::query()
             ->where('user_id', auth()->id())
             ->get(['id', 'name', 'provider']);
         $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
-        $conversationSummaries = $funnel->chatRoom?->messages()
-            ->selectRaw('conversation_key, MAX(id) as latest_id')
-            ->groupBy('conversation_key')
-            ->orderByDesc('latest_id')
-            ->limit(50)
-            ->get()
-            ->map(function ($row) use ($funnel) {
-                $latest = ChatMessage::query()->whereKey((int) $row->latest_id)->first();
-                $count = $funnel->chatRoom?->messages()
-                    ->where('conversation_key', $row->conversation_key)
-                    ->count() ?? 0;
-
-                return [
-                    'conversation_key' => $row->conversation_key,
-                    'attendee_name' => $latest?->attendee_name ?? 'Anonymous attendee',
-                    'attendee_email' => $latest?->attendee_email,
-                    'latest_message' => $latest?->message,
-                    'message_count' => $count,
-                ];
-            })
-            ->values() ?? collect();
+        $conversationSummaries = $this->buildConversationSummaries($funnel, 50);
 
         return Inertia::render('funnels/Edit', [
             'funnel' => $funnel,
@@ -182,7 +162,9 @@ class FunnelController extends Controller
         $this->authorizeFunnel($funnel);
         $validated = $request->validated();
         $integrationIds = $validated['integration_account_ids'] ?? [];
+        $incomingIntegrationConfigs = $validated['integration_configs'] ?? [];
         unset($validated['integration_account_ids']);
+        unset($validated['integration_configs']);
 
         $settings = $funnel->settings()->firstOrNew();
         $settings->fill($validated)->save();
@@ -208,12 +190,26 @@ class FunnelController extends Controller
             }
         }
 
+        $existingConfigs = $funnel->integrations()
+            ->get(['integration_account_id', 'provider_list_config'])
+            ->mapWithKeys(fn ($integration) => [
+                (string) $integration->integration_account_id => is_array($integration->provider_list_config)
+                    ? $integration->provider_list_config
+                    : [],
+            ]);
+
         $funnel->integrations()->delete();
 
         foreach ($integrationIds as $integrationId) {
+            $providerConfig = $existingConfigs->get((string) $integrationId, []);
+
+            if (isset($incomingIntegrationConfigs[$integrationId]) && is_array($incomingIntegrationConfigs[$integrationId])) {
+                $providerConfig = $incomingIntegrationConfigs[$integrationId];
+            }
+
             $funnel->integrations()->create([
                 'integration_account_id' => $integrationId,
-                'provider_list_config' => [],
+                'provider_list_config' => $providerConfig,
                 'enabled' => true,
             ]);
         }
@@ -242,6 +238,93 @@ class FunnelController extends Controller
         $resolver->forget($username, $funnel->slug);
 
         return back()->with('success', 'Funnel published successfully.');
+    }
+
+    public function unpublish(Funnel $funnel, PublicFunnelResolver $resolver): RedirectResponse
+    {
+        $this->authorizeFunnel($funnel);
+
+        $funnel->update([
+            'status' => 'draft',
+            'published_at' => null,
+        ]);
+
+        $funnel->pages()->update(['published_at' => null]);
+        $funnel->loadMissing('user');
+
+        $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
+        $resolver->forget($username, $funnel->slug);
+
+        return back()->with('success', 'Funnel unpublished and moved back to draft.');
+    }
+
+    public function archive(Funnel $funnel, PublicFunnelResolver $resolver): RedirectResponse
+    {
+        $this->authorizeFunnel($funnel);
+
+        $funnel->update([
+            'status' => 'archived',
+            'published_at' => null,
+        ]);
+
+        $funnel->pages()->update(['published_at' => null]);
+        $funnel->loadMissing('user');
+
+        $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
+        $resolver->forget($username, $funnel->slug);
+
+        return back()->with('success', 'Funnel archived.');
+    }
+
+    public function destroy(Funnel $funnel, PublicFunnelResolver $resolver): RedirectResponse
+    {
+        $this->authorizeFunnel($funnel);
+        $funnel->loadMissing('user');
+
+        $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
+        $slug = $funnel->slug;
+
+        $funnel->delete();
+        $resolver->forget($username, $slug);
+
+        return to_route('funnels.index')->with('success', 'Funnel deleted.');
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function buildConversationSummaries(Funnel $funnel, int $limit = 50)
+    {
+        $chatRoomId = $funnel->chatRoom?->id;
+        if (! $chatRoomId) {
+            return collect();
+        }
+
+        $rows = ChatMessage::query()
+            ->where('chat_room_id', $chatRoomId)
+            ->whereNotNull('conversation_key')
+            ->selectRaw('conversation_key, MAX(id) as latest_id, COUNT(*) as message_count')
+            ->groupBy('conversation_key')
+            ->orderByDesc('latest_id')
+            ->limit($limit)
+            ->get();
+
+        $latestMessages = ChatMessage::query()
+            ->whereIn('id', $rows->pluck('latest_id')->all())
+            ->get()
+            ->keyBy('id');
+
+        return $rows->map(function ($row) use ($latestMessages) {
+            $latest = $latestMessages->get((int) $row->latest_id);
+
+            return [
+                'conversation_key' => $row->conversation_key,
+                'attendee_name' => $latest?->attendee_name ?? 'Anonymous attendee',
+                'attendee_email' => $latest?->attendee_email,
+                'latest_message' => $latest?->message,
+                'message_count' => (int) $row->message_count,
+            ];
+        })->values();
     }
 
     private function authorizeFunnel(Funnel $funnel): void

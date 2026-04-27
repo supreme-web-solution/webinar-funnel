@@ -17,7 +17,24 @@ interface Account {
     last_connected_at: string | null;
 }
 
-const props = defineProps<{ accounts: Account[] }>();
+interface DispatchLog {
+    id: number;
+    provider: string;
+    status: string;
+    attempt: number;
+    error_message: string | null;
+    funnel_name: string | null;
+    created_at: string | null;
+}
+
+const props = defineProps<{
+    accounts: Account[];
+    dispatchLogs: DispatchLog[];
+    queueHealth: {
+        queued: number;
+        failed_last_24h: number;
+    };
+}>();
 
 /* ─── Provider catalogue ─────────────────────────────────────────────────── */
 const PROVIDERS = [
@@ -80,54 +97,6 @@ const PROVIDERS = [
         fields: [
             { key: 'api_key', label: 'API Key',  type: 'password', hint: 'Account → SMTP & API → API Keys' },
             { key: 'list_id', label: 'List ID',  type: 'text',     hint: 'Numeric ID of the contact list' },
-        ],
-    },
-    {
-        id: 'aweber',
-        label: 'AWeber',
-        icon: 'heroicons:envelope',
-        color: '#E8612C',
-        bg: '#2d1200',
-        desc: 'Email marketing for small biz',
-        fields: [
-            { key: 'api_key', label: 'API Key',  type: 'password', hint: 'Account settings → API access' },
-            { key: 'list_id', label: 'List ID',  type: 'text',     hint: 'Your subscriber list ID' },
-        ],
-    },
-    {
-        id: 'drip',
-        label: 'Drip',
-        icon: 'heroicons:beaker',
-        color: '#7B68EE',
-        bg: '#1a1233',
-        desc: 'E-commerce CRM & email',
-        fields: [
-            { key: 'api_token',  label: 'API Token',   type: 'password', hint: 'Account → User Settings → API Token' },
-            { key: 'account_id', label: 'Account ID',  type: 'text',     hint: 'Numeric account ID from your Drip URL' },
-        ],
-    },
-    {
-        id: 'hubspot',
-        label: 'HubSpot',
-        icon: 'simple-icons:hubspot',
-        color: '#FF7A59',
-        bg: '#1f0a00',
-        desc: 'CRM, marketing & sales hub',
-        fields: [
-            { key: 'access_token', label: 'Private App Token', type: 'password', hint: 'Settings → Integrations → Private Apps' },
-            { key: 'list_id',      label: 'Contact List ID',   type: 'text',     hint: 'Numeric list ID from HubSpot contacts' },
-        ],
-    },
-    {
-        id: 'campaignmonitor',
-        label: 'Campaign Monitor',
-        icon: 'heroicons:paper-airplane',
-        color: '#45BBC4',
-        bg: '#0a2226',
-        desc: 'Beautiful email campaigns',
-        fields: [
-            { key: 'api_key', label: 'API Key',  type: 'password', hint: 'Account Settings → API keys' },
-            { key: 'list_id', label: 'List ID',  type: 'text',     hint: 'The subscriber list ID' },
         ],
     },
     {
@@ -248,6 +217,19 @@ function formatDate(dt: string | null): string {
     }
 
     return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateTime(dt: string | null): string {
+    if (!dt) {
+        return 'Unknown';
+    }
+
+    return new Date(dt).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
 }
 
 const activeCount = computed(() => props.accounts.filter((a) => a.status === 'active').length);
@@ -557,6 +539,65 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
             </div>
 
             <!-- ── Provider reference ── -->
+            <Card class="border shadow-sm">
+                <CardHeader class="pb-3">
+                    <CardTitle class="text-sm font-semibold">Dispatch Monitor</CardTitle>
+                    <CardDescription class="text-xs">Track queued, successful, and failed ESP deliveries in real time.</CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-3">
+                    <div class="rounded-lg border bg-muted/20 p-3 text-xs">
+                        <p class="font-semibold text-foreground">Queue worker reminder</p>
+                        <p class="mt-1 text-muted-foreground">
+                            Run <code class="font-mono text-[11px]">php artisan queue:work</code> in production so queued lead sync jobs are processed.
+                        </p>
+                        <div class="mt-2 flex items-center gap-2">
+                            <Badge class="bg-amber-50 text-amber-700 border-amber-200">Queued: {{ queueHealth.queued }}</Badge>
+                            <Badge
+                                :class="queueHealth.failed_last_24h > 0
+                                    ? 'bg-red-50 text-red-700 border-red-200'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'"
+                            >
+                                Failed (24h): {{ queueHealth.failed_last_24h }}
+                            </Badge>
+                        </div>
+                    </div>
+
+                    <div v-if="dispatchLogs.length === 0" class="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                        No dispatch activity yet.
+                    </div>
+
+                    <div v-else class="space-y-2">
+                        <div
+                            v-for="log in dispatchLogs"
+                            :key="log.id"
+                            class="rounded-lg border p-3"
+                        >
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <p class="text-xs font-semibold text-foreground">
+                                        {{ providerMeta(log.provider).label }} · {{ log.funnel_name ?? 'Unknown funnel' }}
+                                    </p>
+                                    <p class="text-[0.68rem] text-muted-foreground mt-0.5">
+                                        {{ formatDateTime(log.created_at) }} · Attempt {{ log.attempt }}
+                                    </p>
+                                </div>
+                                <Badge
+                                    class="capitalize text-[0.62rem] px-1.5 py-0.5"
+                                    :class="log.status === 'success'
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : log.status === 'queued'
+                                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                            : 'bg-red-50 text-red-700 border-red-200'"
+                                >
+                                    {{ log.status }}
+                                </Badge>
+                            </div>
+                            <p v-if="log.error_message" class="mt-2 text-xs text-destructive">{{ log.error_message }}</p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             <Card class="border shadow-sm">
                 <CardHeader class="pb-3">
                     <CardTitle class="text-sm font-semibold">Supported Providers</CardTitle>

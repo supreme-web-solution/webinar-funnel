@@ -48,7 +48,8 @@ class EspDispatcher
             'activecampaign'  => app(ActiveCampaignEspAdapter::class),
             'sendinblue',
             'brevo'           => app(BrevoEspAdapter::class),
-            default           => app(GenericWebhookEspAdapter::class),
+            'generic_webhook' => app(GenericWebhookEspAdapter::class),
+            default           => new UnsupportedEspAdapter($provider),
         };
     }
 }

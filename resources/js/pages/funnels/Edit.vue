@@ -3,7 +3,7 @@ import { Icon } from '@iconify/vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import grapesjs from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,9 +23,10 @@ const props = defineProps<{
             webinar_title?: string | null;
             webinar_description?: string | null;
             video_url?: string | null;
+            webinar_cta_label?: string | null;
+            webinar_cta_url?: string | null;
             chat_mode: string;
             allow_replay: boolean;
-            double_opt_in: boolean;
             chat_seed_messages?: Array<{ author: string; message: string }>;
         } | null;
         pages: Array<{
@@ -65,17 +66,28 @@ const savingSettings = ref(false);
 const publishing    = ref(false);
 const activeTab     = ref('optin');
 
-/* Refresh canvas when returning to optin tab (hidden iframe collapses to 0×0) */
-watch(activeTab, (tab) => {
-    if (tab !== 'optin') {
-        return;
-    }
-
+/* Refresh canvas when returning to optin tab (hidden iframe can collapse to 0×0) */
+const refreshEditorCanvas = (): void => {
     nextTick(() => {
-        if (gjsEditor.value) {
-            gjsEditor.value.refresh();
+        if (!gjsEditor.value) {
+            return;
         }
+
+        // Run multiple refresh passes because container geometry settles across frames.
+        gjsEditor.value.refresh();
+        requestAnimationFrame(() => {
+            gjsEditor.value?.refresh();
+        });
+        setTimeout(() => {
+            gjsEditor.value?.refresh();
+        }, 80);
     });
+};
+
+watch(activeTab, (tab) => {
+    if (tab === 'optin') {
+        refreshEditorCanvas();
+    }
 });
 
 /* ─── Toolbar actions ──────────────────────────────────────────────────── */
@@ -85,15 +97,21 @@ const editorRedo = () => gjsEditor.value?.runCommand('core:redo');
 function setDevice(device: 'desktop' | 'mobile'): void {
     activeDevice.value = device;
     gjsEditor.value?.setDevice(device === 'desktop' ? 'Desktop' : 'Mobile');
+    refreshEditorCanvas();
 }
 
 function toggleFullscreen(): void {
     isFullscreen.value = !isFullscreen.value;
     // Recalculate canvas dimensions after the DOM updates
-    nextTick(() => {
-        gjsEditor.value?.refresh();
-    });
+    refreshEditorCanvas();
 }
+
+const onGlobalKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && isFullscreen.value) {
+        isFullscreen.value = false;
+        refreshEditorCanvas();
+    }
+};
 
 const pageForm = useForm<{ page_type: 'optin' | 'webinar'; schema: any }>({
     page_type: 'optin',
@@ -101,14 +119,18 @@ const pageForm = useForm<{ page_type: 'optin' | 'webinar'; schema: any }>({
 });
 
 const publishForm = useForm({});
+const unpublishForm = useForm({});
+const archiveForm = useForm({});
+const deleteForm = useForm({});
 
 const settingsForm = useForm<{
     webinar_title: string;
     webinar_description: string;
     video_url: string;
+    webinar_cta_label: string;
+    webinar_cta_url: string;
     chat_mode: string;
     allow_replay: boolean;
-    double_opt_in: boolean;
     chat_seed_messages: Array<{ author: string; message: string }>;
     branding: { primary: string; secondary: string };
     integration_account_ids: number[];
@@ -116,9 +138,10 @@ const settingsForm = useForm<{
     webinar_title: props.funnel.settings?.webinar_title ?? '',
     webinar_description: props.funnel.settings?.webinar_description ?? '',
     video_url: props.funnel.settings?.video_url ?? '',
+    webinar_cta_label: props.funnel.settings?.webinar_cta_label ?? 'Claim Your Spot',
+    webinar_cta_url: props.funnel.settings?.webinar_cta_url ?? '',
     chat_mode: props.funnel.settings?.chat_mode ?? 'simulated',
     allow_replay: props.funnel.settings?.allow_replay ?? true,
-    double_opt_in: props.funnel.settings?.double_opt_in ?? false,
     chat_seed_messages: props.funnel.settings?.chat_seed_messages ?? [],
     branding: { primary: '#111827', secondary: '#F9FAFB' },
     integration_account_ids: props.funnel.integrations.map((i) => i.integration_account.id),
@@ -165,6 +188,41 @@ const publish = (): void => {
     });
 };
 
+const unpublish = (): void => {
+    publishing.value = true;
+    unpublishForm.post(`/funnels/${props.funnel.id}/unpublish`, {
+        onFinish: () => {
+            publishing.value = false;
+        },
+    });
+};
+
+const archive = (): void => {
+    if (!window.confirm('Archive this funnel? It will no longer be publicly accessible.')) {
+        return;
+    }
+
+    publishing.value = true;
+    archiveForm.post(`/funnels/${props.funnel.id}/archive`, {
+        onFinish: () => {
+            publishing.value = false;
+        },
+    });
+};
+
+const removeFunnel = (): void => {
+    if (!window.confirm('Delete this funnel permanently? This cannot be undone.')) {
+        return;
+    }
+
+    publishing.value = true;
+    deleteForm.delete(`/funnels/${props.funnel.id}`, {
+        onFinish: () => {
+            publishing.value = false;
+        },
+    });
+};
+
 const copyLink = async (type: 'optin' | 'webinar'): Promise<void> => {
     await navigator.clipboard.writeText(props.publicLinks[type]);
     copiedLink.value = type;
@@ -187,6 +245,8 @@ function providerIcon(provider: string): string {
 }
 
 onMounted(() => {
+    window.addEventListener('keydown', onGlobalKeydown);
+
     if (!editorContainer.value || !blocksContainer.value || !stylesContainer.value) {
         return;
     }
@@ -576,6 +636,10 @@ onMounted(() => {
     gjsEditor.value = editor;
     (editorContainer.value as any).__gjsEditor = editor;
 });
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', onGlobalKeydown);
+});
 </script>
 
 <template>
@@ -598,7 +662,9 @@ onMounted(() => {
                             class="capitalize text-[0.65rem] px-2 py-0.5 shrink-0"
                             :class="funnel.status === 'published'
                                 ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border-amber-200'"
+                                : funnel.status === 'archived'
+                                    ? 'bg-slate-100 text-slate-700 border-slate-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'"
                         >
                             <span
                                 v-if="funnel.status === 'published'"
@@ -612,12 +678,33 @@ onMounted(() => {
             </div>
 
             <!-- Actions -->
-            <div class="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            <div class="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap justify-end">
                 <Button as-child variant="outline" size="sm" class="h-8 text-xs gap-1.5">
                     <a :href="`/funnels/${funnel.id}/chat`">
                         <Icon icon="heroicons:chat-bubble-left-right" class="size-3.5" />
                         Chat Manager
                     </a>
+                </Button>
+                <Button
+                    v-if="funnel.status === 'published'"
+                    variant="outline"
+                    size="sm"
+                    class="h-8 text-xs gap-1.5"
+                    :disabled="publishing"
+                    @click="unpublish"
+                >
+                    <Icon icon="heroicons:arrow-uturn-left" class="size-3.5" />
+                    Unpublish
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-8 text-xs gap-1.5"
+                    :disabled="publishing"
+                    @click="archive"
+                >
+                    <Icon icon="heroicons:archive-box" class="size-3.5" />
+                    Archive
                 </Button>
                 <Button
                     size="sm"
@@ -635,6 +722,16 @@ onMounted(() => {
                     />
                     <Icon v-else icon="heroicons:rocket-launch" class="size-3.5" />
                     {{ publishing ? 'Publishing…' : funnel.status === 'published' ? 'Re-publish' : 'Publish' }}
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-8 text-xs gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5"
+                    :disabled="publishing"
+                    @click="removeFunnel"
+                >
+                    <Icon icon="heroicons:trash" class="size-3.5" />
+                    Delete
                 </Button>
             </div>
         </div>
@@ -671,7 +768,7 @@ onMounted(() => {
             </TabsList>
 
             <!-- ── Tab: Opt-in Editor ── -->
-            <TabsContent value="optin" class="m-0 p-0">
+            <TabsContent value="optin" force-mount class="m-0 p-0 data-[state=inactive]:hidden">
                 <!-- Full-height 3-pane editor workspace -->
                 <div
                     class="flex flex-col overflow-hidden border shadow-sm"
@@ -850,6 +947,28 @@ onMounted(() => {
                                 </div>
                                 <p class="text-[0.65rem] text-muted-foreground">Paste a YouTube or Vimeo embed URL</p>
                             </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold">CTA Button Label</Label>
+                                <Input
+                                    v-model="settingsForm.webinar_cta_label"
+                                    class="h-9 text-sm"
+                                    placeholder="Claim Your Spot"
+                                />
+                                <p class="text-[0.65rem] text-muted-foreground">Shown as the call-to-action button on the public webinar page.</p>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold">CTA Link URL</Label>
+                                <div class="relative">
+                                    <Icon icon="heroicons:link" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                                    <Input
+                                        v-model="settingsForm.webinar_cta_url"
+                                        type="url"
+                                        class="pl-9 h-9 text-sm"
+                                        placeholder="https://your-offer-page.com"
+                                    />
+                                </div>
+                                <p class="text-[0.65rem] text-muted-foreground">Attendees click this after watching the webinar.</p>
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -892,16 +1011,6 @@ onMounted(() => {
                                     <Switch
                                         :checked="settingsForm.allow_replay"
                                         @update:checked="settingsForm.allow_replay = $event"
-                                    />
-                                </div>
-                                <div class="flex items-center justify-between pt-3">
-                                    <div>
-                                        <p class="text-sm font-medium text-foreground">Double Opt-in</p>
-                                        <p class="text-xs text-muted-foreground">Send a confirmation email before registering</p>
-                                    </div>
-                                    <Switch
-                                        :checked="settingsForm.double_opt_in"
-                                        @update:checked="settingsForm.double_opt_in = $event"
                                     />
                                 </div>
                             </div>

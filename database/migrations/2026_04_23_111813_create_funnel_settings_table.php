@@ -20,7 +20,6 @@ return new class extends Migration
             $table->string('chat_mode')->default('simulated');
             $table->unsignedInteger('countdown_seconds')->nullable();
             $table->boolean('allow_replay')->default(true);
-            $table->boolean('double_opt_in')->default(false);
             $table->json('chat_seed_messages')->nullable();
             $table->json('branding')->nullable();
             $table->timestamps();

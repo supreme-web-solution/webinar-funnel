@@ -8,6 +8,14 @@ use Illuminate\Support\Str;
 
 class TemplateSeeder extends Seeder
 {
+    private const VIDEO_EMBEDS = [
+        'https://www.youtube.com/embed/dQw4w9WgXcQ',
+        'https://www.youtube.com/embed/9No-FiEInLA',
+        'https://www.youtube.com/embed/fLexgOxsZu0',
+        'https://www.youtube.com/embed/ysz5S6PUM-U',
+        'https://www.youtube.com/embed/aqz-KE-bpKQ',
+    ];
+
     public function run(): void
     {
         $categories = [
@@ -23,6 +31,11 @@ class TemplateSeeder extends Seeder
             $style    = $styles[($i - 1) % count($styles)];
             $name     = "DFY Webinar Template {$i}";
             $slug     = Str::slug("dfy-webinar-template-{$i}");
+            $videoUrl = self::VIDEO_EMBEDS[($i - 1) % count(self::VIDEO_EMBEDS)];
+            $webinarTitle = "How to grow your {$category} business in 90 days";
+            $webinarDescription = "Step-by-step {$category} roadmap to get faster results, avoid common mistakes, and scale with confidence.";
+            $webinarCtaLabel = 'Apply What You Learned';
+            $webinarCtaUrl = 'https://example.com/next-step';
 
             $template = Template::query()->updateOrCreate(
                 ['slug' => $slug],
@@ -52,15 +65,19 @@ class TemplateSeeder extends Seeder
                         ],
                     ],
                     'webinar_schema' => [
-                        'title'       => "{$name} Webinar Room",
-                        'description' => 'Watch the training and join the chat sidebar.',
-                        'video'       => ['provider' => 'youtube', 'url' => 'https://www.youtube.com/embed/dQw4w9WgXcQ'],
+                        'title'       => $webinarTitle,
+                        'description' => $webinarDescription,
+                        'video'       => ['provider' => 'youtube', 'url' => $videoUrl],
                         'chat'        => ['position' => 'right', 'enabled' => true],
                     ],
                     'default_settings' => [
+                        'webinar_title'      => $webinarTitle,
+                        'webinar_description'=> $webinarDescription,
+                        'video_url'          => $videoUrl,
+                        'webinar_cta_label'  => $webinarCtaLabel,
+                        'webinar_cta_url'    => $webinarCtaUrl,
                         'chat_mode'          => 'simulated',
                         'allow_replay'       => true,
-                        'double_opt_in'      => false,
                         'branding'           => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
                         'chat_seed_messages' => [
                             ['author' => 'Moderator', 'message' => 'Welcome! Let us know where you are joining from 👋'],
