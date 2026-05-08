@@ -29,6 +29,8 @@ class FunnelSettingsUpdateRequest extends FormRequest
             'video_url' => ['nullable', 'url', 'max:2048'],
             'webinar_cta_label' => ['nullable', 'string', 'max:120'],
             'webinar_cta_url' => ['nullable', 'url', 'max:2048'],
+            'affiliate_request_link' => ['nullable', 'url', 'max:2048'],
+            'jv_page' => ['nullable', 'url', 'max:2048'],
             'chat_mode' => ['required', 'in:simulated,realtime,hybrid'],
             'countdown_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
             'allow_replay' => ['required', 'boolean'],

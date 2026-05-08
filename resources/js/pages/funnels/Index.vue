@@ -12,6 +12,7 @@ interface FunnelItem {
     name: string;
     slug: string;
     status: string;
+    public_url: string | null;
     published_at: string | null;
     created_at: string;
     leads_count: number;
@@ -67,7 +68,7 @@ const filterTabs: Array<{ key: 'all' | 'published' | 'draft' | 'archived'; label
 <template>
     <Head title="My Funnels" />
 
-    <div class="flex flex-col gap-6 p-4 md:p-6 w-full max-w-screen-xl mx-auto">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
 
         <!-- ── Page header ── -->
         <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -234,6 +235,19 @@ const filterTabs: Array<{ key: 'all' | 'published' | 'draft' | 'archived'; label
 
                 <!-- Actions -->
                 <div class="flex items-center gap-1.5 shrink-0">
+                    <Button
+                        v-if="funnel.public_url"
+                        as-child
+                        variant="outline"
+                        size="sm"
+                        class="h-8 px-3 text-xs gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                        title="View public page"
+                    >
+                        <a :href="funnel.public_url" target="_blank" rel="noopener noreferrer">
+                            <Icon icon="heroicons:globe-alt" class="size-3.5" />
+                            View
+                        </a>
+                    </Button>
                     <Button
                         as-child
                         size="sm"

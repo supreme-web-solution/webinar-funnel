@@ -11,12 +11,19 @@ use App\Http\Controllers\PublicFunnelController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\MentionController;
 use App\Http\Controllers\UserManagementController;
+use Illuminate\Support\Facades\Auth;
+
+Route::get('/', function () {
+    return Auth::check()
+        ? redirect()->route('dashboard')
+        : redirect()->route('login');
+})->name('home');
 
 $reservedPublicPrefix = '^(?!(dashboard|templates|funnels|integrations|settings|users|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads)$)[A-Za-z0-9_-]+';
 
-Route::inertia('/', 'Welcome', [
-    'canRegister' => Features::enabled(Features::registration()),
-])->name('home');
+// Route::inertia('/', 'Welcome', [
+//     'canRegister' => Features::enabled(Features::registration()),
+// ])->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
@@ -56,6 +63,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('keywords/{keyword}/fetch', [MentionController::class, 'fetchNow'])->name('keywords.fetch');
     });
     Route::get('users', [UserManagementController::class, 'index'])->name('users.index');
+    Route::post('users', [UserManagementController::class, 'store'])->name('users.store');
     Route::patch('users/{user}', [UserManagementController::class, 'update'])->name('users.update');
     Route::delete('users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
 });

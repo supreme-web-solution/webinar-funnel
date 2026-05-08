@@ -32,11 +32,54 @@ const sending = ref(false);
 const chatBody = ref<HTMLElement | null>(null);
 let poller: number | undefined;
 
+// Simulated live viewer count
+const viewerCount = ref(Math.floor(Math.random() * 180) + 120);
+let viewerTimer: number | undefined;
+
 const webinarTitle = computed(() => props.funnel.settings?.webinar_title ?? `${props.funnel.name} Webinar`);
 const webinarDesc = computed(() => props.funnel.settings?.webinar_description ?? 'Watch the exclusive webinar training below.');
 const webinarCtaLabel = computed(() => props.funnel.settings?.webinar_cta_label?.trim() || 'Claim Your Spot');
 const webinarCtaUrl = computed(() => props.funnel.settings?.webinar_cta_url?.trim() || '');
 const hasWebinarCta = computed(() => webinarCtaUrl.value.length > 0);
+
+/** Converts any YouTube or Vimeo URL variant into the proper embed URL */
+const videoEmbedUrl = computed((): string | null => {
+    const raw = props.funnel.settings?.video_url?.trim();
+    if (!raw) return null;
+
+    // Already a proper embed URL — pass through
+    if (raw.includes('youtube.com/embed/') || raw.includes('player.vimeo.com/video/')) {
+        return raw;
+    }
+
+    // youtu.be/ID short URL
+    const youtuBe = raw.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+    if (youtuBe) {
+        return `https://www.youtube.com/embed/${youtuBe[1]}?rel=0&modestbranding=1&color=white`;
+    }
+
+    // youtube.com/watch?v=ID  (may have extra params)
+    const ytWatch = raw.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+    if (raw.includes('youtube.com') && ytWatch) {
+        return `https://www.youtube.com/embed/${ytWatch[1]}?rel=0&modestbranding=1&color=white`;
+    }
+
+    // vimeo.com/ID  (numeric ID, not /channels/ etc.)
+    const vimeoMatch = raw.match(/vimeo\.com\/(\d+)/);
+    if (vimeoMatch) {
+        return `https://player.vimeo.com/video/${vimeoMatch[1]}?title=0&byline=0&portrait=0&color=40E0D0`;
+    }
+
+    // Unknown — return as-is and hope for the best
+    return raw;
+});
+
+const videoProvider = computed((): 'youtube' | 'vimeo' | 'unknown' => {
+    const raw = props.funnel.settings?.video_url?.trim() ?? '';
+    if (raw.includes('youtube') || raw.includes('youtu.be')) return 'youtube';
+    if (raw.includes('vimeo')) return 'vimeo';
+    return 'unknown';
+});
 
 const scrollToBottom = async (): Promise<void> => {
     await nextTick();
@@ -96,111 +139,149 @@ const handleKeydown = (e: KeyboardEvent): void => {
 onMounted(() => {
     scrollToBottom();
     poller = window.setInterval(fetchMessages, 4000);
+    // Simulate live viewer count fluctuation
+    viewerTimer = window.setInterval(() => {
+        const delta = Math.floor(Math.random() * 7) - 3;
+        viewerCount.value = Math.max(80, viewerCount.value + delta);
+    }, 5000);
 });
 
 onUnmounted(() => {
-    if (poller) {
-        window.clearInterval(poller);
-    }
+    if (poller) window.clearInterval(poller);
+    if (viewerTimer) window.clearInterval(viewerTimer);
 });
 </script>
 
 <template>
     <Head :title="webinarTitle" />
 
-    <!-- Dark webinar room -->
-    <div class="min-h-screen bg-[#0a0f1e] text-white flex flex-col">
+    <!-- Locked to viewport — no page scroll -->
+    <div class="h-screen overflow-hidden bg-[#0a0f1e] text-white flex flex-col">
 
-        <!-- Top bar -->
-        <header class="flex items-center justify-between border-b border-white/10 bg-[#0d1424] px-4 py-2.5">
-            <div class="flex items-center gap-3 min-w-0">
-                <div class="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/20">
-                    <Icon icon="heroicons:video-camera" class="size-4 text-primary" style="color:#40E0D0" />
+        <!-- ── Top bar ── -->
+        <header class="flex shrink-0 items-center justify-between border-b border-white/10 bg-[#0d1424] px-4 py-2">
+
+            <!-- Left: icon + title -->
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+                <div class="flex size-7 shrink-0 items-center justify-center rounded-md" style="background:rgba(64,224,208,0.15)">
+                    <Icon icon="heroicons:video-camera" class="size-4" style="color:#40E0D0" />
                 </div>
                 <span class="truncate text-sm font-semibold text-white/90">{{ webinarTitle }}</span>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
+
+            <!-- Right: CTA + meta badges -->
+            <div class="flex items-center gap-2.5 shrink-0">
+                <!-- Primary CTA button — visible at top always -->
+                <a
+                    v-if="hasWebinarCta"
+                    :href="webinarCtaUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shrink-0 cta-pulse"
+                    style="background:#40E0D0;color:#0a0f1e;"
+                >
+                    <Icon icon="heroicons:rocket-launch" class="size-3.5" />
+                    {{ webinarCtaLabel }}
+                </a>
+
+                <!-- Viewer count -->
+                <span class="hidden md:inline-flex items-center gap-1 text-xs text-white/45">
+                    <Icon icon="heroicons:eye" class="size-3.5" />
+                    {{ viewerCount.toLocaleString() }} watching
+                </span>
+
                 <!-- LIVE badge -->
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-600/20 border border-rose-500/30 px-2.5 py-1 text-xs font-bold text-rose-400 uppercase tracking-wider">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-600/20 border border-rose-500/30 px-2.5 py-1 text-[11px] font-bold text-rose-400 uppercase tracking-wider">
                     <span class="size-1.5 rounded-full bg-rose-500 animate-pulse" />
                     Live
+                </span>
+
+                <!-- Provider badge -->
+                <span
+                    v-if="videoProvider !== 'unknown'"
+                    class="hidden sm:inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                    :class="videoProvider === 'youtube'
+                        ? 'bg-red-600/20 border border-red-500/30 text-red-400'
+                        : 'bg-sky-600/20 border border-sky-500/30 text-sky-400'"
+                >
+                    <Icon :icon="videoProvider === 'youtube' ? 'mdi:youtube' : 'mdi:vimeo'" class="size-3.5" />
+                    {{ videoProvider === 'youtube' ? 'YouTube' : 'Vimeo' }}
                 </span>
             </div>
         </header>
 
-        <!-- Main content -->
-        <div class="flex flex-1 flex-col lg:flex-row overflow-hidden">
+        <!-- ── Body: video + chat, fills remaining height ── -->
+        <div class="flex flex-1 flex-col lg:flex-row overflow-hidden min-h-0">
 
-            <!-- ── Video section ── -->
-            <main class="flex flex-col gap-4 p-4 lg:flex-1 lg:p-6">
-                <!-- Video player -->
-                <div class="aspect-video w-full overflow-hidden rounded-xl bg-black ring-1 ring-white/10 shadow-2xl">
+            <!-- ── Video column ── -->
+            <main class="flex flex-col flex-1 min-h-0 p-3 gap-2">
+
+                <!-- CTA strip on mobile (header CTA is hidden on small screens) -->
+                <a
+                    v-if="hasWebinarCta"
+                    :href="webinarCtaUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="sm:hidden flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-bold shrink-0 cta-pulse"
+                    style="background:#40E0D0;color:#0a0f1e;"
+                >
+                    <Icon icon="heroicons:rocket-launch" class="size-4" />
+                    {{ webinarCtaLabel }}
+                </a>
+
+                <!-- Video — fills all remaining vertical space -->
+                <div
+                    class="relative flex-1 min-h-0 overflow-hidden rounded-xl bg-black"
+                    style="box-shadow: 0 0 0 1px rgba(255,255,255,0.07), 0 20px 50px rgba(0,0,0,0.6);"
+                >
                     <iframe
-                        v-if="funnel.settings?.video_url"
-                        class="h-full w-full"
-                        :src="funnel.settings.video_url"
+                        v-if="videoEmbedUrl"
+                        class="absolute inset-0 h-full w-full"
+                        :src="videoEmbedUrl"
+                        frameborder="0"
                         allowfullscreen
-                        allow="autoplay; fullscreen"
+                        allow="autoplay; fullscreen; picture-in-picture"
+                        referrerpolicy="strict-origin-when-cross-origin"
                     />
-                    <div
-                        v-else
-                        class="flex h-full flex-col items-center justify-center gap-3 text-white/40"
-                    >
+                    <div v-else class="flex h-full flex-col items-center justify-center gap-3 text-white/40">
                         <Icon icon="heroicons:video-camera-slash" class="size-14" />
                         <p class="text-sm">Video not configured yet</p>
                     </div>
+
+                    <!-- Floating LIVE + viewer overlay on video -->
+                    <div v-if="videoEmbedUrl" class="pointer-events-none absolute left-3 top-3 flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1.5 rounded-full bg-rose-600/85 px-2.5 py-1 text-[11px] font-bold text-white uppercase tracking-wider backdrop-blur-sm">
+                            <span class="size-1.5 rounded-full bg-white animate-pulse" />
+                            Live
+                        </span>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[11px] text-white/80 backdrop-blur-sm">
+                            <Icon icon="heroicons:eye" class="size-3" />
+                            {{ viewerCount.toLocaleString() }}
+                        </span>
+                    </div>
                 </div>
 
-                <!-- Webinar info below video -->
-                <div class="space-y-1.5">
-                    <h1 class="text-lg font-bold text-white leading-snug">{{ webinarTitle }}</h1>
-                    <p class="text-sm text-white/50 leading-relaxed">{{ webinarDesc }}</p>
-                </div>
-
-                <!-- Info strip -->
-                <div class="flex flex-wrap items-center gap-4 text-xs text-white/40">
-                    <span class="flex items-center gap-1.5">
-                        <Icon icon="heroicons:users" class="size-4" />
+                <!-- Compact info strip below video -->
+                <div class="flex shrink-0 items-center gap-4 text-[11px] text-white/35 px-0.5">
+                    <span class="flex items-center gap-1">
+                        <Icon icon="heroicons:users" class="size-3.5" />
                         Live now
                     </span>
-                    <span class="flex items-center gap-1.5">
-                        <Icon icon="heroicons:shield-check" class="size-4" />
+                    <span class="flex items-center gap-1">
+                        <Icon icon="heroicons:shield-check" class="size-3.5" />
                         Private &amp; secure
                     </span>
-                    <span class="flex items-center gap-1.5">
-                        <Icon icon="heroicons:clock" class="size-4" />
+                    <span class="flex items-center gap-1">
+                        <Icon icon="heroicons:clock" class="size-3.5" />
                         Limited availability
                     </span>
-                </div>
-
-                <!-- Primary CTA -->
-                <div
-                    v-if="hasWebinarCta"
-                    class="rounded-xl border border-primary/25 bg-primary/10 p-4"
-                >
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <p class="text-sm font-semibold text-white">Ready for the next step?</p>
-                            <p class="text-xs text-white/60 mt-0.5">Use the button below to continue after watching the training.</p>
-                        </div>
-                        <a
-                            :href="webinarCtaUrl"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition hover:opacity-90"
-                            style="background:#40E0D0;color:#0a0f1e;"
-                        >
-                            <Icon icon="heroicons:rocket-launch" class="size-4" />
-                            {{ webinarCtaLabel }}
-                        </a>
-                    </div>
                 </div>
             </main>
 
             <!-- ── Chat sidebar ── -->
-            <aside class="flex flex-col border-t border-white/10 lg:border-t-0 lg:border-l lg:w-[360px] lg:h-[calc(100vh-48px)]">
+            <aside class="flex flex-col border-t border-white/10 lg:border-t-0 lg:border-l lg:w-[360px] min-h-0 overflow-hidden">
                 <!-- Chat header -->
-                <div class="flex items-center justify-between border-b border-white/10 bg-[#0d1424] px-4 py-3">
+                <div class="flex shrink-0 items-center justify-between border-b border-white/10 bg-[#0d1424] px-4 py-3">
                     <div class="flex items-center gap-2">
                         <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-4 text-white/60" />
                         <span class="text-sm font-semibold text-white/80">Webinar Chat</span>
@@ -211,7 +292,7 @@ onUnmounted(() => {
                 <!-- Pinned CTA in chat -->
                 <div
                     v-if="hasWebinarCta"
-                    class="border-b border-primary/20 bg-primary/10 px-3 py-2"
+                    class="shrink-0 border-b border-primary/20 bg-primary/10 px-3 py-2"
                 >
                     <a
                         :href="webinarCtaUrl"
@@ -220,10 +301,10 @@ onUnmounted(() => {
                         class="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-[#0d1424] px-3 py-2 text-xs"
                     >
                         <span class="flex items-center gap-1.5 text-white/85">
-                            <Icon icon="heroicons:megaphone" class="size-3.5 text-primary" style="color:#40E0D0" />
-                            Pinned CTA: {{ webinarCtaLabel }}
+                            <Icon icon="heroicons:megaphone" class="size-3.5" style="color:#40E0D0" />
+                            {{ webinarCtaLabel }}
                         </span>
-                        <span class="inline-flex items-center gap-1 font-semibold text-primary" style="color:#40E0D0">
+                        <span class="inline-flex items-center gap-1 font-semibold" style="color:#40E0D0">
                             Open
                             <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
                         </span>
@@ -233,8 +314,7 @@ onUnmounted(() => {
                 <!-- Messages -->
                 <div
                     ref="chatBody"
-                    class="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10"
-                    style="min-height: 200px; max-height: 60vh"
+                    class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10"
                 >
                     <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full gap-2 text-white/30 py-10">
                         <Icon icon="heroicons:chat-bubble-oval-left" class="size-8" />
@@ -311,3 +391,26 @@ onUnmounted(() => {
         </div>
     </div>
 </template>
+
+<style scoped>
+@keyframes cta-blink {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(64, 224, 208, 0.7), 0 0 12px rgba(64, 224, 208, 0.4);
+        opacity: 1;
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(64, 224, 208, 0), 0 0 24px rgba(64, 224, 208, 0.15);
+        opacity: 0.82;
+    }
+}
+
+.cta-pulse {
+    animation: cta-blink 1.6s ease-in-out infinite;
+}
+
+.cta-pulse:hover {
+    animation: none;
+    opacity: 0.9;
+    box-shadow: 0 0 20px rgba(64, 224, 208, 0.5);
+}
+</style>

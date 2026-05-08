@@ -236,7 +236,7 @@ return [
     |
     | The following list of directories and files will be watched when using
     | the `horizon:listen` command. Whenever any directories or files are
-    | changed, Horizon will automatically restart to apply all changes.
+    | changed, Horizon will automatically restart to apply all changes.en
     |
     */
 

@@ -25,6 +25,8 @@ const props = defineProps<{
             video_url?: string | null;
             webinar_cta_label?: string | null;
             webinar_cta_url?: string | null;
+            affiliate_request_link?: string | null;
+            jv_page?: string | null;
             chat_mode: string;
             allow_replay: boolean;
             chat_seed_messages?: Array<{ author: string; message: string }>;
@@ -129,6 +131,8 @@ const settingsForm = useForm<{
     video_url: string;
     webinar_cta_label: string;
     webinar_cta_url: string;
+    affiliate_request_link: string;
+    jv_page: string;
     chat_mode: string;
     allow_replay: boolean;
     chat_seed_messages: Array<{ author: string; message: string }>;
@@ -140,6 +144,8 @@ const settingsForm = useForm<{
     video_url: props.funnel.settings?.video_url ?? '',
     webinar_cta_label: props.funnel.settings?.webinar_cta_label ?? 'Claim Your Spot',
     webinar_cta_url: props.funnel.settings?.webinar_cta_url ?? '',
+    affiliate_request_link: props.funnel.settings?.affiliate_request_link ?? '',
+    jv_page: props.funnel.settings?.jv_page ?? '',
     chat_mode: props.funnel.settings?.chat_mode ?? 'simulated',
     allow_replay: props.funnel.settings?.allow_replay ?? true,
     chat_seed_messages: props.funnel.settings?.chat_seed_messages ?? [],
@@ -968,6 +974,32 @@ onUnmounted(() => {
                                     />
                                 </div>
                                 <p class="text-[0.65rem] text-muted-foreground">Attendees click this after watching the webinar.</p>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold">Affiliate Request Link</Label>
+                                <div class="relative">
+                                    <Icon icon="heroicons:link" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                                    <Input
+                                        v-model="settingsForm.affiliate_request_link"
+                                        type="url"
+                                        class="pl-9 h-9 text-sm"
+                                        placeholder="https://www.jvzoo.com/affiliate/..."
+                                    />
+                                </div>
+                                <p class="text-[0.65rem] text-muted-foreground">Used to request affiliate access for this offer.</p>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold">JV Page</Label>
+                                <div class="relative">
+                                    <Icon icon="heroicons:globe-alt" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                                    <Input
+                                        v-model="settingsForm.jv_page"
+                                        type="url"
+                                        class="pl-9 h-9 text-sm"
+                                        placeholder="https://your-offer.com/jv"
+                                    />
+                                </div>
+                                <p class="text-[0.65rem] text-muted-foreground">Partner resources and launch details page.</p>
                             </div>
                         </CardContent>
                     </Card>

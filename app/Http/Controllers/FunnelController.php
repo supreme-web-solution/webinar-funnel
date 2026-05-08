@@ -23,6 +23,7 @@ class FunnelController extends Controller
     public function index(): Response
     {
         $userId = auth()->id();
+        $username = auth()->user()->username ?? 'user-'.$userId;
 
         $funnels = Funnel::query()
             ->where('user_id', $userId)
@@ -30,6 +31,30 @@ class FunnelController extends Controller
             ->withCount('leads')
             ->latest()
             ->get(['id', 'template_id', 'name', 'slug', 'status', 'published_at', 'created_at']);
+
+        $funnels = $funnels->map(function (Funnel $funnel) use ($username) {
+            return [
+                'id' => $funnel->id,
+                'name' => $funnel->name,
+                'slug' => $funnel->slug,
+                'status' => $funnel->status,
+                'published_at' => $funnel->published_at,
+                'created_at' => $funnel->created_at,
+                'leads_count' => $funnel->leads_count,
+                'template' => $funnel->template
+                    ? [
+                        'name' => $funnel->template->name,
+                        'category' => $funnel->template->category,
+                    ]
+                    : null,
+                'public_url' => $funnel->status === 'published'
+                    ? route('public.optin', [
+                        'username' => $username,
+                        'slug' => $funnel->slug,
+                    ])
+                    : null,
+            ];
+        })->values();
 
         $stats = [
             'total'     => $funnels->count(),

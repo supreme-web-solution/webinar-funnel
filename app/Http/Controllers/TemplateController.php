@@ -13,7 +13,7 @@ class TemplateController extends Controller
         $templates = Template::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->paginate(24)
+            ->paginate(60)
             ->through(fn (Template $template) => [
                 'id' => $template->id,
                 'name' => $template->name,

@@ -18,6 +18,8 @@ class FunnelSetting extends Model
         'video_url',
         'webinar_cta_label',
         'webinar_cta_url',
+        'affiliate_request_link',
+        'jv_page',
         'chat_mode',
         'countdown_seconds',
         'allow_replay',

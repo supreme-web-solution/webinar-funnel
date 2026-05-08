@@ -1,6 +1,7 @@
 export type User = {
     id: number;
     name: string;
+    username?: string;
     email: string;
     avatar?: string;
     email_verified_at: string | null;
@@ -11,6 +12,7 @@ export type User = {
 
 export type Auth = {
     user: User;
+    is_admin?: boolean;
 };
 
 export type TwoFactorConfigContent = {
