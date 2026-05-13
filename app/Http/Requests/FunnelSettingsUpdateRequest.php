@@ -56,6 +56,8 @@ class FunnelSettingsUpdateRequest extends FormRequest
             'exit_popup_description' => ['nullable', 'string', 'max:1000'],
             'exit_popup_cta_label' => ['nullable', 'string', 'max:120'],
             'exit_popup_cta_url' => ['nullable', 'url', 'max:2048'],
+            'redirect_enabled' => ['nullable', 'boolean'],
+            'redirect_url' => ['nullable', 'url', 'max:2048'],
             'integration_account_ids' => ['nullable', 'array'],
             'integration_account_ids.*' => [
                 'integer',

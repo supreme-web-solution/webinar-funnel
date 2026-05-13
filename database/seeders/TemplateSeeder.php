@@ -38,7 +38,7 @@ class TemplateSeeder extends Seeder
             $webinarDescription = $offer
                 ? $this->buildOfferDescription($offer)
                 : "Step-by-step {$category} roadmap to get faster results, avoid common mistakes, and scale with confidence.";
-            $webinarCtaLabel = 'Apply What You Learned';
+            $webinarCtaLabel = 'sign up right away';
             $webinarCtaUrl = $offer['jv_page'] ?? 'https://example.com/next-step';
             $affiliateRequestLink = $offer['affiliate_request_link'] ?? null;
             $jvPage = $offer['jv_page'] ?? null;
@@ -50,7 +50,6 @@ class TemplateSeeder extends Seeder
             $primaryOfferSeconds = $timingRow
                 ? $this->hmsToSeconds($timingRow['offer'])
                 : 3600;
-            $affiliateOfferUrl = $affiliateRequestLink ?? $jvPage ?? $webinarCtaUrl;
             $offerDisplayName = $offer
                 ? (string) preg_replace('/\s+Offer$/i', '', (string) $offer['name'])
                 : $name;
@@ -100,13 +99,13 @@ class TemplateSeeder extends Seeder
                         'jv_page'             => $jvPage,
                         'offers' => $this->buildDefaultOffersForTemplate(
                             $offerDisplayName,
-                            $affiliateOfferUrl,
                             $primaryOfferSeconds,
                             $webinarDurationSeconds,
-                            $i,
                         ),
                         'chat_mode'          => 'simulated',
                         'allow_replay'       => true,
+                        'redirect_enabled'   => false,
+                        'redirect_url'       => '',
                         'branding'           => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
                         'chat_seed_messages' => [
                             ['author' => 'Moderator', 'message' => 'Welcome! Let us know where you are joining from 👋'],
@@ -208,50 +207,47 @@ class TemplateSeeder extends Seeder
      */
     private function buildDefaultOffersForTemplate(
         string $offerDisplayName,
-        string $affiliateOfferUrl,
         int $primaryOfferSeconds,
         ?int $webinarDurationSeconds,
-        int $templateIndex,
     ): array {
-        $ctaUrl = $affiliateOfferUrl !== '' ? $affiliateOfferUrl : 'https://example.com/affiliate';
+        $chatOfferSeconds = max(300, $primaryOfferSeconds - 900);
+        $pinnedOfferSeconds = max(300, $primaryOfferSeconds);
+        $popupOfferSeconds = $webinarDurationSeconds !== null
+            ? max($pinnedOfferSeconds + 120, min($pinnedOfferSeconds + 900, $webinarDurationSeconds - 300))
+            : $pinnedOfferSeconds + 900;
 
-        $placements = ['pinned', 'chat', 'popup'];
-        $mainPlacement = $placements[($templateIndex - 1) % 3];
+        $title = "Get {$offerDisplayName} Bundle Deal Now!";
+        $description = 'Get the all-inclusive bundle deal right away at the webinar only discounted price.';
 
-        $offers = [[
-            'title' => $offerDisplayName.' — offer',
-            'description' => 'Timed offer for this webinar template (same affiliate / JV link as the funnel).',
-            'cta_label' => 'Get access',
-            'cta_url' => $ctaUrl,
-            'placement' => $mainPlacement,
-            'timing_seconds' => $primaryOfferSeconds,
-            'enabled' => true,
-        ]];
-
-        if (
-            $templateIndex % 4 === 0
-            && $webinarDurationSeconds !== null
-            && $webinarDurationSeconds > 900
-            && $primaryOfferSeconds > 900
-        ) {
-            $early = max(300, min((int) floor($primaryOfferSeconds * 0.45), $primaryOfferSeconds - 480));
-            if ($early < $primaryOfferSeconds - 240) {
-                $altPlacements = array_values(array_diff($placements, [$mainPlacement]));
-                $offers[] = [
-                    'title' => $offerDisplayName.' — reminder',
-                    'description' => 'Earlier nudge with the same link.',
-                    'cta_label' => 'Open link',
-                    'cta_url' => $ctaUrl,
-                    'placement' => $altPlacements[0] ?? 'chat',
-                    'timing_seconds' => $early,
-                    'enabled' => true,
-                ];
-            }
-        }
-
-        usort($offers, fn (array $a, array $b): int => $a['timing_seconds'] <=> $b['timing_seconds']);
-
-        return array_values($offers);
+        return [
+            [
+                'title' => $title,
+                'description' => $description,
+                'cta_label' => 'Get Deal',
+                'cta_url' => '',
+                'placement' => 'chat',
+                'timing_seconds' => $chatOfferSeconds,
+                'enabled' => true,
+            ],
+            [
+                'title' => $title,
+                'description' => $description,
+                'cta_label' => 'Get Deal',
+                'cta_url' => '',
+                'placement' => 'pinned',
+                'timing_seconds' => $pinnedOfferSeconds,
+                'enabled' => true,
+            ],
+            [
+                'title' => $title,
+                'description' => $description,
+                'cta_label' => 'Get Deal',
+                'cta_url' => '',
+                'placement' => 'popup',
+                'timing_seconds' => $popupOfferSeconds,
+                'enabled' => true,
+            ],
+        ];
     }
 
     private function getOfferCategory(string $name): string

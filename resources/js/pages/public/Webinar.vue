@@ -29,6 +29,8 @@ const props = defineProps<{
             exit_popup_description?: string | null;
             exit_popup_cta_label?: string | null;
             exit_popup_cta_url?: string | null;
+            redirect_enabled?: boolean;
+            redirect_url?: string | null;
         } | null;
     };
     chatMessages: Array<{
@@ -62,6 +64,7 @@ const exitPopupShownOnce = ref(false);
 const lastMouseY = ref<number | null>(null);
 const sentMilestones = ref<Set<string>>(new Set());
 const sessionKey = ref('');
+const redirectedAtEnd = ref(false);
 
 // Simulated live viewer count
 const viewerCount = ref(Math.floor(Math.random() * 180) + 120);
@@ -193,6 +196,9 @@ const exitPopupDescription = computed(() => props.funnel.settings?.exit_popup_de
 const exitPopupCtaLabel = computed(() => props.funnel.settings?.exit_popup_cta_label?.trim() || 'Claim Offer');
 const exitPopupCtaUrl = computed(() => props.funnel.settings?.exit_popup_cta_url?.trim() || '');
 const hasExitPopupCta = computed(() => exitPopupCtaUrl.value.length > 0);
+const videoEndRedirectEnabled = computed(() => props.funnel.settings?.redirect_enabled === true);
+const videoEndRedirectUrl = computed(() => props.funnel.settings?.redirect_url?.trim() || '');
+const hasVideoEndRedirect = computed(() => videoEndRedirectEnabled.value && videoEndRedirectUrl.value.length > 0);
 
 const dismissOfferPopup = (): void => {
     if (!visiblePopupOffer.value) return;
@@ -297,6 +303,20 @@ const maybeTrackMilestones = (): void => {
             postAnalytics('milestone_100');
         }
     }
+};
+
+const maybeRedirectAtVideoEnd = (): void => {
+    if (redirectedAtEnd.value || !hasVideoEndRedirect.value) {
+        return;
+    }
+
+    const duration = videoDurationSeconds.value;
+    if (duration <= 0 || elapsedSeconds.value < duration) {
+        return;
+    }
+
+    redirectedAtEnd.value = true;
+    window.location.assign(videoEndRedirectUrl.value);
 };
 
 watch(
@@ -423,6 +443,7 @@ onMounted(() => {
     offerTimer = window.setInterval(() => {
         elapsedSeconds.value = Math.floor((Date.now() - startedAtMs.value) / 1000);
         maybeTrackMilestones();
+        maybeRedirectAtVideoEnd();
     }, 1000);
     playbackKeepAliveTimer = window.setInterval(tryResumePlayback, 12000);
     analyticsHeartbeatTimer = window.setInterval(() => {

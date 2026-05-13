@@ -521,6 +521,8 @@ class FunnelController extends Controller
         $settings['exit_popup_description'] = '';
         $settings['exit_popup_cta_label'] = '';
         $settings['exit_popup_cta_url'] = '';
+        $settings['redirect_enabled'] = false;
+        $settings['redirect_url'] = '';
         $settings['chat_mode'] = $settings['chat_mode'] ?? 'simulated';
         $settings['allow_replay'] = array_key_exists('allow_replay', $settings) ? (bool) $settings['allow_replay'] : true;
         $settings['branding'] = $settings['branding'] ?? ['primary' => '#40E0D0', 'secondary' => '#FFAD00'];

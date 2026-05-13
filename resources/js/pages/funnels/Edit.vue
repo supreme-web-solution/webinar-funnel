@@ -45,6 +45,8 @@ const props = defineProps<{
             exit_popup_description?: string | null;
             exit_popup_cta_label?: string | null;
             exit_popup_cta_url?: string | null;
+            redirect_enabled?: boolean;
+            redirect_url?: string | null;
             traffic_ai_reply_enabled?: boolean;
             traffic_ai_link_override?: string | null;
             traffic_ai_extra_context?: string | null;
@@ -225,6 +227,8 @@ const settingsForm = useForm<{
     exit_popup_description: string;
     exit_popup_cta_label: string;
     exit_popup_cta_url: string;
+    redirect_enabled: boolean;
+    redirect_url: string;
     chat_mode: string;
     allow_replay: boolean;
     chat_seed_messages: Array<{ author: string; message: string }>;
@@ -259,6 +263,8 @@ const settingsForm = useForm<{
     exit_popup_description: props.funnel.settings?.exit_popup_description ?? 'Claim this special offer before leaving this webinar room.',
     exit_popup_cta_label: props.funnel.settings?.exit_popup_cta_label ?? 'Claim Offer Now',
     exit_popup_cta_url: props.funnel.settings?.exit_popup_cta_url ?? '',
+    redirect_enabled: props.funnel.settings?.redirect_enabled ?? false,
+    redirect_url: props.funnel.settings?.redirect_url ?? '',
     chat_mode: props.funnel.settings?.chat_mode ?? 'simulated',
     allow_replay: props.funnel.settings?.allow_replay ?? true,
     chat_seed_messages: props.funnel.settings?.chat_seed_messages ?? [],
@@ -373,6 +379,15 @@ const copyLink = async (type: 'optin' | 'webinar'): Promise<void> => {
     setTimeout(() => {
         copiedLink.value = null;
     }, 2000);
+};
+
+const openExternalLink = (url: string): void => {
+    const normalized = url.trim();
+    if (!normalized) {
+        return;
+    }
+
+    window.open(normalized, '_blank', 'noopener,noreferrer');
 };
 
 const espProviderIcon: Record<string, string> = {
@@ -1290,27 +1305,51 @@ onUnmounted(() => {
                             </div>
                             <div class="space-y-1.5">
                                 <Label class="text-xs font-semibold">Affiliate Request Link</Label>
-                                <div class="relative">
-                                    <Icon icon="heroicons:link" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                                <div class="flex overflow-hidden rounded-md border bg-muted/20">
+                                    <div class="inline-flex h-9 items-center px-3 text-muted-foreground">
+                                        <Icon icon="heroicons:link" class="size-4 pointer-events-none" />
+                                    </div>
                                     <Input
                                         v-model="settingsForm.affiliate_request_link"
                                         type="url"
-                                        class="pl-9 h-9 text-sm"
+                                        readonly
+                                        class="h-9 rounded-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
                                         placeholder="https://www.jvzoo.com/affiliate/..."
                                     />
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-9 items-center border-l px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="!settingsForm.affiliate_request_link?.trim()"
+                                        title="Open in new tab"
+                                        @click="openExternalLink(settingsForm.affiliate_request_link)"
+                                    >
+                                        <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
+                                    </button>
                                 </div>
                                 <p class="text-[0.65rem] text-muted-foreground">Used to request affiliate access for this offer.</p>
                             </div>
                             <div class="space-y-1.5">
                                 <Label class="text-xs font-semibold">JV Page</Label>
-                                <div class="relative">
-                                    <Icon icon="heroicons:globe-alt" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                                <div class="flex overflow-hidden rounded-md border bg-muted/20">
+                                    <div class="inline-flex h-9 items-center px-3 text-muted-foreground">
+                                        <Icon icon="heroicons:globe-alt" class="size-4 pointer-events-none" />
+                                    </div>
                                     <Input
                                         v-model="settingsForm.jv_page"
                                         type="url"
-                                        class="pl-9 h-9 text-sm"
+                                        readonly
+                                        class="h-9 rounded-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
                                         placeholder="https://your-offer.com/jv"
                                     />
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-9 items-center border-l px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="!settingsForm.jv_page?.trim()"
+                                        title="Open in new tab"
+                                        @click="openExternalLink(settingsForm.jv_page)"
+                                    >
+                                        <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
+                                    </button>
                                 </div>
                                 <p class="text-[0.65rem] text-muted-foreground">Partner resources and launch details page.</p>
                             </div>
@@ -1485,6 +1524,38 @@ onUnmounted(() => {
                                     <Input v-model="settingsForm.exit_popup_cta_url" type="url" class="h-9 text-sm" placeholder="https://your-exit-offer-link.com" />
                                 </div>
                             </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card class="border shadow-sm">
+                    <CardHeader class="pb-3">
+                        <CardTitle class="text-base font-semibold">Video End Redirect</CardTitle>
+                        <CardDescription class="text-xs">
+                            Redirect attendees after the webinar reaches its configured video duration.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div class="flex w-full items-center justify-between rounded-lg border p-3 text-left">
+                            <div>
+                                <p class="text-sm font-medium">Enable Redirect After Video Ends</p>
+                                <p class="text-xs text-muted-foreground">When enabled, users are redirected as soon as watch time reaches video duration.</p>
+                            </div>
+                            <Switch
+                                :model-value="Boolean(settingsForm.redirect_enabled)"
+                                @update:model-value="settingsForm.redirect_enabled = Boolean($event)"
+                            />
+                        </div>
+
+                        <div v-if="Boolean(settingsForm.redirect_enabled)" class="space-y-1.5">
+                            <Label class="text-xs font-semibold">Redirect URL</Label>
+                            <Input
+                                v-model="settingsForm.redirect_url"
+                                type="url"
+                                class="h-9 text-sm"
+                                placeholder="https://your-redirect-page.com"
+                            />
+                            <p class="text-[0.65rem] text-muted-foreground">This opens automatically at video completion.</p>
                         </div>
                     </CardContent>
                 </Card>
