@@ -43,6 +43,18 @@ class TemplateSeeder extends Seeder
             $affiliateRequestLink = $offer['affiliate_request_link'] ?? null;
             $jvPage = $offer['jv_page'] ?? null;
 
+            $timingRow = $this->templateWebinarOfferTiming()[$i - 1] ?? null;
+            $webinarDurationSeconds = $timingRow
+                ? $this->hmsToSeconds($timingRow['webinar'])
+                : null;
+            $primaryOfferSeconds = $timingRow
+                ? $this->hmsToSeconds($timingRow['offer'])
+                : 3600;
+            $affiliateOfferUrl = $affiliateRequestLink ?? $jvPage ?? $webinarCtaUrl;
+            $offerDisplayName = $offer
+                ? (string) preg_replace('/\s+Offer$/i', '', (string) $offer['name'])
+                : $name;
+
             $template = Template::query()->updateOrCreate(
                 ['slug' => $slug],
                 [
@@ -81,10 +93,18 @@ class TemplateSeeder extends Seeder
                         'webinar_title'      => $webinarTitle,
                         'webinar_description'=> $webinarDescription,
                         'video_url'          => $videoUrl,
+                        'webinar_duration_seconds' => $webinarDurationSeconds,
                         'webinar_cta_label'  => $webinarCtaLabel,
                         'webinar_cta_url'    => $webinarCtaUrl,
                         'affiliate_request_link' => $affiliateRequestLink,
                         'jv_page'             => $jvPage,
+                        'offers' => $this->buildDefaultOffersForTemplate(
+                            $offerDisplayName,
+                            $affiliateOfferUrl,
+                            $primaryOfferSeconds,
+                            $webinarDurationSeconds,
+                            $i,
+                        ),
                         'chat_mode'          => 'simulated',
                         'allow_replay'       => true,
                         'branding'           => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
@@ -99,6 +119,139 @@ class TemplateSeeder extends Seeder
 
             $template->versions()->where('version', '!=', 1)->update(['is_current' => false]);
         }
+    }
+
+    /**
+     * Parse "H:M:S", "M:S", or seconds-only segments from template timing notes.
+     */
+    private function hmsToSeconds(string $hms): int
+    {
+        $hms = trim($hms);
+        $parts = array_map('intval', explode(':', $hms));
+        $c = count($parts);
+
+        if ($c === 1) {
+            return max(0, $parts[0]);
+        }
+
+        if ($c === 2) {
+            return max(0, ($parts[0] * 60) + $parts[1]);
+        }
+
+        return max(0, ($parts[0] * 3600) + ($parts[1] * 60) + $parts[2]);
+    }
+
+    /**
+     * Webinar length + primary offer drop time per seeded template (indexes 0–50 = templates #1–#51).
+     *
+     * @return list<array{webinar: string, offer: string}>
+     */
+    private function templateWebinarOfferTiming(): array
+    {
+        return [
+            ['webinar' => '2:23:19', 'offer' => '1:03:37'],
+            ['webinar' => '1:58:11', 'offer' => '1:03:00'],
+            ['webinar' => '2:17:34', 'offer' => '1:03:45'],
+            ['webinar' => '1:12:35', 'offer' => '30:47'],
+            ['webinar' => '1:41:50', 'offer' => '1:23:48'],
+            ['webinar' => '2:22:22', 'offer' => '1:30:00'],
+            ['webinar' => '1:55:49', 'offer' => '1:18:00'],
+            ['webinar' => '2:23:19', 'offer' => '1:03:37'],
+            ['webinar' => '1:59:13', 'offer' => '1:20:50'],
+            ['webinar' => '1:50:42', 'offer' => '1:17:54'],
+            ['webinar' => '2:06:27', 'offer' => '1:21:12'],
+            ['webinar' => '2:48:59', 'offer' => '1:01:59'],
+            ['webinar' => '1:47:38', 'offer' => '57:20'],
+            ['webinar' => '1:20:19', 'offer' => '1:05:40'],
+            ['webinar' => '2:00:50', 'offer' => '1:11:20'],
+            ['webinar' => '1:26:44', 'offer' => '1:03:10'],
+            ['webinar' => '2:12:55', 'offer' => '1:07:25'],
+            ['webinar' => '1:10:40', 'offer' => '1:02:30'],
+            ['webinar' => '1:46:46', 'offer' => '1:16:00'],
+            ['webinar' => '1:05:29', 'offer' => '1:00:00'],
+            ['webinar' => '1:43:35', 'offer' => '1:01:00'],
+            ['webinar' => '1:52:17', 'offer' => '1:09:00'],
+            ['webinar' => '1:59:28', 'offer' => '1:07:00'],
+            ['webinar' => '1:51:39', 'offer' => '56:40'],
+            ['webinar' => '1:13:19', 'offer' => '47:20'],
+            ['webinar' => '1:39:54', 'offer' => '1:05:50'],
+            ['webinar' => '1:49:22', 'offer' => '1:15:26'],
+            ['webinar' => '2:04:46', 'offer' => '1:11:45'],
+            ['webinar' => '1:44:55', 'offer' => '1:05:50'],
+            ['webinar' => '1:31:22', 'offer' => '1:20:33'],
+            ['webinar' => '1:54:04', 'offer' => '1:12:12'],
+            ['webinar' => '2:17:50', 'offer' => '1:15:00'],
+            ['webinar' => '2:04:07', 'offer' => '1:04:40'],
+            ['webinar' => '1:59:02', 'offer' => '1:03:37'],
+            ['webinar' => '1:53:10', 'offer' => '55:20'],
+            ['webinar' => '1:41:52', 'offer' => '56:37'],
+            ['webinar' => '2:03:36', 'offer' => '54:38'],
+            ['webinar' => '1:22:24', 'offer' => '1:04:18'],
+            ['webinar' => '1:47:10', 'offer' => '55:55'],
+            ['webinar' => '1:24:12', 'offer' => '1:08:55'],
+            ['webinar' => '1:43:07', 'offer' => '1:10:48'],
+            ['webinar' => '1:21:40', 'offer' => '1:17:22'],
+            ['webinar' => '2:23:19', 'offer' => '1:03:37'],
+            ['webinar' => '2:09:45', 'offer' => '1:22:01'],
+            ['webinar' => '1:52:27', 'offer' => '1:06:33'],
+            ['webinar' => '1:53:12', 'offer' => '1:22:50'],
+            ['webinar' => '1:56:26', 'offer' => '1:28:30'],
+            ['webinar' => '1:48:04', 'offer' => '1:03:30'],
+            ['webinar' => '2:11:40', 'offer' => '1:19:45'],
+            ['webinar' => '1:58:58', 'offer' => '1:18:10'],
+            ['webinar' => '1:55:35', 'offer' => '1:06:29'],
+        ];
+    }
+
+    /**
+     * @return list<array{title: string, description: string, cta_label: string, cta_url: string, placement: string, timing_seconds: int, enabled: bool}>
+     */
+    private function buildDefaultOffersForTemplate(
+        string $offerDisplayName,
+        string $affiliateOfferUrl,
+        int $primaryOfferSeconds,
+        ?int $webinarDurationSeconds,
+        int $templateIndex,
+    ): array {
+        $ctaUrl = $affiliateOfferUrl !== '' ? $affiliateOfferUrl : 'https://example.com/affiliate';
+
+        $placements = ['pinned', 'chat', 'popup'];
+        $mainPlacement = $placements[($templateIndex - 1) % 3];
+
+        $offers = [[
+            'title' => $offerDisplayName.' — offer',
+            'description' => 'Timed offer for this webinar template (same affiliate / JV link as the funnel).',
+            'cta_label' => 'Get access',
+            'cta_url' => $ctaUrl,
+            'placement' => $mainPlacement,
+            'timing_seconds' => $primaryOfferSeconds,
+            'enabled' => true,
+        ]];
+
+        if (
+            $templateIndex % 4 === 0
+            && $webinarDurationSeconds !== null
+            && $webinarDurationSeconds > 900
+            && $primaryOfferSeconds > 900
+        ) {
+            $early = max(300, min((int) floor($primaryOfferSeconds * 0.45), $primaryOfferSeconds - 480));
+            if ($early < $primaryOfferSeconds - 240) {
+                $altPlacements = array_values(array_diff($placements, [$mainPlacement]));
+                $offers[] = [
+                    'title' => $offerDisplayName.' — reminder',
+                    'description' => 'Earlier nudge with the same link.',
+                    'cta_label' => 'Open link',
+                    'cta_url' => $ctaUrl,
+                    'placement' => $altPlacements[0] ?? 'chat',
+                    'timing_seconds' => $early,
+                    'enabled' => true,
+                ];
+            }
+        }
+
+        usort($offers, fn (array $a, array $b): int => $a['timing_seconds'] <=> $b['timing_seconds']);
+
+        return array_values($offers);
     }
 
     private function getOfferCategory(string $name): string
