@@ -21,11 +21,14 @@ const props = defineProps<{
 }>();
 
 const templateIdFromUrl = Number(new URLSearchParams(window.location.search).get('template_id') ?? 0);
+const scratchModeFromUrl = new URLSearchParams(window.location.search).get('scratch') === '1';
+const firstTemplateId = props.templates[0]?.id || 0;
 
 const form = useForm({
-    template_id: templateIdFromUrl || props.templates[0]?.id || 0,
+    template_id: scratchModeFromUrl ? firstTemplateId : (templateIdFromUrl || firstTemplateId),
     name: '',
     slug: '',
+    is_scratch: scratchModeFromUrl,
 });
 
 const selectedTemplate = computed(() => props.templates.find((t) => t.id === form.template_id) ?? props.templates[0]);
@@ -46,6 +49,7 @@ const filteredTemplates = computed(() => {
 });
 
 function selectTemplate(id: number): void {
+    if (form.is_scratch) return;
     form.template_id = id;
     showPicker.value = false;
     pickerSearch.value = '';
@@ -84,7 +88,7 @@ function cardGradient(idx: number): string {
 <template>
     <Head title="Create Funnel" />
 
-    <div class="flex flex-col gap-6 p-4 md:p-6 w-full max-w-screen-xl mx-auto">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
 
         <!-- ── Page header ── -->
         <div class="flex items-center gap-3">
@@ -118,12 +122,12 @@ function cardGradient(idx: number): string {
                         />
                         <div
                             v-else
-                            class="flex h-full w-full items-center justify-center bg-gradient-to-br"
+                            class="flex h-full w-full items-center justify-center bg-linear-to-br"
                             :class="cardGradient(selectedTemplate?.id ?? 0)"
                         >
                             <Icon icon="heroicons:video-camera" class="size-14 text-white/70" />
                         </div>
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        <div class="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
                         <div class="absolute bottom-3 left-3 right-3">
                             <p class="text-sm font-semibold text-white leading-tight line-clamp-1">
                                 {{ selectedTemplate?.name }}
@@ -151,10 +155,11 @@ function cardGradient(idx: number): string {
                                 variant="outline"
                                 size="sm"
                                 class="h-7 px-3 text-xs"
+                                :disabled="form.is_scratch"
                                 @click="showPicker = !showPicker"
                             >
                                 <Icon icon="heroicons:arrows-right-left" class="size-3.5 mr-1" />
-                                Change
+                                {{ form.is_scratch ? 'Fixed template' : 'Change' }}
                             </Button>
                         </div>
                     </CardContent>
@@ -201,7 +206,7 @@ function cardGradient(idx: number): string {
             <div class="lg:col-span-3 flex flex-col gap-4">
 
                 <!-- Template picker panel (toggled) -->
-                <Card v-if="showPicker" class="border shadow-sm">
+                <Card v-if="showPicker && !form.is_scratch" class="border shadow-sm">
                     <CardHeader class="pb-3">
                         <div class="flex items-center justify-between">
                             <CardTitle class="text-sm font-semibold">Switch Template</CardTitle>
@@ -236,7 +241,7 @@ function cardGradient(idx: number): string {
                                     />
                                     <div
                                         v-else
-                                        class="flex h-full w-full items-center justify-center bg-gradient-to-br"
+                                        class="flex h-full w-full items-center justify-center bg-linear-to-br"
                                         :class="cardGradient(idx)"
                                     >
                                         <Icon icon="heroicons:video-camera" class="size-4 text-white/80" />
@@ -315,6 +320,7 @@ function cardGradient(idx: number): string {
 
                             <!-- Selected template preview in form (hidden input) -->
                             <input type="hidden" :value="form.template_id" />
+                            <input type="hidden" :value="form.is_scratch ? 1 : 0" />
 
                             <!-- Template confirmation row -->
                             <div class="flex items-center justify-between rounded-lg border bg-muted/30 px-3.5 py-2.5">
@@ -326,6 +332,10 @@ function cardGradient(idx: number): string {
                                 <Badge class="text-[0.6rem] bg-primary/10 text-primary border-primary/20 capitalize">
                                     {{ selectedTemplate?.category }}
                                 </Badge>
+                            </div>
+
+                            <div v-if="form.is_scratch" class="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3.5 py-2.5 text-xs text-emerald-800">
+                                Scratch mode: this uses the first base template structure, but starts with empty page content and webinar settings.
                             </div>
 
                             <!-- Submit -->

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Session Expired - DFY Webinar Forge</title>
+    <title>Session Expired - DFY Webinar Funnels</title>
     <style>
         :root {
             --bg: #f8fafc;
@@ -150,7 +150,7 @@
 <main class="card">
     <div class="brand">
         <span class="dot"></span>
-        DFY Webinar Forge
+        DFY Webinar Funnels
     </div>
 
     <span class="eyebrow">Session Expired</span>

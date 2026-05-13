@@ -8,7 +8,7 @@ import { Icon } from '@iconify/vue';
     </div>
     <div class="ml-2 grid flex-1 text-left leading-tight">
         <span class="truncate text-[0.8rem] font-bold tracking-tight text-sidebar-accent-foreground">
-            DFY Webinar Forge
+            DFY Webinar Funnels
         </span>
         <span class="text-[0.65rem] text-sidebar-foreground/50 truncate">Funnel Builder</span>
     </div>

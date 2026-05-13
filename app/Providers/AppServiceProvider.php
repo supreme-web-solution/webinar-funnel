@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\Mention;
+use App\Observers\MentionObserver;
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
@@ -24,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Mention::observe(MentionObserver::class);
+
         $this->configureDefaults();
     }
 
@@ -49,7 +54,7 @@ class AppServiceProvider extends ServiceProvider
         );
 
         RateLimiter::for('public-optin', function ($request) {
-            return \Illuminate\Cache\RateLimiting\Limit::perMinute(30)->by(
+            return Limit::perMinute(30)->by(
                 sprintf('%s|%s', $request->ip(), $request->path())
             );
         });

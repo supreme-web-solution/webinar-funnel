@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import grapesjs from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const props = defineProps<{
     funnel: {
@@ -23,10 +25,31 @@ const props = defineProps<{
             webinar_title?: string | null;
             webinar_description?: string | null;
             video_url?: string | null;
+            webinar_duration_seconds?: number | null;
             webinar_cta_label?: string | null;
             webinar_cta_url?: string | null;
             affiliate_request_link?: string | null;
             jv_page?: string | null;
+            offers?: Array<{
+                title: string;
+                description?: string | null;
+                cta_label: string;
+                cta_url: string;
+                placement: 'chat' | 'pinned' | 'popup';
+                timing_seconds: number;
+                enabled?: boolean;
+            }>;
+            exit_popup_enabled?: boolean;
+            exit_popup_show_close?: boolean;
+            exit_popup_title?: string | null;
+            exit_popup_description?: string | null;
+            exit_popup_cta_label?: string | null;
+            exit_popup_cta_url?: string | null;
+            traffic_ai_reply_enabled?: boolean;
+            traffic_ai_link_override?: string | null;
+            traffic_ai_extra_context?: string | null;
+            traffic_ai_max_replies_per_day?: number;
+            traffic_ai_social_account_ids?: Record<string, number | null>;
             chat_mode: string;
             allow_replay: boolean;
             chat_seed_messages?: Array<{ author: string; message: string }>;
@@ -48,6 +71,59 @@ const props = defineProps<{
     publicLinks: {
         optin: string;
         webinar: string;
+    };
+    traffic: {
+        keywords: Array<{
+            id: number;
+            name: string;
+            is_active: boolean;
+            email_notifications: boolean;
+            platforms: string[];
+            mentions_count: number;
+        }>;
+        mentions: {
+            data: Array<{
+                id: number;
+                keyword_id: number;
+                title: string | null;
+                content: string | null;
+                source_type: string;
+                username: string | null;
+                like_count: number;
+                retweet_count: number;
+                comments_count: number;
+                views: number | null;
+                votes: number | null;
+                permalink: string | null;
+                posted_at: string | null;
+                keyword: { id: number; name: string } | null;
+            }>;
+            total: number;
+            from: number | null;
+            to: number | null;
+            last_page: number;
+            current_page: number;
+            links: Array<{ url: string | null; label: string; active: boolean }>;
+        };
+        stats: {
+            total: number;
+            this_week: number;
+            keywords_count: number;
+            platforms: Record<string, number>;
+        };
+        filters: {
+            search?: string;
+            platform?: string;
+            keyword_id?: number | string;
+        };
+        social_accounts: Array<{ id: number; platform: string; platform_username: string | null }>;
+    };
+    videoStats: {
+        accessed: number;
+        watched_60s: number;
+        watched_50_percent: number;
+        watched_to_end: number;
+        avg_watch_seconds: number;
     };
 }>();
 
@@ -129,28 +205,74 @@ const settingsForm = useForm<{
     webinar_title: string;
     webinar_description: string;
     video_url: string;
+    webinar_duration_seconds: number | null;
     webinar_cta_label: string;
     webinar_cta_url: string;
     affiliate_request_link: string;
     jv_page: string;
+    offers: Array<{
+        title: string;
+        description: string;
+        cta_label: string;
+        cta_url: string;
+        placement: 'chat' | 'pinned' | 'popup';
+        timing_seconds: number;
+        enabled: boolean;
+    }>;
+    exit_popup_enabled: boolean;
+    exit_popup_show_close: boolean;
+    exit_popup_title: string;
+    exit_popup_description: string;
+    exit_popup_cta_label: string;
+    exit_popup_cta_url: string;
     chat_mode: string;
     allow_replay: boolean;
     chat_seed_messages: Array<{ author: string; message: string }>;
     branding: { primary: string; secondary: string };
     integration_account_ids: number[];
+    traffic_ai_reply_enabled: boolean;
+    traffic_ai_link_override: string;
+    traffic_ai_extra_context: string;
+    traffic_ai_max_replies_per_day: number;
+    traffic_ai_social_account_ids: { reddit: number | null; youtube: number | null; twitter: number | null };
 }>({
     webinar_title: props.funnel.settings?.webinar_title ?? '',
     webinar_description: props.funnel.settings?.webinar_description ?? '',
     video_url: props.funnel.settings?.video_url ?? '',
+    webinar_duration_seconds: props.funnel.settings?.webinar_duration_seconds ?? null,
     webinar_cta_label: props.funnel.settings?.webinar_cta_label ?? 'Claim Your Spot',
     webinar_cta_url: props.funnel.settings?.webinar_cta_url ?? '',
     affiliate_request_link: props.funnel.settings?.affiliate_request_link ?? '',
     jv_page: props.funnel.settings?.jv_page ?? '',
+    offers: (props.funnel.settings?.offers ?? []).map((offer) => ({
+        title: offer.title ?? '',
+        description: offer.description ?? '',
+        cta_label: offer.cta_label ?? 'Get Offer',
+        cta_url: offer.cta_url ?? '',
+        placement: offer.placement ?? 'pinned',
+        timing_seconds: Number(offer.timing_seconds ?? 0),
+        enabled: offer.enabled !== false,
+    })),
+    exit_popup_enabled: props.funnel.settings?.exit_popup_enabled ?? false,
+    exit_popup_show_close: props.funnel.settings?.exit_popup_show_close ?? true,
+    exit_popup_title: props.funnel.settings?.exit_popup_title ?? 'Wait! Before You Go...',
+    exit_popup_description: props.funnel.settings?.exit_popup_description ?? 'Claim this special offer before leaving this webinar room.',
+    exit_popup_cta_label: props.funnel.settings?.exit_popup_cta_label ?? 'Claim Offer Now',
+    exit_popup_cta_url: props.funnel.settings?.exit_popup_cta_url ?? '',
     chat_mode: props.funnel.settings?.chat_mode ?? 'simulated',
     allow_replay: props.funnel.settings?.allow_replay ?? true,
     chat_seed_messages: props.funnel.settings?.chat_seed_messages ?? [],
     branding: { primary: '#111827', secondary: '#F9FAFB' },
     integration_account_ids: props.funnel.integrations.map((i) => i.integration_account.id),
+    traffic_ai_reply_enabled: props.funnel.settings?.traffic_ai_reply_enabled ?? false,
+    traffic_ai_link_override: props.funnel.settings?.traffic_ai_link_override ?? '',
+    traffic_ai_extra_context: props.funnel.settings?.traffic_ai_extra_context ?? '',
+    traffic_ai_max_replies_per_day: Number(props.funnel.settings?.traffic_ai_max_replies_per_day ?? 20),
+    traffic_ai_social_account_ids: {
+        reddit: (props.funnel.settings?.traffic_ai_social_account_ids as Record<string, number | null> | undefined)?.reddit ?? null,
+        youtube: (props.funnel.settings?.traffic_ai_social_account_ids as Record<string, number | null> | undefined)?.youtube ?? null,
+        twitter: (props.funnel.settings?.traffic_ai_social_account_ids as Record<string, number | null> | undefined)?.twitter ?? null,
+    },
 });
 
 const savePage = (): void => {
@@ -183,6 +305,22 @@ const saveSettings = (): void => {
             savingSettings.value = false;
         },
     });
+};
+
+const addOfferRow = (): void => {
+    settingsForm.offers.push({
+        title: '',
+        description: '',
+        cta_label: 'Get Offer',
+        cta_url: '',
+        placement: 'pinned',
+        timing_seconds: 30,
+        enabled: true,
+    });
+};
+
+const removeOfferRow = (index: number): void => {
+    settingsForm.offers.splice(index, 1);
 };
 
 const publish = (): void => {
@@ -248,6 +386,125 @@ const espProviderIcon: Record<string, string> = {
 
 function providerIcon(provider: string): string {
     return espProviderIcon[provider.toLowerCase()] ?? 'heroicons:envelope';
+}
+
+/* ─── Traffic Settings state ───────────────────────────────────────────── */
+const trafficSearch = ref(props.traffic.filters.search ?? '');
+const trafficPlatform = ref(props.traffic.filters.platform ?? '');
+const trafficKeywordId = ref<number | string>(props.traffic.filters.keyword_id ?? '');
+const addingTrafficKeyword = ref(false);
+const trafficAiSectionOpen = ref(false);
+let trafficDebounce: ReturnType<typeof setTimeout>;
+
+const trafficKeywordForm = useForm({
+    name: '',
+    platforms: ['reddit', 'youtube', 'twitter', 'news'],
+});
+
+const PLATFORM_OPTIONS = ['reddit', 'youtube', 'twitter', 'news'];
+const PLATFORM_META: Record<string, { label: string; icon: string; color: string; bg: string }> = {
+    reddit: { label: 'Reddit', icon: 'simple-icons:reddit', color: '#ff6b35', bg: 'rgba(255,69,0,0.12)' },
+    youtube: { label: 'YouTube', icon: 'simple-icons:youtube', color: '#ff4444', bg: 'rgba(255,0,0,0.12)' },
+    twitter: { label: 'Twitter', icon: 'simple-icons:x', color: '#e2e8f0', bg: 'rgba(255,255,255,0.08)' },
+    news: { label: 'News', icon: 'heroicons:newspaper', color: '#4e9af1', bg: 'rgba(26,115,232,0.12)' },
+};
+
+function trafficPlatformMeta(key: string) {
+    const normalized = String(key).toLowerCase();
+    return PLATFORM_META[normalized] ?? { label: key, icon: 'heroicons:globe-alt', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' };
+}
+
+const trafficPlatformTabs = computed(() => {
+    const all = { key: '', label: 'All', count: props.traffic.stats.total };
+    const entries = Object.entries(props.traffic.stats.platforms ?? {}).map(([k, v]) => ({
+        key: String(k).toLowerCase(),
+        label: k,
+        count: Number(v),
+    }));
+    return [all, ...entries];
+});
+
+watch([trafficSearch, trafficPlatform, trafficKeywordId], ([s, p, k]) => {
+    clearTimeout(trafficDebounce);
+    trafficDebounce = setTimeout(() => {
+        router.get(`/funnels/${props.funnel.id}/edit`, {
+            traffic_search: s || undefined,
+            traffic_platform: p || undefined,
+            traffic_keyword_id: k || undefined,
+        }, {
+            preserveState: true,
+            replace: true,
+            preserveScroll: true,
+        });
+    }, 350);
+});
+
+function toggleTrafficPlatform(p: string): void {
+    const idx = trafficKeywordForm.platforms.indexOf(p);
+    if (idx === -1) trafficKeywordForm.platforms.push(p);
+    else trafficKeywordForm.platforms.splice(idx, 1);
+}
+
+function submitTrafficKeyword(): void {
+    trafficKeywordForm.post(`/funnels/${props.funnel.id}/traffic/keywords`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            trafficKeywordForm.reset();
+            trafficKeywordForm.platforms = ['reddit', 'youtube', 'twitter', 'news'];
+            addingTrafficKeyword.value = false;
+        },
+    });
+}
+
+function toggleTrafficKeywordActive(keyword: { id: number; is_active: boolean }): void {
+    router.patch(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}`, {
+        is_active: !keyword.is_active,
+    }, { preserveScroll: true });
+}
+
+function toggleTrafficKeywordNotifications(keyword: { id: number; email_notifications: boolean }): void {
+    router.patch(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}`, {
+        email_notifications: !keyword.email_notifications,
+    }, { preserveScroll: true });
+}
+
+function fetchTrafficKeywordNow(keyword: { id: number }): void {
+    router.post(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}/fetch`, {}, { preserveScroll: true });
+}
+
+function deleteTrafficKeyword(keyword: { id: number; name: string }): void {
+    if (!window.confirm(`Delete keyword "${keyword.name}" and its mentions?`)) return;
+    router.delete(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}`, { preserveScroll: true });
+}
+
+function fmtTrafficDate(dt: string | null): string {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const now = Date.now();
+    const diff = (now - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function trafficAccountsForPlatform(platform: string): Array<{ id: number; platform: string; platform_username: string | null }> {
+    return props.traffic.social_accounts.filter((a) => a.platform === platform);
+}
+
+function setTrafficSocialAccount(platform: 'reddit' | 'youtube' | 'twitter', raw: string): void {
+    if (raw === '') {
+        settingsForm.traffic_ai_social_account_ids[platform] = null;
+        return;
+    }
+    const n = Number(raw);
+    settingsForm.traffic_ai_social_account_ids[platform] = Number.isNaN(n) ? null : n;
+}
+
+function trunc(text: string | null, len = 200): string {
+    if (!text) return '';
+    return text.length > len ? `${text.slice(0, len)}…` : text;
 }
 
 onMounted(() => {
@@ -651,7 +908,7 @@ onUnmounted(() => {
 <template>
     <Head :title="`Edit — ${funnel.name}`" />
 
-    <div class="flex flex-col gap-5 p-4 md:p-6 w-full max-w-screen-xl mx-auto">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 md:p-6">
 
         <!-- ── Page header ── -->
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -685,6 +942,39 @@ onUnmounted(() => {
 
             <!-- Actions -->
             <div class="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap justify-end">
+                <!-- Compact video stats chip -->
+                <TooltipProvider :delay-duration="120">
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <button
+                                type="button"
+                                class="hidden md:inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 h-8 text-[0.7rem] font-medium hover:bg-muted/70 transition-colors"
+                            >
+                                <span class="inline-flex items-center gap-1 text-muted-foreground">
+                                    <Icon icon="heroicons:eye" class="size-3.5" />
+                                    <span class="text-foreground tabular-nums">{{ props.videoStats.accessed.toLocaleString() }}</span>
+                                </span>
+                                <span class="inline-block h-3 w-px bg-border" />
+                                <span class="inline-flex items-center gap-1 text-muted-foreground">
+                                    <Icon icon="heroicons:play" class="size-3.5" />
+                                    <span class="text-[#0aa89a] tabular-nums">{{ props.videoStats.watched_60s.toLocaleString() }}</span>
+                                </span>
+                                <Icon icon="heroicons:chevron-down" class="size-3 text-muted-foreground" />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="end" class="px-3 py-2 max-w-[260px]">
+                            <p class="text-[0.65rem] font-semibold uppercase tracking-wide opacity-70 mb-1.5">Video watch stats</p>
+                            <div class="space-y-1 text-[0.7rem]">
+                                <div class="flex justify-between gap-4"><span class="opacity-80">Accessed link</span><span class="font-semibold tabular-nums">{{ props.videoStats.accessed.toLocaleString() }}</span></div>
+                                <div class="flex justify-between gap-4"><span class="opacity-80">Watched 60s</span><span class="font-semibold tabular-nums">{{ props.videoStats.watched_60s.toLocaleString() }}</span></div>
+                                <div class="flex justify-between gap-4"><span class="opacity-80">Watched 50%</span><span class="font-semibold tabular-nums">{{ props.videoStats.watched_50_percent.toLocaleString() }}</span></div>
+                                <div class="flex justify-between gap-4"><span class="opacity-80">Watched end</span><span class="font-semibold tabular-nums">{{ props.videoStats.watched_to_end.toLocaleString() }}</span></div>
+                                <div class="flex justify-between gap-4"><span class="opacity-80">Avg watch (s)</span><span class="font-semibold tabular-nums">{{ props.videoStats.avg_watch_seconds.toLocaleString() }}</span></div>
+                            </div>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+
                 <Button as-child variant="outline" size="sm" class="h-8 text-xs gap-1.5">
                     <a :href="`/funnels/${funnel.id}/chat`">
                         <Icon icon="heroicons:chat-bubble-left-right" class="size-3.5" />
@@ -753,6 +1043,10 @@ onUnmounted(() => {
                     <Icon icon="heroicons:video-camera" class="size-3.5" />
                     Webinar Room
                 </TabsTrigger>
+                <TabsTrigger value="offer" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
+                    <Icon icon="heroicons:gift" class="size-3.5" />
+                    Offer
+                </TabsTrigger>
                 <TabsTrigger value="integrations" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
                     <Icon icon="heroicons:puzzle-piece" class="size-3.5" />
                     Integrations
@@ -770,6 +1064,10 @@ onUnmounted(() => {
                     >
                         {{ conversationSummaries.length }}
                     </span>
+                </TabsTrigger>
+                <TabsTrigger value="traffic" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
+                    <Icon icon="heroicons:megaphone" class="size-3.5" />
+                    Traffic Settings
                 </TabsTrigger>
             </TabsList>
 
@@ -954,6 +1252,21 @@ onUnmounted(() => {
                                 <p class="text-[0.65rem] text-muted-foreground">Paste a YouTube or Vimeo embed URL</p>
                             </div>
                             <div class="space-y-1.5">
+                                <Label class="text-xs font-semibold">Video Duration (seconds)</Label>
+                                <div class="relative">
+                                    <Icon icon="heroicons:clock" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                                    <Input
+                                        :model-value="settingsForm.webinar_duration_seconds ?? ''"
+                                        type="number"
+                                        min="1"
+                                        class="h-9 pl-9 text-sm"
+                                        placeholder="e.g. 3600"
+                                        @update:model-value="(v) => { settingsForm.webinar_duration_seconds = v === '' || v === undefined ? null : Number(v); }"
+                                    />
+                                </div>
+                                <p class="text-[0.65rem] text-muted-foreground">Used to track 50% watch and completed watch analytics.</p>
+                            </div>
+                            <div class="space-y-1.5">
                                 <Label class="text-xs font-semibold">CTA Button Label</Label>
                                 <Input
                                     v-model="settingsForm.webinar_cta_label"
@@ -1004,47 +1317,45 @@ onUnmounted(() => {
                         </CardContent>
                     </Card>
 
-                    <!-- Room settings -->
+                    <!-- Video Watch Stats + replay -->
                     <Card class="border shadow-sm">
                         <CardHeader class="pb-3">
-                            <CardTitle class="text-base font-semibold">Room Settings</CardTitle>
-                            <CardDescription class="text-xs">Behaviour and features for attendees</CardDescription>
+                            <CardTitle class="text-base font-semibold">Video Watch Stats</CardTitle>
+                            <CardDescription class="text-xs">Live funnel performance based on webinar viewer milestones.</CardDescription>
                         </CardHeader>
                         <CardContent class="space-y-5">
-                            <!-- Chat mode -->
-                            <div class="space-y-1.5">
-                                <Label class="text-xs font-semibold">Chat Mode</Label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <button
-                                        v-for="mode in ['simulated', 'hybrid', 'realtime']"
-                                        :key="mode"
-                                        class="rounded-lg border px-3 py-2.5 text-xs font-medium capitalize transition-colors"
-                                        :class="settingsForm.chat_mode === mode
-                                            ? 'border-primary bg-primary/10 text-primary'
-                                            : 'border-border text-muted-foreground hover:border-primary/30'"
-                                        @click="settingsForm.chat_mode = mode"
-                                    >
-                                        <Icon
-                                            :icon="mode === 'simulated' ? 'heroicons:cpu-chip' : mode === 'hybrid' ? 'heroicons:arrows-right-left' : 'heroicons:bolt'"
-                                            class="mx-auto mb-1 size-4"
-                                        />
-                                        {{ mode }}
-                                    </button>
+                            <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                                <div class="rounded-lg border bg-muted/30 p-2.5">
+                                    <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Accessed Link</p>
+                                    <p class="mt-0.5 text-lg font-bold text-foreground tabular-nums">{{ props.videoStats.accessed.toLocaleString() }}</p>
+                                </div>
+                                <div class="rounded-lg border bg-muted/30 p-2.5">
+                                    <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Watched 60s</p>
+                                    <p class="mt-0.5 text-lg font-bold text-[#0aa89a] tabular-nums">{{ props.videoStats.watched_60s.toLocaleString() }}</p>
+                                </div>
+                                <div class="rounded-lg border bg-muted/30 p-2.5">
+                                    <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Watched 50%</p>
+                                    <p class="mt-0.5 text-lg font-bold text-violet-600 tabular-nums">{{ props.videoStats.watched_50_percent.toLocaleString() }}</p>
+                                </div>
+                                <div class="rounded-lg border bg-muted/30 p-2.5">
+                                    <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Watched End</p>
+                                    <p class="mt-0.5 text-lg font-bold text-emerald-600 tabular-nums">{{ props.videoStats.watched_to_end.toLocaleString() }}</p>
+                                </div>
+                                <div class="rounded-lg border bg-muted/30 p-2.5 col-span-2 sm:col-span-1">
+                                    <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Avg Watch (s)</p>
+                                    <p class="mt-0.5 text-lg font-bold text-foreground tabular-nums">{{ props.videoStats.avg_watch_seconds.toLocaleString() }}</p>
                                 </div>
                             </div>
 
-                            <!-- Toggles -->
-                            <div class="space-y-3 divide-y divide-border/60">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-sm font-medium text-foreground">Allow Replay</p>
-                                        <p class="text-xs text-muted-foreground">Attendees can watch the recording after the event</p>
-                                    </div>
-                                    <Switch
-                                        :checked="settingsForm.allow_replay"
-                                        @update:checked="settingsForm.allow_replay = $event"
-                                    />
+                            <div class="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2.5">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-foreground">Allow Replay</p>
+                                    <p class="text-[0.7rem] text-muted-foreground">If the video ends, attendees can replay the recording instead of seeing an "event ended" screen.</p>
                                 </div>
+                                <Switch
+                                    :checked="settingsForm.allow_replay"
+                                    @update:checked="settingsForm.allow_replay = $event"
+                                />
                             </div>
                         </CardContent>
                     </Card>
@@ -1064,6 +1375,130 @@ onUnmounted(() => {
                         />
                         <Icon v-else icon="heroicons:check" class="size-3.5" />
                         {{ savingSettings ? 'Saving…' : 'Save settings' }}
+                    </Button>
+                </div>
+            </TabsContent>
+
+            <!-- ── Tab: Offer Settings ── -->
+            <TabsContent value="offer" class="space-y-4">
+                <Card class="border shadow-sm">
+                    <CardHeader class="pb-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <CardTitle class="text-base font-semibold">Timed Offers</CardTitle>
+                                <CardDescription class="text-xs">
+                                    Configure offers and where they appear in the webinar room (chat, pinned, or popup).
+                                </CardDescription>
+                            </div>
+                            <Button size="sm" class="h-8 text-xs gap-1.5" @click="addOfferRow">
+                                <Icon icon="heroicons:plus" class="size-3.5" />
+                                Add Offer
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div v-if="settingsForm.offers.length === 0" class="rounded-lg border border-dashed py-10 text-center text-xs text-muted-foreground">
+                            No offers yet. Add an offer to display at a specific time in the webinar.
+                        </div>
+
+                        <div v-for="(offer, index) in settingsForm.offers" :key="index" class="rounded-xl border p-4 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm font-semibold">Offer #{{ index + 1 }}</p>
+                                <div class="flex items-center gap-2">
+                                    <Label class="text-xs">Enabled</Label>
+                                    <Switch :checked="offer.enabled" @update:checked="offer.enabled = $event" />
+                                    <Button variant="ghost" size="sm" class="h-7 px-2 text-destructive" @click="removeOfferRow(index)">
+                                        <Icon icon="heroicons:trash" class="size-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs font-semibold">Offer Title</Label>
+                                    <Input v-model="offer.title" class="h-9 text-sm" placeholder="Special bonus offer" />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs font-semibold">CTA Label</Label>
+                                    <Input v-model="offer.cta_label" class="h-9 text-sm" placeholder="Claim Offer" />
+                                </div>
+                                <div class="space-y-1.5 md:col-span-2">
+                                    <Label class="text-xs font-semibold">Description</Label>
+                                    <Textarea v-model="offer.description" class="h-16 resize-none text-sm" placeholder="Short description of this offer..." />
+                                </div>
+                                <div class="space-y-1.5 md:col-span-2">
+                                    <Label class="text-xs font-semibold">Offer Link URL</Label>
+                                    <Input v-model="offer.cta_url" type="url" class="h-9 text-sm" placeholder="https://your-offer-link.com" />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs font-semibold">Display Type</Label>
+                                    <select v-model="offer.placement" class="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm">
+                                        <option value="chat">Chat Message</option>
+                                        <option value="pinned">Pinned Top of Chat</option>
+                                        <option value="popup">Popup in Webinar Room</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs font-semibold">Time (seconds)</Label>
+                                    <Input v-model.number="offer.timing_seconds" type="number" min="0" class="h-9 text-sm" placeholder="30" />
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card class="border shadow-sm">
+                    <CardHeader class="pb-3">
+                        <CardTitle class="text-base font-semibold">Exit-Intent Popup</CardTitle>
+                        <CardDescription class="text-xs">
+                            Show a final offer popup when the attendee attempts to leave the webinar page.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div class="flex w-full items-center justify-between rounded-lg border p-3 text-left">
+                            <div>
+                                <p class="text-sm font-medium">Enable Exit-Intent Popup</p>
+                                <p class="text-xs text-muted-foreground">Triggers when cursor moves to top to close or leave tab.</p>
+                            </div>
+                            <Switch
+                                :model-value="Boolean(settingsForm.exit_popup_enabled)"
+                                @update:model-value="settingsForm.exit_popup_enabled = Boolean($event)"
+                            />
+                        </div>
+
+                        <div v-if="Boolean(settingsForm.exit_popup_enabled)" class="space-y-3">
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs font-semibold">Popup Title</Label>
+                                    <Input v-model="settingsForm.exit_popup_title" class="h-9 text-sm" placeholder="Wait! Before You Go..." />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs font-semibold">CTA Label</Label>
+                                    <Input v-model="settingsForm.exit_popup_cta_label" class="h-9 text-sm" placeholder="Claim Offer Now" />
+                                </div>
+                                <div class="space-y-1.5 md:col-span-2">
+                                    <Label class="text-xs font-semibold">Popup Description</Label>
+                                    <Textarea v-model="settingsForm.exit_popup_description" class="h-16 resize-none text-sm" placeholder="Claim this special offer before leaving..." />
+                                </div>
+                                <div class="space-y-1.5 md:col-span-2">
+                                    <Label class="text-xs font-semibold">CTA URL</Label>
+                                    <Input v-model="settingsForm.exit_popup_cta_url" type="url" class="h-9 text-sm" placeholder="https://your-exit-offer-link.com" />
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <div class="flex justify-end">
+                    <Button
+                        size="sm"
+                        class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                        :disabled="savingSettings || settingsForm.processing"
+                        @click="saveSettings"
+                    >
+                        <Icon v-if="savingSettings" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
+                        <Icon v-else icon="heroicons:check" class="size-3.5" />
+                        {{ savingSettings ? 'Saving…' : 'Save offer settings' }}
                     </Button>
                 </div>
             </TabsContent>
@@ -1283,6 +1718,243 @@ onUnmounted(() => {
                             {{ thread.message_count }}
                         </span>
                     </a>
+                </div>
+            </TabsContent>
+
+            <!-- ── Tab: Traffic Settings ── -->
+            <TabsContent value="traffic" class="space-y-4">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h3 class="text-sm font-semibold text-foreground">Funnel Traffic Settings</h3>
+                        <p class="text-xs text-muted-foreground mt-0.5">
+                            Track mentions and conversations per funnel keyword.
+                        </p>
+                    </div>
+                    <Button size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90" @click="addingTrafficKeyword = !addingTrafficKeyword">
+                        <Icon icon="heroicons:plus" class="size-3.5" />
+                        Add Keyword
+                    </Button>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Total Mentions</p><p class="text-2xl font-bold mt-1">{{ props.traffic.stats.total.toLocaleString() }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">This Week</p><p class="text-2xl font-bold mt-1 text-[#40E0D0]">{{ props.traffic.stats.this_week.toLocaleString() }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Keywords</p><p class="text-2xl font-bold mt-1 text-[#FFAD00]">{{ props.traffic.stats.keywords_count }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Platforms</p><p class="text-2xl font-bold mt-1 text-[#a78bfa]">{{ Object.keys(props.traffic.stats.platforms ?? {}).length }}</p></CardContent></Card>
+                </div>
+
+                <Card class="border shadow-sm border-dashed border-primary/25 overflow-hidden">
+                    <Collapsible v-model:open="trafficAiSectionOpen">
+                        <CardHeader class="space-y-0 pb-3 pt-4 px-4">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                                <CollapsibleTrigger
+                                    type="button"
+                                    class="flex flex-1 min-w-0 items-start gap-2 rounded-lg border border-transparent px-1 py-0.5 text-left outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    <Icon
+                                        icon="heroicons:chevron-right"
+                                        class="size-5 shrink-0 text-muted-foreground transition-transform duration-200"
+                                        :class="{ 'rotate-90': trafficAiSectionOpen }"
+                                    />
+                                    <div class="min-w-0 space-y-0.5">
+                                        <CardTitle class="text-sm font-semibold leading-tight">AI traffic auto-reply</CardTitle>
+                                        <p class="text-[0.65rem] text-muted-foreground leading-snug">
+                                            <span v-if="!trafficAiSectionOpen">Collapsed — expand to enable, set links, and map Reddit / YouTube / X accounts.</span>
+                                            <span v-else>Map connected accounts and reply rules for this funnel.</span>
+                                        </p>
+                                    </div>
+                                </CollapsibleTrigger>
+                                <div class="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                                    <Button size="sm" variant="outline" class="h-9 text-xs gap-1.5" as-child>
+                                        <Link href="/settings/social-traffic">
+                                            <Icon icon="heroicons:link-20-solid" class="size-3.5" />
+                                            Connect accounts
+                                        </Link>
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CollapsibleContent>
+                            <CardContent class="space-y-3 border-t border-border/60 px-4 pb-4 pt-3">
+                                <CardDescription class="text-xs leading-relaxed text-muted-foreground">
+                                    New mentions are evaluated asynchronously, drafted when appropriate, then posted with per-account spacing. Use
+                                    <strong class="text-foreground">Connect accounts</strong>
+                                    (above) to open Settings → Social posting, sign in to Reddit (and later other networks), then pick those accounts in the dropdowns below.
+                                </CardDescription>
+                                <div class="flex flex-wrap gap-2">
+                                    <Button size="sm" class="h-9 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90" as-child>
+                                        <Link href="/settings/social-traffic">
+                                            <Icon icon="simple-icons:reddit" class="size-3.5" />
+                                            Go to Social posting settings
+                                        </Link>
+                                    </Button>
+                                </div>
+                                <div class="flex items-center justify-between gap-3">
+                                    <Label class="text-xs">Enable auto-replies for this funnel</Label>
+                                    <Switch :checked="settingsForm.traffic_ai_reply_enabled" @update:checked="settingsForm.traffic_ai_reply_enabled = $event" />
+                                </div>
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <div class="space-y-1">
+                                        <Label class="text-xs">Link override (optional)</Label>
+                                        <Input v-model="settingsForm.traffic_ai_link_override" type="url" class="h-9 text-xs" placeholder="Else: affiliate → offer → webinar CTA" />
+                                    </div>
+                                    <div class="space-y-1">
+                                        <Label class="text-xs">Max replies per day (this funnel)</Label>
+                                        <Input v-model.number="settingsForm.traffic_ai_max_replies_per_day" type="number" min="1" max="500" class="h-9 text-xs" />
+                                    </div>
+                                </div>
+                                <div class="space-y-1">
+                                    <Label class="text-xs">Extra instructions for the model</Label>
+                                    <Textarea v-model="settingsForm.traffic_ai_extra_context" class="min-h-[72px] text-xs resize-y" placeholder="Tone, product angle, compliance notes…" />
+                                </div>
+                                <div class="grid gap-3 sm:grid-cols-3">
+                                    <div class="space-y-1">
+                                        <Label class="text-xs">Reddit account</Label>
+                                        <select
+                                            class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                                            :value="settingsForm.traffic_ai_social_account_ids.reddit ?? ''"
+                                            @change="setTrafficSocialAccount('reddit', ($event.target as HTMLSelectElement).value)"
+                                        >
+                                            <option value="">— None —</option>
+                                            <option v-for="a in trafficAccountsForPlatform('reddit')" :key="a.id" :value="a.id">{{ a.platform_username || ('#' + a.id) }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <Label class="text-xs">YouTube account</Label>
+                                        <select
+                                            class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                                            :value="settingsForm.traffic_ai_social_account_ids.youtube ?? ''"
+                                            @change="setTrafficSocialAccount('youtube', ($event.target as HTMLSelectElement).value)"
+                                        >
+                                            <option value="">— None —</option>
+                                            <option v-for="a in trafficAccountsForPlatform('youtube')" :key="a.id" :value="a.id">{{ a.platform_username || ('#' + a.id) }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <Label class="text-xs">X (Twitter) account</Label>
+                                        <select
+                                            class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                                            :value="settingsForm.traffic_ai_social_account_ids.twitter ?? ''"
+                                            @change="setTrafficSocialAccount('twitter', ($event.target as HTMLSelectElement).value)"
+                                        >
+                                            <option value="">— None —</option>
+                                            <option v-for="a in trafficAccountsForPlatform('twitter')" :key="a.id" :value="a.id">{{ a.platform_username || ('#' + a.id) }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <Button size="sm" class="h-9 text-xs bg-primary text-primary-foreground hover:opacity-90" :disabled="savingSettings || settingsForm.processing" @click="saveSettings">
+                                    Save auto-reply settings
+                                </Button>
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Collapsible>
+                </Card>
+
+                <Card v-if="addingTrafficKeyword" class="border shadow-sm border-primary/30">
+                    <CardHeader class="pb-3 pt-4 px-4">
+                        <CardTitle class="text-sm font-semibold">Track a new traffic keyword</CardTitle>
+                    </CardHeader>
+                    <CardContent class="px-4 pb-4">
+                        <form class="flex flex-col gap-3" @submit.prevent="submitTrafficKeyword">
+                            <div class="flex gap-2">
+                                <Input v-model="trafficKeywordForm.name" placeholder="e.g. your brand name…" class="h-9 text-sm flex-1" autofocus />
+                                <Button type="submit" size="sm" class="h-9 bg-primary text-primary-foreground hover:opacity-90" :disabled="trafficKeywordForm.processing || !trafficKeywordForm.name.trim()">Add & Fetch</Button>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button
+                                    v-for="p in PLATFORM_OPTIONS"
+                                    :key="p"
+                                    type="button"
+                                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors"
+                                    :class="trafficKeywordForm.platforms.includes(p) ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-muted/30 border-border text-muted-foreground'"
+                                    @click="toggleTrafficPlatform(p)"
+                                >
+                                    <Icon :icon="trafficPlatformMeta(p).icon" class="size-3" />
+                                    {{ p }}
+                                </button>
+                            </div>
+                            <p v-if="trafficKeywordForm.errors.name" class="text-xs text-destructive">{{ trafficKeywordForm.errors.name }}</p>
+                        </form>
+                    </CardContent>
+                </Card>
+
+                <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
+                    <Card class="border shadow-sm">
+                        <CardHeader class="pb-2 pt-4 px-4">
+                            <CardTitle class="text-sm font-semibold">Tracked Keywords ({{ props.traffic.keywords.length }})</CardTitle>
+                        </CardHeader>
+                        <CardContent class="p-0">
+                            <div v-if="props.traffic.keywords.length === 0" class="py-8 text-center text-xs text-muted-foreground">No keywords yet.</div>
+                            <ul v-else class="divide-y divide-border">
+                                <li v-for="kw in props.traffic.keywords" :key="kw.id" class="px-4 py-3">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0 flex-1">
+                                            <button class="text-sm font-medium truncate max-w-full text-left" :class="{ 'opacity-50 line-through': !kw.is_active }" @click="trafficKeywordId = trafficKeywordId == kw.id ? '' : kw.id">{{ kw.name }}</button>
+                                            <p class="text-xs text-muted-foreground mt-0.5">{{ kw.mentions_count }} mentions</p>
+                                        </div>
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            <button class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50" title="Fetch now" @click="fetchTrafficKeywordNow(kw)"><Icon icon="heroicons:arrow-path" class="size-3.5" /></button>
+                                            <button class="flex size-7 items-center justify-center rounded-md" :class="kw.is_active ? 'text-[#40E0D0]' : 'text-muted-foreground'" @click="toggleTrafficKeywordActive(kw)"><Icon :icon="kw.is_active ? 'heroicons:pause' : 'heroicons:play'" class="size-3.5" /></button>
+                                            <button class="flex size-7 items-center justify-center rounded-md" :class="kw.email_notifications ? 'text-[#FFAD00]' : 'text-muted-foreground'" @click="toggleTrafficKeywordNotifications(kw)"><Icon :icon="kw.email_notifications ? 'heroicons:bell' : 'heroicons:bell-slash'" class="size-3.5" /></button>
+                                            <button class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive" @click="deleteTrafficKeyword(kw)"><Icon icon="heroicons:trash" class="size-3.5" /></button>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </CardContent>
+                    </Card>
+
+                    <div class="space-y-3">
+                        <Card class="border shadow-sm">
+                            <CardContent class="p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="flex items-center gap-1 flex-wrap">
+                                    <button
+                                        v-for="tab in trafficPlatformTabs"
+                                        :key="tab.key"
+                                        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors"
+                                        :class="trafficPlatform === tab.key ? 'bg-primary/15 text-primary border border-primary/30' : 'text-muted-foreground hover:bg-muted/50 border border-transparent'"
+                                        @click="trafficPlatform = tab.key"
+                                    >
+                                        <Icon v-if="tab.key" :icon="trafficPlatformMeta(tab.key).icon" class="size-3" />
+                                        <Icon v-else icon="heroicons:squares-2x2" class="size-3" />
+                                        {{ tab.label }}
+                                        <span class="text-[0.6rem] text-muted-foreground">{{ tab.count }}</span>
+                                    </button>
+                                </div>
+                                <div class="relative shrink-0">
+                                    <Icon icon="heroicons:magnifying-glass" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                                    <Input v-model="trafficSearch" placeholder="Search mentions…" class="h-8 pl-8 text-xs w-full sm:w-52" />
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card v-if="props.traffic.mentions.data.length === 0" class="border shadow-sm">
+                            <CardContent class="py-10 text-center text-sm text-muted-foreground">No traffic mentions found for this funnel.</CardContent>
+                        </Card>
+
+                        <div v-else class="flex flex-col gap-3">
+                            <Card v-for="mention in props.traffic.mentions.data" :key="mention.id" class="border shadow-sm">
+                                <CardContent class="p-4">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex size-9 shrink-0 items-center justify-center rounded-lg mt-0.5" :style="{ background: trafficPlatformMeta(mention.source_type).bg }">
+                                            <Icon :icon="trafficPlatformMeta(mention.source_type).icon" class="size-4.5" :style="{ color: trafficPlatformMeta(mention.source_type).color }" />
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between gap-2 mb-1">
+                                                <div class="flex items-center gap-2 min-w-0">
+                                                    <Badge class="text-[0.6rem] px-1.5 py-0 border font-semibold">{{ mention.source_type }}</Badge>
+                                                    <span v-if="mention.keyword" class="text-[0.65rem] text-muted-foreground truncate">#{{ mention.keyword.name }}</span>
+                                                </div>
+                                                <span class="text-[0.65rem] text-muted-foreground">{{ fmtTrafficDate(mention.posted_at) }}</span>
+                                            </div>
+                                            <p v-if="mention.title" class="text-sm font-semibold leading-snug mb-1">{{ trunc(mention.title, 140) }}</p>
+                                            <p v-if="mention.content && mention.content !== mention.title" class="text-xs text-muted-foreground leading-relaxed">{{ trunc(mention.content, 220) }}</p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
                 </div>
             </TabsContent>
 

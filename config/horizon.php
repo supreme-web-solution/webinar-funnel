@@ -99,6 +99,9 @@ return [
     'waits' => [
         'redis:default' => 60,
         'redis:esp-dispatch' => 45,
+        'redis:traffic-post' => 120,
+        'redis:traffic-generate' => 90,
+        'redis:traffic-evaluate' => 60,
     ],
 
     /*
@@ -200,7 +203,7 @@ return [
     'defaults' => [
         'supervisor-1' => [
             'connection' => 'redis',
-            'queue' => ['esp-dispatch', 'default'],
+            'queue' => ['traffic-post', 'traffic-generate', 'traffic-evaluate', 'esp-dispatch', 'default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 6,

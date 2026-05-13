@@ -81,12 +81,20 @@ const filterTabs: Array<{ key: 'all' | 'published' | 'draft' | 'archived'; label
                     {{ stats.archived }} archived
                 </p>
             </div>
-            <Button as-child size="sm" class="self-start sm:self-auto gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shadow-sm">
-                <Link href="/funnels/create">
-                    <Icon icon="heroicons:plus" class="size-4" />
-                    New Funnel
-                </Link>
-            </Button>
+            <div class="flex items-center gap-2 self-start sm:self-auto">
+                <Button as-child size="sm" variant="outline" class="gap-1.5 border-emerald-200 bg-white/85 text-emerald-700 hover:bg-emerald-50">
+                    <Link href="/funnels/create?scratch=1">
+                        <Icon icon="heroicons:sparkles" class="size-4" />
+                        Create From Scratch
+                    </Link>
+                </Button>
+                <Button as-child size="sm" class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shadow-sm">
+                    <Link href="/funnels/create">
+                        <Icon icon="heroicons:plus" class="size-4" />
+                        New Funnel
+                    </Link>
+                </Button>
+            </div>
         </div>
 
         <!-- ── Stat cards ── -->

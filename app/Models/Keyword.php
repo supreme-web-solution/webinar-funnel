@@ -16,6 +16,7 @@ class Keyword extends Model
 
     protected $fillable = [
         'user_id',
+        'funnel_id',
         'name',
         'is_active',
         'email_notifications',
@@ -31,6 +32,11 @@ class Keyword extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function funnel(): BelongsTo
+    {
+        return $this->belongsTo(Funnel::class);
     }
 
     public function mentions(): HasMany

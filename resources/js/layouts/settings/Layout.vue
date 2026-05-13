@@ -23,6 +23,10 @@ const sidebarNavItems: NavItem[] = [
         title: 'Appearance',
         href: editAppearance(),
     },
+    {
+        title: 'Social posting',
+        href: '/settings/social-traffic',
+    },
 ];
 
 const { isCurrentOrParentUrl } = useCurrentUrl();

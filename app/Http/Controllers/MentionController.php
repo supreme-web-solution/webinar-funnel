@@ -20,11 +20,13 @@ class MentionController extends Controller
         $user = $request->user();
 
         $keywords = Keyword::where('user_id', $user->id)
+            ->whereNull('funnel_id')
             ->withCount('mentions')
             ->orderBy('created_at', 'desc')
             ->get();
 
         $mentionsQuery = Mention::where('user_id', $user->id)
+            ->whereHas('keyword', fn ($q) => $q->whereNull('funnel_id'))
             ->with('keyword:id,name');
 
         if ($request->filled('platform')) {
@@ -51,13 +53,17 @@ class MentionController extends Controller
 
         // Platform breakdown counts
         $platformCounts = Mention::where('user_id', $user->id)
+            ->whereHas('keyword', fn ($q) => $q->whereNull('funnel_id'))
             ->selectRaw('source_type, count(*) as cnt')
             ->groupBy('source_type')
             ->pluck('cnt', 'source_type');
 
         $stats = [
-            'total'          => Mention::where('user_id', $user->id)->count(),
+            'total'          => Mention::where('user_id', $user->id)
+                ->whereHas('keyword', fn ($q) => $q->whereNull('funnel_id'))
+                ->count(),
             'this_week'      => Mention::where('user_id', $user->id)
+                ->whereHas('keyword', fn ($q) => $q->whereNull('funnel_id'))
                 ->where('created_at', '>=', now()->startOfWeek())
                 ->count(),
             'keywords_count' => $keywords->count(),
@@ -89,7 +95,7 @@ class MentionController extends Controller
         }
 
         $keyword = Keyword::firstOrCreate(
-            ['user_id' => $user->id, 'name' => trim($validated['name'])],
+            ['user_id' => $user->id, 'funnel_id' => null, 'name' => trim($validated['name'])],
             [
                 'is_active'           => true,
                 'email_notifications' => false,
@@ -106,7 +112,7 @@ class MentionController extends Controller
 
     public function updateKeyword(Request $request, Keyword $keyword): RedirectResponse
     {
-        abort_unless($keyword->user_id === $request->user()->id, 403);
+        abort_unless($keyword->user_id === $request->user()->id && $keyword->funnel_id === null, 403);
 
         $validated = $request->validate([
             'is_active'           => ['sometimes', 'boolean'],
@@ -122,7 +128,7 @@ class MentionController extends Controller
 
     public function destroyKeyword(Request $request, Keyword $keyword): RedirectResponse
     {
-        abort_unless($keyword->user_id === $request->user()->id, 403);
+        abort_unless($keyword->user_id === $request->user()->id && $keyword->funnel_id === null, 403);
 
         $keyword->delete();
 
@@ -131,7 +137,7 @@ class MentionController extends Controller
 
     public function fetchNow(Request $request, Keyword $keyword): RedirectResponse
     {
-        abort_unless($keyword->user_id === $request->user()->id, 403);
+        abort_unless($keyword->user_id === $request->user()->id && $keyword->funnel_id === null, 403);
 
         $this->dispatchAllPlatformJobs($keyword);
 

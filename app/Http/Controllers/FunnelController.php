@@ -9,11 +9,17 @@ use App\Models\ChatMessage;
 use App\Models\ChatRoom;
 use App\Models\Funnel;
 use App\Models\FunnelPage;
+use App\Models\FunnelVideoViewStat;
 use App\Models\IntegrationAccount;
+use App\Models\Keyword;
+use App\Models\Mention;
+use App\Models\SocialAccount;
 use App\Models\Template;
 use App\Services\Funnels\PageSanitizer;
 use App\Services\Funnels\PublicFunnelResolver;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -57,15 +63,15 @@ class FunnelController extends Controller
         })->values();
 
         $stats = [
-            'total'     => $funnels->count(),
+            'total' => $funnels->count(),
             'published' => $funnels->where('status', 'published')->count(),
-            'draft'     => $funnels->where('status', 'draft')->count(),
-            'archived'  => $funnels->where('status', 'archived')->count(),
+            'draft' => $funnels->where('status', 'draft')->count(),
+            'archived' => $funnels->where('status', 'archived')->count(),
         ];
 
         return Inertia::render('funnels/Index', [
             'funnels' => $funnels,
-            'stats'   => $stats,
+            'stats' => $stats,
         ]);
     }
 
@@ -87,6 +93,20 @@ class FunnelController extends Controller
         $validated = $request->validated();
         $template = Template::query()->findOrFail($validated['template_id']);
         $currentVersion = $template->versions()->where('is_current', true)->firstOrFail();
+        $isScratch = (bool) ($validated['is_scratch'] ?? false);
+
+        $optinSchema = $isScratch
+            ? $this->buildScratchOptinSchema((array) $currentVersion->optin_schema)
+            : (array) $currentVersion->optin_schema;
+        $webinarSchema = $isScratch
+            ? $this->buildScratchWebinarSchema((array) $currentVersion->webinar_schema)
+            : (array) $currentVersion->webinar_schema;
+        $defaultSettings = $isScratch
+            ? $this->buildScratchSettings((array) ($currentVersion->default_settings ?? []))
+            : ($currentVersion->default_settings ?? [
+                'chat_mode' => 'simulated',
+                'allow_replay' => true,
+            ]);
 
         $funnel = Funnel::query()->create([
             'user_id' => $request->user()->id,
@@ -100,21 +120,18 @@ class FunnelController extends Controller
         FunnelPage::query()->create([
             'funnel_id' => $funnel->id,
             'page_type' => 'optin',
-            'schema' => $currentVersion->optin_schema,
+            'schema' => $optinSchema,
             'version' => 1,
         ]);
 
         FunnelPage::query()->create([
             'funnel_id' => $funnel->id,
             'page_type' => 'webinar',
-            'schema' => $currentVersion->webinar_schema,
+            'schema' => $webinarSchema,
             'version' => 1,
         ]);
 
-        $funnel->settings()->create($currentVersion->default_settings ?? [
-            'chat_mode' => 'simulated',
-            'allow_replay' => true,
-        ]);
+        $funnel->settings()->create($defaultSettings);
 
         ChatRoom::query()->create([
             'funnel_id' => $funnel->id,
@@ -125,7 +142,7 @@ class FunnelController extends Controller
         return to_route('funnels.edit', $funnel->id);
     }
 
-    public function edit(Funnel $funnel): Response
+    public function edit(Request $request, Funnel $funnel): Response
     {
         $this->authorizeFunnel($funnel);
 
@@ -135,11 +152,15 @@ class FunnelController extends Controller
             ->get(['id', 'name', 'provider']);
         $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
         $conversationSummaries = $this->buildConversationSummaries($funnel, 50);
+        $trafficData = $this->buildTrafficData($request, $funnel);
+        $videoStats = $this->buildVideoStatsData($funnel);
 
         return Inertia::render('funnels/Edit', [
             'funnel' => $funnel,
             'integrationAccounts' => $integrationAccounts,
             'conversationSummaries' => $conversationSummaries,
+            'traffic' => $trafficData,
+            'videoStats' => $videoStats,
             'publicLinks' => [
                 'optin' => route('public.optin', [
                     'username' => $username,
@@ -151,6 +172,96 @@ class FunnelController extends Controller
                 ]),
             ],
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildTrafficData(Request $request, Funnel $funnel): array
+    {
+        $keywords = Keyword::query()
+            ->where('user_id', $funnel->user_id)
+            ->where('funnel_id', $funnel->id)
+            ->withCount('mentions')
+            ->orderByDesc('created_at')
+            ->get();
+
+        $mentionsQuery = Mention::query()
+            ->where('user_id', $funnel->user_id)
+            ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
+            ->with('keyword:id,name,funnel_id');
+
+        $trafficSearch = trim((string) $request->query('traffic_search', ''));
+        $trafficPlatform = (string) $request->query('traffic_platform', '');
+        $trafficKeywordId = $request->query('traffic_keyword_id');
+
+        if ($trafficPlatform !== '') {
+            $mentionsQuery->where('source_type', $trafficPlatform);
+        }
+
+        if ($trafficKeywordId) {
+            $mentionsQuery->where('keyword_id', $trafficKeywordId);
+        }
+
+        if ($trafficSearch !== '') {
+            $mentionsQuery->where(function ($q) use ($trafficSearch): void {
+                $q->where('title', 'like', "%{$trafficSearch}%")
+                    ->orWhere('content', 'like', "%{$trafficSearch}%")
+                    ->orWhere('username', 'like', "%{$trafficSearch}%");
+            });
+        }
+
+        $mentions = $mentionsQuery->orderByDesc('posted_at')->paginate(10)->withQueryString();
+
+        $platformCounts = Mention::query()
+            ->where('user_id', $funnel->user_id)
+            ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
+            ->selectRaw('source_type, count(*) as cnt')
+            ->groupBy('source_type')
+            ->pluck('cnt', 'source_type');
+
+        return [
+            'keywords' => $keywords,
+            'mentions' => $mentions,
+            'stats' => [
+                'total' => Mention::query()
+                    ->where('user_id', $funnel->user_id)
+                    ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
+                    ->count(),
+                'this_week' => Mention::query()
+                    ->where('user_id', $funnel->user_id)
+                    ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
+                    ->where('created_at', '>=', now()->startOfWeek())
+                    ->count(),
+                'keywords_count' => $keywords->count(),
+                'platforms' => $platformCounts,
+            ],
+            'filters' => [
+                'search' => $trafficSearch,
+                'platform' => $trafficPlatform,
+                'keyword_id' => $trafficKeywordId,
+            ],
+            'social_accounts' => SocialAccount::query()
+                ->where('user_id', $funnel->user_id)
+                ->orderBy('platform')
+                ->get(['id', 'platform', 'platform_username']),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildVideoStatsData(Funnel $funnel): array
+    {
+        $baseQuery = FunnelVideoViewStat::query()->where('funnel_id', $funnel->id);
+
+        return [
+            'accessed' => (clone $baseQuery)->count(),
+            'watched_60s' => (clone $baseQuery)->where('reached_60s', true)->count(),
+            'watched_50_percent' => (clone $baseQuery)->where('reached_50_percent', true)->count(),
+            'watched_to_end' => (clone $baseQuery)->where('reached_100_percent', true)->count(),
+            'avg_watch_seconds' => (int) round((float) ((clone $baseQuery)->avg('watched_seconds') ?? 0)),
+        ];
     }
 
     public function updatePage(
@@ -316,7 +427,7 @@ class FunnelController extends Controller
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     * @return Collection<int, array<string, mixed>>
      */
     private function buildConversationSummaries(Funnel $funnel, int $limit = 50)
     {
@@ -355,5 +466,65 @@ class FunnelController extends Controller
     private function authorizeFunnel(Funnel $funnel): void
     {
         abort_unless((int) auth()->id() === (int) $funnel->user_id, 403);
+    }
+
+    /**
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    private function buildScratchOptinSchema(array $schema): array
+    {
+        $schema['html'] = '';
+        $schema['css'] = '';
+        $schema['hero'] = [
+            'headline' => '',
+            'subheadline' => '',
+            'cta' => '',
+        ];
+        $schema['what_youll_discover'] = [];
+
+        return $schema;
+    }
+
+    /**
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    private function buildScratchWebinarSchema(array $schema): array
+    {
+        $schema['title'] = '';
+        $schema['description'] = '';
+        $schema['video'] = ['provider' => 'youtube', 'url' => ''];
+
+        return $schema;
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function buildScratchSettings(array $settings): array
+    {
+        $settings['webinar_title'] = '';
+        $settings['webinar_description'] = '';
+        $settings['video_url'] = '';
+        $settings['webinar_duration_seconds'] = null;
+        $settings['webinar_cta_label'] = '';
+        $settings['webinar_cta_url'] = '';
+        $settings['affiliate_request_link'] = '';
+        $settings['jv_page'] = '';
+        $settings['chat_seed_messages'] = [];
+        $settings['offers'] = [];
+        $settings['exit_popup_enabled'] = false;
+        $settings['exit_popup_show_close'] = true;
+        $settings['exit_popup_title'] = '';
+        $settings['exit_popup_description'] = '';
+        $settings['exit_popup_cta_label'] = '';
+        $settings['exit_popup_cta_url'] = '';
+        $settings['chat_mode'] = $settings['chat_mode'] ?? 'simulated';
+        $settings['allow_replay'] = array_key_exists('allow_replay', $settings) ? (bool) $settings['allow_replay'] : true;
+        $settings['branding'] = $settings['branding'] ?? ['primary' => '#40E0D0', 'secondary' => '#FFAD00'];
+
+        return $settings;
     }
 }

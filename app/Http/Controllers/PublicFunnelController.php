@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FunnelVideoViewStat;
 use App\Services\Funnels\PublicFunnelResolver;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -62,6 +65,58 @@ class PublicFunnelController extends Controller
                 'fetch' => route('public.chat.messages', compact('username', 'slug')),
                 'send' => route('public.chat.send', compact('username', 'slug')),
             ],
+            'analyticsEndpoint' => route('public.webinar.stats', compact('username', 'slug')),
         ]);
+    }
+
+    public function trackVideoStats(
+        Request $request,
+        string $username,
+        string $slug,
+        PublicFunnelResolver $resolver
+    ): JsonResponse {
+        $funnel = $resolver->resolve($username, $slug);
+        if (! $funnel) {
+            return response()->json(['message' => 'Not found'], 404);
+        }
+
+        $payload = $request->validate([
+            'session_key' => ['required', 'string', 'max:80'],
+            'event' => ['required', 'string', 'in:access,heartbeat,milestone_60,milestone_50,milestone_100'],
+            'watched_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
+        ]);
+
+        $now = now();
+        $watchedSeconds = (int) ($payload['watched_seconds'] ?? 0);
+        $event = (string) $payload['event'];
+
+        $stat = FunnelVideoViewStat::query()->firstOrCreate(
+            [
+                'funnel_id' => $funnel->id,
+                'session_key' => $payload['session_key'],
+            ],
+            [
+                'first_seen_at' => $now,
+                'last_seen_at' => $now,
+                'watched_seconds' => $watchedSeconds,
+            ]
+        );
+
+        $stat->last_seen_at = $now;
+        $stat->watched_seconds = max((int) $stat->watched_seconds, $watchedSeconds);
+
+        if ($event === 'milestone_60') {
+            $stat->reached_60s = true;
+        }
+        if ($event === 'milestone_50') {
+            $stat->reached_50_percent = true;
+        }
+        if ($event === 'milestone_100') {
+            $stat->reached_100_percent = true;
+        }
+
+        $stat->save();
+
+        return response()->json(['ok' => true]);
     }
 }

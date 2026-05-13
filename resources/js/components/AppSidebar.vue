@@ -43,11 +43,6 @@ const mainNavItems: NavItem[] = [
         href: '/integrations',
         icon: 'heroicons:puzzle-piece',
     },
-    {
-        title: 'Mentions',
-        href: '/mentions',
-        icon: 'heroicons:chat-bubble-left-right',
-    },
 ];
 
 const page = usePage<{ auth?: { is_admin?: boolean } }>();
@@ -77,20 +72,20 @@ const footerNavItems: NavItem[] = [
 <template>
     <Sidebar collapsible="icon" variant="inset">
         <!-- Brand header -->
-        <SidebarHeader class="border-b border-sidebar-border/60 pb-3">
+        <SidebarHeader class="border-b border-sidebar-border/70 pb-3">
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child class="hover:bg-sidebar-accent/60 rounded-xl">
+                    <SidebarMenuButton size="lg" as-child class="rounded-xl border border-sidebar-border/70 bg-white/80 shadow-sm hover:bg-white transition-colors">
                         <Link href="/dashboard" class="flex items-center gap-3 px-1">
                             <!-- Logo mark -->
-                            <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary shadow-sm">
-                                <Icon icon="heroicons:video-camera" class="size-4.5 text-sidebar-primary-foreground" />
+                            <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-emerald-500 to-cyan-500 shadow-sm">
+                                <Icon icon="heroicons:video-camera" class="size-4.5 text-white" />
                             </div>
                             <div class="grid flex-1 text-left leading-tight">
                                 <span class="truncate text-[0.8rem] font-bold tracking-tight text-sidebar-accent-foreground">
-                                    DFY Webinar Forge
+                                    DFY Webinar Funnels
                                 </span>
-                                <span class="text-[0.65rem] text-sidebar-foreground/50 truncate">
+                                <span class="truncate text-[0.65rem] text-sidebar-foreground/60">
                                     Funnel Builder
                                 </span>
                             </div>
@@ -106,9 +101,9 @@ const footerNavItems: NavItem[] = [
         </SidebarContent>
 
         <!-- Footer -->
-        <SidebarFooter class="border-t border-sidebar-border/60 pt-2">
+        <SidebarFooter class="border-t border-sidebar-border/70 bg-white/35 pt-2">
             <NavFooter :items="footerNavItems" />
-            <SidebarSeparator class="my-1 bg-sidebar-border/60" />
+            <SidebarSeparator class="my-1 bg-sidebar-border/70" />
             <NavUser />
         </SidebarFooter>
     </Sidebar>

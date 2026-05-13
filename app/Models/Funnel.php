@@ -66,4 +66,14 @@ class Funnel extends Model
     {
         return $this->hasOne(ChatRoom::class);
     }
+
+    public function keywords(): HasMany
+    {
+        return $this->hasMany(Keyword::class);
+    }
+
+    public function videoViewStats(): HasMany
+    {
+        return $this->hasMany(FunnelVideoViewStat::class);
+    }
 }

@@ -93,29 +93,41 @@ function fmtDate(iso: string): string {
 <template>
     <Head title="Dashboard" />
 
-    <div class="flex flex-col gap-6 p-4 md:p-6 w-full max-w-screen-xl mx-auto">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
 
         <!-- ── Page header ── -->
-        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div class="relative overflow-hidden rounded-2xl border border-emerald-200/60 bg-linear-to-r from-emerald-50 via-cyan-50 to-sky-50 p-5 shadow-sm">
+            <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-emerald-200/40 blur-2xl"></div>
+            <div class="pointer-events-none absolute -bottom-12 left-24 h-32 w-32 rounded-full bg-cyan-200/40 blur-2xl"></div>
+            <div class="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h1 class="text-xl font-bold tracking-tight text-foreground">
                     {{ greeting }}, {{ userName }} 👋
                 </h1>
                 <p class="text-sm text-muted-foreground mt-0.5">{{ currentDate }}</p>
             </div>
-            <Button as-child size="sm" class="self-start sm:self-auto gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shadow-sm">
-                <Link href="/funnels/create">
-                    <Icon icon="heroicons:plus" class="size-4" />
-                    New Funnel
-                </Link>
-            </Button>
+            <div class="flex items-center gap-2 self-start sm:self-auto">
+                <Button as-child size="sm" variant="outline" class="gap-1.5 border-emerald-200 bg-white/85 text-emerald-700 hover:bg-emerald-50">
+                    <Link href="/funnels/create?scratch=1">
+                        <Icon icon="heroicons:sparkles" class="size-4" />
+                        Create From Scratch
+                    </Link>
+                </Button>
+                <Button as-child size="sm" class="gap-1.5 bg-linear-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-95 shadow-md">
+                    <Link href="/funnels/create">
+                        <Icon icon="heroicons:plus" class="size-4" />
+                        New Funnel
+                    </Link>
+                </Button>
+            </div>
+        </div>
         </div>
 
         <!-- ── KPI metric cards ── -->
         <div class="grid gap-4 grid-cols-2 lg:grid-cols-4">
 
             <!-- Total Funnels -->
-            <Card class="border shadow-sm hover:shadow-md transition-shadow">
+            <Card class="border-emerald-200/60 bg-linear-to-br from-white to-emerald-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Total Funnels
@@ -135,7 +147,7 @@ function fmtDate(iso: string): string {
             </Card>
 
             <!-- Published -->
-            <Card class="border shadow-sm hover:shadow-md transition-shadow">
+            <Card class="border-cyan-200/60 bg-linear-to-br from-white to-cyan-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Published
@@ -156,7 +168,7 @@ function fmtDate(iso: string): string {
             </Card>
 
             <!-- Total Leads -->
-            <Card class="border shadow-sm hover:shadow-md transition-shadow">
+            <Card class="border-amber-200/60 bg-linear-to-br from-white to-amber-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Total Leads
@@ -184,7 +196,7 @@ function fmtDate(iso: string): string {
             </Card>
 
             <!-- This Week -->
-            <Card class="border shadow-sm hover:shadow-md transition-shadow">
+            <Card class="border-violet-200/60 bg-linear-to-br from-white to-violet-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         This Week
@@ -205,7 +217,7 @@ function fmtDate(iso: string): string {
 
             <!-- Recent Funnels table – 2/3 width -->
             <div class="lg:col-span-2">
-                <Card class="border shadow-sm h-full">
+                <Card class="h-full border-emerald-200/60 bg-linear-to-b from-white to-emerald-50/40 shadow-sm">
                     <CardHeader class="flex flex-row items-center justify-between pb-3">
                         <div>
                             <CardTitle class="text-base font-semibold">Recent Funnels</CardTitle>
@@ -223,11 +235,11 @@ function fmtDate(iso: string): string {
                                 <Link href="/funnels/create">Create Funnel</Link>
                             </Button>
                         </div>
-                        <div v-else class="divide-y divide-border/60">
+                        <div v-else class="divide-y divide-emerald-100/80">
                             <div
                                 v-for="funnel in recentFunnels"
                                 :key="funnel.id"
-                                class="flex items-center gap-3 px-5 py-3 hover:bg-muted/40 transition-colors group"
+                                class="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-emerald-50/70"
                             >
                                 <!-- Icon col -->
                                 <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -271,30 +283,30 @@ function fmtDate(iso: string): string {
             <div class="flex flex-col gap-4">
 
                 <!-- Quick actions -->
-                <Card class="border shadow-sm">
+                <Card class="border-cyan-200/60 bg-linear-to-b from-white to-cyan-50/50 shadow-sm">
                     <CardHeader class="pb-3">
                         <CardTitle class="text-base font-semibold">Quick Actions</CardTitle>
                     </CardHeader>
                     <CardContent class="flex flex-col gap-2">
-                        <Button as-child variant="outline" class="justify-start gap-2.5 h-9 text-sm font-medium hover:bg-primary/5 hover:border-primary/30 transition-colors">
+                        <Button as-child variant="outline" class="h-9 justify-start gap-2.5 border-cyan-200/70 bg-white/90 text-sm font-medium hover:border-cyan-400/60 hover:bg-cyan-50 transition-colors">
                             <Link href="/funnels/create">
                                 <Icon icon="heroicons:plus-circle" class="size-4 text-primary" />
                                 Create New Funnel
                             </Link>
                         </Button>
-                        <Button as-child variant="outline" class="justify-start gap-2.5 h-9 text-sm font-medium hover:bg-primary/5 hover:border-primary/30 transition-colors">
+                        <Button as-child variant="outline" class="h-9 justify-start gap-2.5 border-cyan-200/70 bg-white/90 text-sm font-medium hover:border-cyan-400/60 hover:bg-cyan-50 transition-colors">
                             <Link href="/templates">
                                 <Icon icon="heroicons:rectangle-stack" class="size-4 text-primary" />
                                 Browse Templates
                             </Link>
                         </Button>
-                        <Button as-child variant="outline" class="justify-start gap-2.5 h-9 text-sm font-medium hover:bg-primary/5 hover:border-primary/30 transition-colors">
+                        <Button as-child variant="outline" class="h-9 justify-start gap-2.5 border-cyan-200/70 bg-white/90 text-sm font-medium hover:border-cyan-400/60 hover:bg-cyan-50 transition-colors">
                             <Link href="/leads">
                                 <Icon icon="heroicons:users" class="size-4 text-primary" />
                                 View All Leads
                             </Link>
                         </Button>
-                        <Button as-child variant="outline" class="justify-start gap-2.5 h-9 text-sm font-medium hover:bg-primary/5 hover:border-primary/30 transition-colors">
+                        <Button as-child variant="outline" class="h-9 justify-start gap-2.5 border-cyan-200/70 bg-white/90 text-sm font-medium hover:border-cyan-400/60 hover:bg-cyan-50 transition-colors">
                             <Link href="/integrations">
                                 <Icon icon="heroicons:puzzle-piece" class="size-4 text-primary" />
                                 Manage Integrations
@@ -304,7 +316,7 @@ function fmtDate(iso: string): string {
                 </Card>
 
                 <!-- Top funnels by leads -->
-                <Card class="border shadow-sm flex-1">
+                <Card class="flex-1 border-violet-200/60 bg-linear-to-b from-white to-violet-50/50 shadow-sm">
                     <CardHeader class="pb-3">
                         <CardTitle class="text-base font-semibold">Top Funnels</CardTitle>
                         <CardDescription class="text-xs">Ranked by lead count</CardDescription>
@@ -353,7 +365,7 @@ function fmtDate(iso: string): string {
         <!-- ── Getting started banner (shown when no funnels) ── -->
         <div
             v-if="metrics.funnelCount === 0"
-            class="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 p-6 flex flex-col sm:flex-row items-center gap-4"
+            class="flex flex-col items-center gap-4 rounded-2xl border border-emerald-300/60 bg-linear-to-r from-emerald-50 via-cyan-50 to-sky-50 p-6 sm:flex-row"
         >
             <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/15">
                 <Icon icon="heroicons:rocket-launch" class="size-6 text-primary" />
@@ -364,7 +376,7 @@ function fmtDate(iso: string): string {
                     Browse 50+ pre-built templates, customise your opt-in page, connect your ESP, and go live in minutes.
                 </p>
             </div>
-            <Button as-child class="shrink-0 sm:ml-auto bg-primary text-primary-foreground hover:opacity-90 shadow-sm">
+            <Button as-child class="shrink-0 sm:ml-auto bg-linear-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-95 shadow-md">
                 <Link href="/templates">Explore Templates</Link>
             </Button>
         </div>

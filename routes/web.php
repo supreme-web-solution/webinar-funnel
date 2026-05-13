@@ -11,6 +11,7 @@ use App\Http\Controllers\PublicFunnelController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\MentionController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\FunnelTrafficController;
 use Illuminate\Support\Facades\Auth;
 
 Route::get('/', function () {
@@ -46,6 +47,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('{funnel}/chat/conversations', [ChatController::class, 'deleteConversation'])->name('funnels.chat.conversations.delete');
         Route::get('{funnel}/chat/messages', [ChatController::class, 'ownerMessages'])->name('funnels.chat.messages');
         Route::post('{funnel}/chat/messages', [ChatController::class, 'ownerSend'])->name('funnels.chat.send');
+
+        Route::prefix('{funnel}/traffic')->name('funnels.traffic.')->group(function () {
+            Route::post('keywords', [FunnelTrafficController::class, 'storeKeyword'])->name('keywords.store');
+            Route::patch('keywords/{keyword}', [FunnelTrafficController::class, 'updateKeyword'])->name('keywords.update');
+            Route::delete('keywords/{keyword}', [FunnelTrafficController::class, 'destroyKeyword'])->name('keywords.destroy');
+            Route::post('keywords/{keyword}/fetch', [FunnelTrafficController::class, 'fetchNow'])->name('keywords.fetch');
+        });
     });
 
     Route::get('integrations', [IntegrationController::class, 'index'])->name('integrations.index');
@@ -91,6 +99,12 @@ Route::post('/{username}/{slug}/webinar/chat/messages', [ChatController::class, 
     ->where('slug', '[A-Za-z0-9-]+')
     ->middleware('throttle:30,1')
     ->name('public.chat.send');
+
+Route::post('/{username}/{slug}/webinar/stats', [PublicFunnelController::class, 'trackVideoStats'])
+    ->where('username', $reservedPublicPrefix)
+    ->where('slug', '[A-Za-z0-9-]+')
+    ->middleware('throttle:120,1')
+    ->name('public.webinar.stats');
 
 Route::get('/{username}/{slug}', [PublicFunnelController::class, 'optin'])
     ->where('username', $reservedPublicPrefix)

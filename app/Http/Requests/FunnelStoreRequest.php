@@ -27,6 +27,7 @@ class FunnelStoreRequest extends FormRequest
             'template_id' => ['required', 'integer', Rule::exists('templates', 'id')->where('is_active', true)],
             'name' => ['required', 'string', 'max:120'],
             'slug' => ['required', 'string', 'max:120', 'alpha_dash', Rule::unique('funnels', 'slug')->where('user_id', $this->user()->id)],
+            'is_scratch' => ['nullable', 'boolean'],
         ];
     }
 }

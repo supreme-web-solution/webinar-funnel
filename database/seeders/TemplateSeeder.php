@@ -65,7 +65,7 @@ class TemplateSeeder extends Seeder
                         'html'       => $design['html'],
                         'css'        => $design['css'],
                         'hero'       => [
-                            'headline'    => $offer['optin_heading'] ?? "{$name} — Save Your Seat",
+                            'headline'    => '🔥100% FREE TRAINING REVEALS:',
                             'subheadline' => $offer['optin_intro'] ?? 'Learn the complete system in one focused webinar.',
                             'cta'         => 'Reserve My Spot',
                         ],
@@ -188,7 +188,7 @@ class TemplateSeeder extends Seeder
         return [
             [
                 'name' => 'GuruOS Offer',
-                'optin_heading' => 'How To Build & Scale a Self-Growing Information Business Using AI Agents — Without Creating Everything Manually',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the world’s first AI operating system that builds your courses, memberships, communities, traffic campaigns, and launch funnels for you — helping beginners create profitable info businesses faster than ever.',
                 'bullet_points' => [
                     'How to use AI agents to automatically create, design, and launch high-quality courses and digital products',
@@ -199,7 +199,7 @@ class TemplateSeeder extends Seeder
                     'How beginners are using AI agents to launch scalable information businesses without being experts or showing their face',
                     'The “Agency Model” that lets you sell AI-powered course creation and automation services to businesses for high-ticket monthly retainers',
                     'Includes access to the proven $20M+ launch blueprint from Ben Murray showing how to create and scale winning offers fast',
-                    'How to build a future-proof online business using systems that continue working and growing long-term automatically',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BE OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://youtu.be/wEAY-IC3WLw',
@@ -208,7 +208,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Agentic Agency Offer',
-                'optin_heading' => 'How To Build AI-Powered Lead Generation & Follow-Up Systems For Local Businesses — Without Hiring Staff or Manually Chasing Leads',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the first “agentic” AI platform that turns any local business website into a fully automated funnel, AI calling, and follow-up system that captures, nurtures, and books leads 24/7 — completely hands-free.',
                 'bullet_points' => [
                     'How to turn any local business URL into a live high-converting funnel in under 5 minutes using AI automation',
@@ -229,7 +229,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'AI Flip Domains Offer',
-                'optin_heading' => 'How To Find, Buy & Flip Profitable Domain Names Using AI — Even If You’ve Never Sold a Domain Before',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the AI-powered system that helps beginners identify high-potential domain names, estimate resale value, list them on major marketplaces, and flip them for profit without guessing or technical skills.',
                 'bullet_points' => [
                     'How to tap into the multi-billion-dollar domain flipping industry without needing experience or technical knowledge',
@@ -250,7 +250,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'GEO Optimizer Offer',
-                'optin_heading' => 'How To Get Your Website Recommended by ChatGPT, Google AI & Perplexity Using AI Search Optimization — Without Technical SEO Skills',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the first WordPress plugin built specifically for AI search engines that helps your content become AI-readable, AI-citable, and AI-recommended across ChatGPT, Google AI Overviews, Claude, Perplexity, Gemini, and more.',
                 'bullet_points' => [
                     'How to optimize your WordPress website for the new era of AI search and position your content to be cited by ChatGPT, Google AI, Perplexity, and other AI engines',
@@ -271,7 +271,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Cinemation Offer',
-                'optin_heading' => 'How To Create Full-Length Cinematic AI Videos With Consistent Characters & Storytelling — Without Filming, Editing, or Production Skills',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the breakthrough AI video platform that lets beginners create movies, documentaries, ads, educational videos, and cinematic content in any niche using powerful AI automation.',
                 'bullet_points' => [
                     'How to create stunning full-length cinematic videos without cameras, actors, editing software, or production teams',
@@ -292,7 +292,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'SerpSling Ai Offer',
-                'optin_heading' => 'How To Rank Websites Inside ChatGPT, Google AI & Claude Using AI Search Optimization — And Charge Clients Monthly For It',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the breakthrough AI search optimization platform that audits, fixes, and optimizes websites to appear inside major AI search engines automatically — helping beginners tap into one of the fastest-growing digital marketing opportunities.',
                 'bullet_points' => [
                     'How to get websites ranked and recommended inside ChatGPT, Google AI, Claude, and other major AI search engines with just a few clicks',
@@ -313,7 +313,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'ClientForce Offer',
-                'optin_heading' => 'How To Deploy AI Sales Agents That Prospect, Follow Up, Call, Propose & Help Close Deals Automatically — 24/7',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the next generation AI sales platform that automates your entire sales workflow from lead generation to follow-up, AI voice calls, proposals, and booked meetings — without manual prospecting or chasing leads.',
                 'bullet_points' => [
                     'How to launch self-running AI Sales Agents that continuously prospect and fill your pipeline automatically',
@@ -334,7 +334,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Traffic Magnets Offer',
-                'optin_heading' => 'How To Build “Traffic Magnet” Tools That Generate Free Google Traffic & Passive Income — Without SEO Expertise or Paid Ads',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the simple system for creating interactive calculators, widgets, and generators that attract targeted buyers from Google every month and turn that traffic into long-term recurring income.',
                 'bullet_points' => [
                     'How to create simple interactive tools that attract targeted Google traffic automatically without going viral or posting daily',
@@ -355,7 +355,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Hooked Ai Offer',
-                'optin_heading' => 'How To Create Scroll-Stopping Short Videos That Get More Views, Clicks & Sales — Without Filming Everything From Scratch',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the new “Hook First” AI system that helps creators, marketers, affiliates, and business owners turn weak videos into attention-grabbing content designed to stop the scroll and keep people watching.',
                 'bullet_points' => [
                     'The breakthrough “Hook First” strategy that makes short videos more engaging, clickable, and watchable from the very first seconds',
@@ -376,7 +376,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Outrich Offer',
-                'optin_heading' => 'How To Automate Lead Generation, Outreach & Client Acquisition Using AI — Without Hiring Staff or Sending Emails Manually',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the AI-powered outreach engine that finds leads, writes personalized emails, follows up automatically, and helps businesses generate more meetings, clients, and revenue on autopilot.',
                 'bullet_points' => [
                     'How to build a predictable client acquisition system using AI-powered outreach automation',
@@ -397,7 +397,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'InstantlyClaw Offer',
-                'optin_heading' => 'How To Deploy Fully Hosted AI Agent Teams That Run Real Business Tasks Automatically — Without Coding, Servers, or Technical Setup',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the breakthrough one-click AI agent deployment system that lets beginners launch fully functional AI teams capable of browsing websites, sending emails, creating documents, running workflows, and automating business operations in under 60 seconds.',
                 'bullet_points' => [
                     'How to launch fully hosted AI agent systems with one click — no Docker, coding, VPS setup, or API configuration required',
@@ -418,7 +418,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'OpenClaw Cracked Offer',
-                'optin_heading' => 'How AI Build & Launch a Real Online Business Live — From Idea to Sales Page in One Session',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the new generation of AI systems that don’t just give suggestions — they execute. Watch AI build a business live by creating the offer, writing the copy, setting up payments, drafting emails, preparing ads, and launching the core assets automatically.',
                 'bullet_points' => [
                     'Watch AI build a real online business live from scratch without slides, theory, or pre-recorded demos',
@@ -439,7 +439,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'LocalMator Offer',
-                'optin_heading' => 'How To Start an AI-Powered Reputation Management Agency & Get Clients Paying $500–$1,500/Month — Without SEO or Technical Skills',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the new AI-powered system that helps local businesses monitor, manage, and respond to online reviews automatically — while positioning yourself to profit from one of the fastest-growing local business opportunities.',
                 'bullet_points' => [
                     'How to start a high-income reputation management agency using AI automation instead of manual work',
@@ -460,7 +460,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'CleverAi Studio Offer',
-                'optin_heading' => 'How To Create AI-Powered Content, Videos, Designs, Chatbots & Marketing Campaigns From One Dashboard — Without Technical Skills or Monthly Fees',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the breakthrough AI platform that scans any website, learns your business automatically, and gives you access to 300+ premium AI tools for content creation, marketing, automation, design, SEO, video, voiceovers, and more.',
                 'bullet_points' => [
                     'How to generate personalized, publish-ready AI content simply by entering a website URL — without endless prompting or manual setup',
@@ -481,7 +481,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Prezent IQ Offer',
-                'optin_heading' => 'How To Create Interactive AI Presentations That Speak, Engage, Capture Leads & Close Deals Automatically — Without Coding or Technical Skills',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the world’s first Agentic AI Presentation System that transforms ordinary slides into interactive AI-powered experiences capable of answering questions, capturing leads, guiding decisions, and helping businesses convert more customers 24/7.',
                 'bullet_points' => [
                     'How to turn any idea, website, document, or PowerPoint into a talking AI presentation in minutes',
@@ -502,7 +502,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'ViralCharacters Offer',
-                'optin_heading' => 'How To Create Viral Character Videos For TikTok, Reels & YouTube Shorts — Without Filming, Editing, or Animation Skills',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the AI-powered viral video studio that lets anyone create scroll-stopping short-form videos using talking babies, animals, celebrities, historical figures, parody characters, and custom avatars designed to boost views, engagement, and followers automatically.',
                 'bullet_points' => [
                     'How to create viral-style short videos using AI-powered characters without filming yourself or learning video editing',
@@ -523,7 +523,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'GramGennies Offer',
-                'optin_heading' => 'How To Grow a Profitable Instagram Brand With AI Agents — Without Showing Your Face or Posting Manually Every Day',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the first Meta-approved AI agent system that learns your business, creates viral content, grows real followers, handles DMs, and helps turn Instagram engagement into leads and sales automatically.',
                 'bullet_points' => [
                     'How to grow targeted Instagram followers safely using Meta-approved AI agents instead of risky bots or automation tools',
@@ -544,7 +544,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Synthesys Actors Offer',
-                'optin_heading' => 'How To Create AI Actor Video Funnels That Capture Attention, Build Trust & Close Sales Automatically',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the breakthrough AI video marketing system that lets you create consistent AI actor videos for Reel ads, retargeting campaigns, long-form VSLs, product promotions, and complete high-converting sales funnels without filming yourself.',
                 'bullet_points' => [
                     'How to create long-form AI Avatar Video Sales Letters designed to convert viewers into buyers automatically',
@@ -565,7 +565,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'CogneX Ai Offer',
-                'optin_heading' => 'How To Replace 30+ Expensive AI Tools & Build a Profitable AI Business From One Dashboard — Without Technical Skills',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the all-in-one AI platform that combines content creation, video generation, voiceovers, websites, automation, design, podcasts, and marketing tools into one powerful system designed to help beginners launch scalable AI-powered businesses.',
                 'bullet_points' => [
                     'How to replace expensive tools like ChatGPT, Canva, MidJourney, Jasper, ElevenLabs, InVideo, ClickFunnels, and more with one AI platform',
@@ -586,7 +586,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Reddify Ai Offer',
-                'optin_heading' => 'How To Turn Reddit Into a 24/7 Free Traffic & High-Ticket Sales Machine Using AI — Without Paid Ads or Manual Posting',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the AI-powered Reddit automation system that creates viral-style posts, finds targeted subreddits, follows up automatically, captures leads, and monetizes traffic with high-ticket offers on autopilot.',
                 'bullet_points' => [
                     'How to leverage Reddit for consistent free traffic without running paid ads or posting manually every day',
@@ -607,7 +607,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Micro Content Agency Offer',
-                'optin_heading' => 'How To Launch an AI Video Content Agency That Onboards Clients in 10 Minutes — Without Hiring Creators or Editing Videos Manually',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the AI-powered agency platform that reads client websites, extracts brand voice automatically, creates 30-day video content systems, generates scripts, produces videos, and publishes content — all from one dashboard.',
                 'bullet_points' => [
                     'How to turn any client website into a complete branded video content system in as little as 10 minutes',
@@ -628,7 +628,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Imimic Offer',
-                'optin_heading' => 'How To Create AI Virtual Influencers That Grow Followers, Create Viral Content & Generate Income Automatically — Without Showing Your Face',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the AI-powered platform that lets anyone build hyper-realistic virtual influencers capable of creating videos, posting content, attracting followers, and monetizing social media across multiple niches on autopilot.',
                 'bullet_points' => [
                     'How to create hyper-realistic AI influencers that look, speak, and behave like real creators without filming yourself',
@@ -649,7 +649,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'AiPodVids Offer',
-                'optin_heading' => 'How To Create Viral AI Podcast Clips That Build Trust, Grow Followers & Drive Sales — Without Recording or Showing Your Face',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the world’s first AI podcast clip engine that transforms simple keywords into addictive short-form podcast videos designed to grab attention, increase engagement, and generate traffic across YouTube, TikTok, Instagram, Facebook, LinkedIn, and more.',
                 'bullet_points' => [
                     'How to create scroll-stopping podcast-style videos using AI without recording yourself or learning video editing',
@@ -670,7 +670,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'AiDirectors Offer',
-                'optin_heading' => 'How To Create AI-Powered UGC Videos That Drive Views, Clicks & Sales — Without Filming, Editing, or Technical Skills',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the 1-click AI business builder that transforms any product image, affiliate offer, or website link into realistic human-style videos designed to generate traffic, grow faceless channels, and drive affiliate commissions automatically.',
                 'bullet_points' => [
                     'How to create scroll-stopping AI UGC videos for TikTok, Instagram Reels, and YouTube Shorts without recording yourself',
@@ -691,7 +691,7 @@ class TemplateSeeder extends Seeder
             ],
             [
                 'name' => 'Creativo ai 2.0 Offer',
-                'optin_heading' => 'How To Create Stunning AI-Enhanced Images & Product Visuals in Minutes — Without Photoshop or Design Skills',
+                'optin_heading' => '🔥100% FREE TRAINING REVEALS:',
                 'optin_intro' => 'Discover the AI-powered image editing platform that helps ecommerce sellers, marketers, and creators generate, enhance, upscale, and transform professional-quality visuals with one click.',
                 'bullet_points' => [
                     'How to create professional-grade product images, marketing visuals, and social media graphics without Photoshop or advanced editing skills',
@@ -904,7 +904,7 @@ class TemplateSeeder extends Seeder
                     'The simple system to automate your business tasks without technical skills',
                     'How to eliminate “prompt struggles” and get results instantly',
                     'How to use AI workflows to save hours of work daily',
-                    'How beginners are using this to grow online businesses faster',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BE OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://www.youtube.com/watch?v=xGQyPjSazP0',
@@ -920,7 +920,7 @@ class TemplateSeeder extends Seeder
                     'The simple method to find and model proven winning ads in your niche',
                     'How to eliminate guesswork and launch campaigns that convert faster',
                     'How to automate your marketing without hiring copywriters or agencies',
-                    'How beginners are using AI to save time and boost results quickly',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BE OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://youtu.be/eMmc2Tnlo9A',
@@ -951,7 +951,7 @@ class TemplateSeeder extends Seeder
                     'How to generate videos, pages, emails, and content without writing anything',
                     'The simple system to launch campaigns faster and start getting results quickly',
                     'How to create lead magnets, blogs, and ads on autopilot',
-                    'How beginners are using this to build affiliate income and AI-powered agencies',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BECOME OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://youtu.be/d-Z8S83uDik',
@@ -969,7 +969,7 @@ class TemplateSeeder extends Seeder
                     'The secret to creating highly engaging books with animations, voiceovers, and interactive elements that stand out',
                     'How to publish books that attract attention, build credibility, and actually SELL',
                     'The “multi-market strategy” to sell your books to parents, schools, agencies, and freelancers',
-                    'How beginners are using this to launch their own digital publishing business without tech skills',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BE OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://youtu.be/ygLMWQaCcug',
@@ -987,7 +987,7 @@ class TemplateSeeder extends Seeder
                     'The secret to building high-converting bonus pages that increase your affiliate commissions',
                     'How to turn any niche, keyword, or product into a ready-to-profit affiliate asset with one click',
                     'The “set-and-profit” strategy to earn commissions by recommending products like top affiliate marketers',
-                    'How beginners are using this to start online income streams without tech skills, experience, or upfront costs',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BE OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://youtu.be/zoICOLa8yeI',
@@ -1121,7 +1121,7 @@ class TemplateSeeder extends Seeder
                     'How to generate voiceovers for different use cases like audiobooks, e-learning, and explainer videos',
                     'How to produce high-quality audio using built-in enhancement and mixing tools',
                     'How to create scripts and voiceovers together using AI-powered transcription and VSL generation',
-                    'How beginners are using this to start voiceover services without recording or hiring freelancers',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BE OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://vimeo.com/1186724898',
@@ -1177,7 +1177,7 @@ class TemplateSeeder extends Seeder
                     'Done-For-You OR Fully Custom — Perfect for Beginners & Pros Use push-button automation for instant results or switch to manual mode for full creative control.',
                     'Built-In Monetization — Turn Every eBook Into a Lead & Sales Machine. Add clickable links, offers, and calls-to-action that generate income on autopilot.',
                     'Tap Into Global Markets With 95+ Languages + Instant Audiobooks. Create multilingual eBooks and convert them into audiobooks in seconds for wider reach and passive traffic.',
-                    'Sell Unlimited eBooks & Keep 100% Profit — No Tech, No Hidden Costs. Includes commercial license, DFY content, email follow-ups, and Amazon KDP training to start earning fast.',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BE OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://youtu.be/CJSSBcBfBuY',
@@ -1197,7 +1197,7 @@ class TemplateSeeder extends Seeder
                     'How to leverage done-for-you affiliate products and content to start promoting profitable offers immediately',
                     'The “self-scheduling” AI technology that posts at the best times automatically — no manual scheduling needed',
                     'How to turn this into a profitable SMMA or AI automation service and charge clients monthly recurring fees',
-                    'Includes step-by-step affiliate training from multi-million-dollar marketer Ben Murray showing how to build a profitable affiliate business with AI doing the heavy lifting',
+
                 ],
                 'webinar_title' => 'WATCH THIS TRAINING COMPLETELY TO BE OUR NEXT SUCCESS STORY',
                 'video_url' => 'https://youtu.be/srdOzkwWTnY',
@@ -1237,7 +1237,7 @@ class TemplateSeeder extends Seeder
     /* ── Design 0: Dark Navy + Turquoise ── */
     private function designDarkTurquoise(?array $offer, string $name, string $category): array
     {
-        $heading  = htmlspecialchars($offer['optin_heading'] ?? '🔥 FREE TRAINING REVEALS:', ENT_QUOTES);
+        $heading = '🔥100% FREE TRAINING REVEALS:';
         $intro    = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
         $bullets  = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
@@ -1248,6 +1248,7 @@ class TemplateSeeder extends Seeder
     <div class="dfy-inner">
       <span class="dfy-badge">{$heading}</span>
       <h1 class="dfy-headline">{$intro}</h1>
+      <a class="dfy-scroll-btn" href="#dfy-optin-form">Click Here To Register For This FREE Training</a>
       <div class="dfy-divider-line"></div>
       <div class="dfy-bullets-wrap">
         <p class="dfy-bullets-title">What You'll Discover On This FREE Training:</p>
@@ -1257,7 +1258,7 @@ class TemplateSeeder extends Seeder
       <div class="dfy-trust">
         <span>✓ 100% Free</span><span>✓ Instant Access</span><span>✓ Limited Spots</span>
       </div>
-      <form class="dfy-form" data-locked-form="true">
+      <form id="dfy-optin-form" class="dfy-form" data-locked-form="true">
         <p class="dfy-form-heading">Enter Your Details To Get Instant Access</p>
         <input class="dfy-input" name="name" type="text" placeholder="Your full name" required />
         <input class="dfy-input" name="email" type="email" placeholder="Your best email address" required />
@@ -1293,6 +1294,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-btn{width:100%;padding:16px;background:linear-gradient(135deg,#40E0D0,#2dc4b5);color:#060d1a;font-size:16px;font-weight:900;border:none;border-radius:10px;cursor:pointer;margin-top:4px;transition:transform .15s,opacity .15s;letter-spacing:.02em}
 .dfy-btn:hover{transform:translateY(-2px);opacity:.9}
 .dfy-privacy{margin-top:14px;font-size:11.5px;color:rgba(255,255,255,.3)}
+.dfy-scroll-btn{display:inline-block;margin:0 auto 22px;padding:12px 18px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:.02em;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .15s,opacity .15s}
+.dfy-scroll-btn:hover{transform:translateY(-1px);opacity:.92}
+html{scroll-behavior:smooth}
 CSS;
 
         return compact('html', 'css');
@@ -1301,7 +1305,7 @@ CSS;
     /* ── Design 1: Dark Amber / Warm Gold ── */
     private function designAmberDark(?array $offer, string $name, string $category): array
     {
-        $heading     = htmlspecialchars($offer['optin_heading'] ?? '🔥 FREE TRAINING REVEALS:', ENT_QUOTES);
+        $heading = '🔥100% FREE TRAINING REVEALS:';
         $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
         $bullets     = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
@@ -1312,13 +1316,14 @@ CSS;
     <div class="dfy-inner">
       <span class="dfy-badge">{$heading}</span>
       <h1 class="dfy-headline">{$intro}</h1>
+      <a class="dfy-scroll-btn" href="#dfy-optin-form">Click Here To Register For This FREE Training</a>
       <div class="dfy-sep">◆ ◆ ◆</div>
       <div class="dfy-bullets-wrap">
         <p class="dfy-bullets-title">Here's What You'll Learn On This FREE Training:</p>
         <ul class="dfy-bullets">
 {$bulletsHtml}        </ul>
       </div>
-      <form class="dfy-form" data-locked-form="true">
+      <form id="dfy-optin-form" class="dfy-form" data-locked-form="true">
         <p class="dfy-form-heading">🎟 Secure Your Free Spot Below</p>
         <label class="dfy-label">First Name</label>
         <input class="dfy-input" name="name" type="text" placeholder="Enter your name" required />
@@ -1358,6 +1363,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-btn:hover{opacity:.88;transform:translateY(-1px)}
 .dfy-footer-trust{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:20px}
 .dfy-footer-trust span{font-size:12px;color:rgba(255,255,255,.3)}
+.dfy-scroll-btn{display:inline-block;margin:0 auto 22px;padding:12px 18px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:.02em;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .15s,opacity .15s}
+.dfy-scroll-btn:hover{transform:translateY(-1px);opacity:.92}
+html{scroll-behavior:smooth}
 CSS;
 
         return compact('html', 'css');
@@ -1366,7 +1374,7 @@ CSS;
     /* ── Design 2: Light / Clean Teal ── */
     private function designLightTeal(?array $offer, string $name, string $category): array
     {
-        $heading     = htmlspecialchars($offer['optin_heading'] ?? '🔥 FREE TRAINING REVEALS:', ENT_QUOTES);
+        $heading = '🔥100% FREE TRAINING REVEALS:';
         $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
         $bullets     = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets, 'dfy-check');
@@ -1377,6 +1385,7 @@ CSS;
     <div class="dfy-card-left">
       <span class="dfy-badge">{$heading}</span>
       <h1 class="dfy-headline">{$intro}</h1>
+      <a class="dfy-scroll-btn" href="#dfy-optin-form">Click Here To Register For This FREE Training</a>
       <div class="dfy-divider"></div>
       <p class="dfy-disc-title">What You'll Discover:</p>
       <ul class="dfy-bullets">
@@ -1386,7 +1395,7 @@ CSS;
       <div class="dfy-lock-icon">🔐</div>
       <h2 class="dfy-form-title">Register for Free Access</h2>
       <p class="dfy-form-sub">Enter your details below to claim your spot</p>
-      <form class="dfy-form" data-locked-form="true">
+      <form id="dfy-optin-form" class="dfy-form" data-locked-form="true">
         <input class="dfy-input" name="name" type="text" placeholder="Your full name" required />
         <input class="dfy-input" name="email" type="email" placeholder="Your best email address" required />
         <button class="dfy-btn" type="submit">Yes! Give Me Instant Access →</button>
@@ -1426,6 +1435,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-privacy{margin-top:10px;font-size:11.5px;color:#94a3b8;text-align:center}
 .dfy-trust-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:18px}
 .dfy-trust-row span{font-size:11px;color:#64748b;font-weight:600}
+.dfy-scroll-btn{display:inline-block;margin:0 auto 22px;padding:12px 18px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:.02em;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .15s,opacity .15s}
+.dfy-scroll-btn:hover{transform:translateY(-1px);opacity:.92}
+html{scroll-behavior:smooth}
 CSS;
 
         return compact('html', 'css');
@@ -1434,7 +1446,7 @@ CSS;
     /* ── Design 3: Deep Purple ── */
     private function designDeepPurple(?array $offer, string $name, string $category): array
     {
-        $heading     = htmlspecialchars($offer['optin_heading'] ?? '🔥 FREE TRAINING REVEALS:', ENT_QUOTES);
+        $heading = '🔥100% FREE TRAINING REVEALS:';
         $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
         $bullets     = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
@@ -1446,6 +1458,7 @@ CSS;
     <div class="dfy-inner">
       <div class="dfy-eyebrow">{$heading}</div>
       <h1 class="dfy-headline">{$intro}</h1>
+      <a class="dfy-scroll-btn" href="#dfy-optin-form">Click Here To Register For This FREE Training</a>
       <div class="dfy-line"></div>
       <div class="dfy-bullets-wrap">
         <p class="dfy-bullets-label">▸ On This FREE Training You Will Discover:</p>
@@ -1459,7 +1472,7 @@ CSS;
         <div class="dfy-stat-div"></div>
         <div class="dfy-stat"><strong>100%</strong><span>Free</span></div>
       </div>
-      <form class="dfy-form" data-locked-form="true">
+      <form id="dfy-optin-form" class="dfy-form" data-locked-form="true">
         <p class="dfy-form-label">Enter Your Details To Reserve Your Seat</p>
         <div class="dfy-row">
           <input class="dfy-input" name="name" type="text" placeholder="Full name" required />
@@ -1503,6 +1516,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-btn{width:100%;padding:15px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;font-size:15px;font-weight:800;border:none;border-radius:8px;cursor:pointer;transition:opacity .2s,transform .15s;letter-spacing:.02em}
 .dfy-btn:hover{opacity:.9;transform:translateY(-1px)}
 .dfy-privacy{margin-top:12px;font-size:11.5px;color:rgba(255,255,255,.25)}
+.dfy-scroll-btn{display:inline-block;margin:0 auto 22px;padding:12px 18px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:.02em;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .15s,opacity .15s}
+.dfy-scroll-btn:hover{transform:translateY(-1px);opacity:.92}
+html{scroll-behavior:smooth}
 CSS;
 
         return compact('html', 'css');
@@ -1511,17 +1527,18 @@ CSS;
     /* ── Design 4: Minimal White ── */
     private function designMinimalWhite(?array $offer, string $name, string $category): array
     {
-        $heading     = htmlspecialchars($offer['optin_heading'] ?? '🔥 FREE TRAINING REVEALS:', ENT_QUOTES);
+        $heading = '🔥100% FREE TRAINING REVEALS:';
         $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
         $bullets     = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets, 'dfy-check');
 
         $html = <<<HTML
 <div class="dfy-page">
-  <div class="dfy-logo">DFY Webinar Forge</div>
+  <div class="dfy-logo">DFY Webinar Funnels</div>
   <section class="dfy-hero">
     <span class="dfy-badge">{$heading}</span>
     <h1 class="dfy-headline">{$intro}</h1>
+      <a class="dfy-scroll-btn" href="#dfy-optin-form">Click Here To Register For This FREE Training</a>
     <div class="dfy-content-grid">
       <div class="dfy-bullets-col">
         <p class="dfy-disc-title">📋 What You'll Discover:</p>
@@ -1529,7 +1546,7 @@ CSS;
 {$bulletsHtml}        </ul>
       </div>
       <div class="dfy-form-col">
-        <form class="dfy-form" data-locked-form="true">
+        <form id="dfy-optin-form" class="dfy-form" data-locked-form="true">
           <h2 class="dfy-form-title">🔐 Secure Your Free Spot</h2>
           <p class="dfy-form-sub">100% free — no credit card needed</p>
           <input class="dfy-input" name="name" type="text" placeholder="Your first name" required />
@@ -1573,6 +1590,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .dfy-privacy{margin-top:12px;font-size:11.5px;color:#cbd5e1;text-align:center}
 .dfy-trust-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
 .dfy-trust-row span{font-size:11px;color:#94a3b8;font-weight:600}
+.dfy-scroll-btn{display:inline-block;margin:0 auto 22px;padding:12px 18px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:.02em;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .15s,opacity .15s}
+.dfy-scroll-btn:hover{transform:translateY(-1px);opacity:.92}
+html{scroll-behavior:smooth}
 CSS;
 
         return compact('html', 'css');
@@ -1581,7 +1601,7 @@ CSS;
     /* ── Design 5: Emerald Dark ── */
     private function designEmeraldDark(?array $offer, string $name, string $category): array
     {
-        $heading     = htmlspecialchars($offer['optin_heading'] ?? '🔥 FREE TRAINING REVEALS:', ENT_QUOTES);
+        $heading = '🔥100% FREE TRAINING REVEALS:';
         $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
         $bullets     = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
@@ -1593,6 +1613,7 @@ CSS;
     <div class="dfy-inner">
       <div class="dfy-tag">{$heading}</div>
       <h1 class="dfy-headline">{$intro}</h1>
+      <a class="dfy-scroll-btn" href="#dfy-optin-form">Click Here To Register For This FREE Training</a>
       <div class="dfy-accent-bar"></div>
       <div class="dfy-bullets-wrap">
         <div class="dfy-bullets-header">
@@ -1602,7 +1623,7 @@ CSS;
         <ul class="dfy-bullets">
 {$bulletsHtml}        </ul>
       </div>
-      <form class="dfy-form" data-locked-form="true">
+      <form id="dfy-optin-form" class="dfy-form" data-locked-form="true">
         <p class="dfy-form-label">⚡ Enter Your Details For Instant Free Access</p>
         <div class="dfy-fields">
           <input class="dfy-input" name="name" type="text" placeholder="Your full name" required />
@@ -1643,6 +1664,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-btn{width:100%;padding:16px;background:linear-gradient(135deg,#10b981,#059669);color:#021a0e;font-size:15px;font-weight:900;border:none;border-radius:10px;cursor:pointer;transition:opacity .2s,transform .15s;letter-spacing:.02em}
 .dfy-btn:hover{opacity:.9;transform:translateY(-2px)}
 .dfy-privacy{margin-top:12px;font-size:11.5px;color:rgba(255,255,255,.25)}
+.dfy-scroll-btn{display:inline-block;margin:0 auto 22px;padding:12px 18px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:.02em;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .15s,opacity .15s}
+.dfy-scroll-btn:hover{transform:translateY(-1px);opacity:.92}
+html{scroll-behavior:smooth}
 CSS;
 
         return compact('html', 'css');
@@ -1651,7 +1675,7 @@ CSS;
     /* ── Design 6: Crimson Bold Red ── */
     private function designCrimsonBold(?array $offer, string $name, string $category): array
     {
-        $heading     = htmlspecialchars($offer['optin_heading'] ?? '🔥 FREE TRAINING REVEALS:', ENT_QUOTES);
+        $heading = '🔥100% FREE TRAINING REVEALS:';
         $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
         $bullets     = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
@@ -1664,6 +1688,7 @@ CSS;
     <div class="dfy-inner">
       <div class="dfy-pill">{$heading}</div>
       <h1 class="dfy-headline">{$intro}</h1>
+      <a class="dfy-scroll-btn" href="#dfy-optin-form">Click Here To Register For This FREE Training</a>
       <div class="dfy-stripe"></div>
       <div class="dfy-grid">
         <div class="dfy-left">
@@ -1672,7 +1697,7 @@ CSS;
 {$bulletsHtml}          </ul>
         </div>
         <div class="dfy-right">
-          <form class="dfy-form" data-locked-form="true">
+          <form id="dfy-optin-form" class="dfy-form" data-locked-form="true">
             <div class="dfy-form-top">
               <span class="dfy-form-badge">FREE ACCESS</span>
               <h2 class="dfy-form-title">Reserve Your Spot</h2>
@@ -1726,6 +1751,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-trust{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
 .dfy-trust span{font-size:11px;color:rgba(255,255,255,.35);font-weight:600}
 .dfy-privacy{font-size:11px;color:rgba(255,255,255,.22);text-align:center}
+.dfy-scroll-btn{display:inline-block;margin:0 auto 22px;padding:12px 18px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:.02em;box-shadow:0 8px 20px rgba(0,0,0,.18);transition:transform .15s,opacity .15s}
+.dfy-scroll-btn:hover{transform:translateY(-1px);opacity:.92}
+html{scroll-behavior:smooth}
 CSS;
 
         return compact('html', 'css');
