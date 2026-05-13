@@ -73,6 +73,22 @@ const sentMilestones = ref<Set<string>>(new Set());
 const sessionKey = ref('');
 const redirectedAtEnd = ref(false);
 
+/** Temporary top/bottom bars to hide YouTube/Vimeo chrome — hide after intro window */
+const videoChromeMaskActive = ref(false);
+let chromeMaskHideTimer: number | undefined;
+
+const scheduleChromeMaskHide = (): void => {
+    window.clearTimeout(chromeMaskHideTimer);
+    if (!videoEmbedUrl.value) {
+        videoChromeMaskActive.value = false;
+        return;
+    }
+    videoChromeMaskActive.value = true;
+    chromeMaskHideTimer = window.setTimeout(() => {
+        videoChromeMaskActive.value = false;
+    }, 5000);
+};
+
 // Simulated live viewer count
 const viewerCount = ref(Math.floor(Math.random() * 180) + 120);
 let viewerTimer: number | undefined;
@@ -496,10 +512,15 @@ const handleKeydown = (e: KeyboardEvent): void => {
     }
 };
 
+watch(videoEmbedUrl, () => {
+    scheduleChromeMaskHide();
+});
+
 onMounted(() => {
     ensureSessionKey();
     postAnalytics('access');
     scrollToBottom();
+    scheduleChromeMaskHide();
     poller = window.setInterval(fetchMessages, 4000);
     // Simulate live viewer count fluctuation
     viewerTimer = window.setInterval(() => {
@@ -522,6 +543,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    window.clearTimeout(chromeMaskHideTimer);
     if (poller) window.clearInterval(poller);
     if (viewerTimer) window.clearInterval(viewerTimer);
     if (offerTimer) window.clearInterval(offerTimer);
@@ -621,10 +643,12 @@ onUnmounted(() => {
                         <p class="text-sm">Video not configured yet</p>
                     </div>
 
-                    <!-- Force stream-style look by masking provider chrome -->
-                    <template v-if="videoEmbedUrl">
-                        <div class="pointer-events-none absolute inset-x-0 top-0 z-1 h-20 bg-black" />
-                        <div class="pointer-events-none absolute inset-x-0 bottom-0 z-1 h-28 bg-black" />
+                    <!-- Temporary masks to hide provider chrome (removed after 5s) -->
+                    <template
+                        v-if="videoEmbedUrl && videoChromeMaskActive && (videoProvider === 'youtube' || videoProvider === 'vimeo')"
+                    >
+                        <div class="pointer-events-none absolute inset-x-0 top-0 z-1 h-20 bg-black transition-opacity duration-500" />
+                        <div class="pointer-events-none absolute inset-x-0 bottom-0 z-1 h-28 bg-black transition-opacity duration-500" />
                     </template>
 
                     <!-- Click blocker to prevent hover/click exposing native controls -->
