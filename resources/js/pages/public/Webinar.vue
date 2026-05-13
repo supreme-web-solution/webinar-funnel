@@ -89,10 +89,10 @@ const baseVideoEmbedUrl = computed((): string | null => {
     const raw = props.funnel.settings?.video_url?.trim();
     if (!raw) return null;
 
-    // Already a proper embed URL — pass through
+    // Already a proper embed URL — normalize to standard youtube.com/embed.
     if (raw.includes('youtube.com/embed/') || raw.includes('youtube-nocookie.com/embed/')) {
         const id = raw.match(/embed\/([a-zA-Z0-9_-]+)/)?.[1];
-        return id ? `https://www.youtube-nocookie.com/embed/${id}` : raw;
+        return id ? `https://www.youtube.com/embed/${id}` : raw;
     }
     if (raw.includes('player.vimeo.com/video/')) {
         return raw;
@@ -101,23 +101,23 @@ const baseVideoEmbedUrl = computed((): string | null => {
     // youtu.be/ID short URL
     const youtuBe = raw.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
     if (youtuBe) {
-        return `https://www.youtube-nocookie.com/embed/${youtuBe[1]}`;
+        return `https://www.youtube.com/embed/${youtuBe[1]}`;
     }
 
     // youtube.com/watch?v=ID  (may have extra params)
     const ytWatch = raw.match(/[?&]v=([a-zA-Z0-9_-]+)/);
     if (raw.includes('youtube.com') && ytWatch) {
-        return `https://www.youtube-nocookie.com/embed/${ytWatch[1]}`;
+        return `https://www.youtube.com/embed/${ytWatch[1]}`;
     }
 
     // youtube live/shorts URL patterns
     const ytLive = raw.match(/youtube\.com\/live\/([a-zA-Z0-9_-]+)/);
     if (ytLive) {
-        return `https://www.youtube-nocookie.com/embed/${ytLive[1]}`;
+        return `https://www.youtube.com/embed/${ytLive[1]}`;
     }
     const ytShorts = raw.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/);
     if (ytShorts) {
-        return `https://www.youtube-nocookie.com/embed/${ytShorts[1]}`;
+        return `https://www.youtube.com/embed/${ytShorts[1]}`;
     }
 
     // vimeo.com/ID  (numeric ID, not /channels/ etc.)

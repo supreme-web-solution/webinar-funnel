@@ -163,6 +163,42 @@ const activeDevice     = ref<'desktop' | 'mobile'>('desktop');
 const isFullscreen     = ref(false);
 
 const copiedLink    = ref<'optin' | 'webinar' | null>(null);
+const shareModalOpen = ref(false);
+const shareActiveLink = ref<'webinar' | 'optin'>('webinar');
+const shareLinkCopied = ref(false);
+
+const shareCurrentUrl = computed(() =>
+    shareActiveLink.value === 'webinar' ? props.publicLinks.webinar : props.publicLinks.optin,
+);
+const shareCurrentText = computed(() =>
+    shareActiveLink.value === 'webinar'
+        ? `Join me for this FREE webinar: ${props.funnel.name}`
+        : `Register for this FREE webinar: ${props.funnel.name}`,
+);
+
+const openSharePlatform = (platform: string): void => {
+    const url  = encodeURIComponent(shareCurrentUrl.value);
+    const text = encodeURIComponent(shareCurrentText.value);
+    const links: Record<string, string> = {
+        facebook:  `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+        x:         `https://twitter.com/intent/tweet?url=${url}&text=${text}`,
+        whatsapp:  `https://wa.me/?text=${encodeURIComponent(shareCurrentText.value + ' ' + shareCurrentUrl.value)}`,
+        linkedin:  `https://www.linkedin.com/sharing/share-offsite/?url=${url}`,
+        telegram:  `https://t.me/share/url?url=${url}&text=${text}`,
+        email:     `mailto:?subject=${encodeURIComponent('You are invited: ' + props.funnel.name)}&body=${encodeURIComponent(shareCurrentText.value + '\n\n' + shareCurrentUrl.value)}`,
+    };
+    if (links[platform]) {
+        window.open(links[platform], '_blank', 'noopener,noreferrer,width=620,height=500');
+    }
+};
+
+const copyShareLink = async (): Promise<void> => {
+    try {
+        await navigator.clipboard.writeText(shareCurrentUrl.value);
+        shareLinkCopied.value = true;
+        window.setTimeout(() => { shareLinkCopied.value = false; }, 2000);
+    } catch { /* ignore */ }
+};
 const savingPage    = ref(false);
 const savingSettings = ref(false);
 const publishing    = ref(false);
@@ -529,6 +565,38 @@ const deleteAiSource = async (source: { delete_url: string }): Promise<void> => 
     } finally {
         await loadAiSources();
     }
+};
+
+/* ─── AI source chunk preview ──────────────────────────── */
+const addSourceTab = ref<'url' | 'text' | 'file'>('url');
+const expandedSourceIds = ref<Set<number>>(new Set());
+const sourceChunks = ref<Record<number, Array<{ id: string; chunk_index: number; content: string }>>>({});
+const sourceChunksLoading = ref<Record<number, boolean>>({});
+
+const loadSourceChunks = async (source: { id: number; chunks_url: string }): Promise<void> => {
+    if (sourceChunks.value[source.id]) return;
+    sourceChunksLoading.value = { ...sourceChunksLoading.value, [source.id]: true };
+    try {
+        const res = await fetch(`${source.chunks_url}?per_page=20`, { headers: { Accept: 'application/json' } });
+        if (!res.ok) return;
+        const payload = await res.json();
+        sourceChunks.value = { ...sourceChunks.value, [source.id]: payload.data ?? [] };
+    } catch {
+        // ignore
+    } finally {
+        sourceChunksLoading.value = { ...sourceChunksLoading.value, [source.id]: false };
+    }
+};
+
+const toggleSourceChunks = (source: { id: number; chunks_url: string }): void => {
+    const next = new Set(expandedSourceIds.value);
+    if (next.has(source.id)) {
+        next.delete(source.id);
+    } else {
+        next.add(source.id);
+        void loadSourceChunks(source);
+    }
+    expandedSourceIds.value = next;
 };
 
 /* ─── Traffic Settings state ───────────────────────────────────────────── */
@@ -1124,6 +1192,18 @@ onUnmounted(() => {
                         Chat Manager
                     </a>
                 </Button>
+
+                <!-- Share button -->
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-8 text-xs gap-1.5"
+                    @click="shareModalOpen = true"
+                >
+                    <Icon icon="heroicons:share" class="size-3.5" />
+                    Share
+                </Button>
+
                 <Button
                     v-if="funnel.status === 'published'"
                     variant="outline"
@@ -1707,131 +1787,299 @@ onUnmounted(() => {
             </TabsContent>
 
             <!-- ── Tab: AI Assistant ── -->
-            <TabsContent value="ai-assistant" class="space-y-4">
-                <Card class="border shadow-sm">
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-base font-semibold">Webinar AI Assistant</CardTitle>
-                        <CardDescription class="text-xs">
-                            Enable AI chat support with source uploads (URL, pasted text, and files).
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent class="space-y-4">
-                        <div class="flex w-full items-center justify-between rounded-lg border p-3 text-left">
+            <TabsContent value="ai-assistant" class="space-y-5">
+
+                <!-- ── Hero toggle card ─────────────────────────────── -->
+                <div class="flex items-center justify-between gap-4 rounded-xl border bg-linear-to-r from-violet-50/60 to-indigo-50/60 p-4 dark:from-violet-950/20 dark:to-indigo-950/20">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/40">
+                            <Icon icon="heroicons:cpu-chip" class="size-5 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-foreground">Webinar AI Assistant</p>
+                            <p class="text-xs text-muted-foreground">Replies to attendee chat using your uploaded knowledge base.</p>
+                        </div>
+                    </div>
+                    <Switch
+                        :model-value="Boolean(settingsForm.webinar_ai_enabled)"
+                        @update:model-value="settingsForm.webinar_ai_enabled = Boolean($event)"
+                    />
+                </div>
+
+                <template v-if="Boolean(settingsForm.webinar_ai_enabled)">
+
+                    <!-- ── Assistant settings row ───────────────────── -->
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div class="space-y-1.5">
+                            <Label class="text-xs font-semibold">Assistant display name</Label>
+                            <Input
+                                v-model="settingsForm.webinar_ai_assistant_name"
+                                class="h-9 text-sm"
+                                placeholder="Webinar Assistant"
+                            />
+                            <p class="text-[0.68rem] text-muted-foreground">Name shown in chat when the AI replies.</p>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
                             <div>
-                                <p class="text-sm font-medium">Enable AI Assistant</p>
-                                <p class="text-xs text-muted-foreground">When enabled, AI can answer attendee chat from your uploaded knowledge.</p>
+                                <p class="text-sm font-medium">Auto-reply</p>
+                                <p class="text-[0.7rem] text-muted-foreground leading-relaxed">Automatically respond to every<br>attendee message in real time.</p>
                             </div>
                             <Switch
-                                :model-value="Boolean(settingsForm.webinar_ai_enabled)"
-                                @update:model-value="settingsForm.webinar_ai_enabled = Boolean($event)"
+                                :model-value="Boolean(settingsForm.webinar_ai_auto_reply_enabled)"
+                                @update:model-value="settingsForm.webinar_ai_auto_reply_enabled = Boolean($event)"
                             />
                         </div>
+                    </div>
 
-                        <div v-if="Boolean(settingsForm.webinar_ai_enabled)" class="space-y-4">
-                            <div class="grid gap-3 md:grid-cols-2">
-                                <div class="space-y-1.5">
-                                    <Label class="text-xs font-semibold">Assistant Name</Label>
-                                    <Input
-                                        v-model="settingsForm.webinar_ai_assistant_name"
-                                        class="h-9 text-sm"
-                                        placeholder="Webinar Assistant"
+                    <!-- ── Knowledge base section ───────────────────── -->
+                    <div class="space-y-3">
+                        <!-- section header with slot indicators -->
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-semibold">Knowledge Base</p>
+                                <p class="text-xs text-muted-foreground">Sources the AI reads when generating replies.</p>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span
+                                    v-for="i in AI_SOURCE_LIMIT"
+                                    :key="i"
+                                    class="h-2 w-8 rounded-full transition-colors"
+                                    :class="i <= aiSourceCount ? 'bg-violet-500' : 'bg-muted'"
+                                />
+                                <span class="ml-1 text-xs text-muted-foreground">{{ aiSourceCount }}/{{ AI_SOURCE_LIMIT }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Add source tabbed card -->
+                        <Card class="border shadow-sm overflow-hidden">
+                            <!-- tab buttons -->
+                            <div class="flex border-b bg-muted/30">
+                                <button
+                                    v-for="tab in (['url', 'text', 'file'] as const)"
+                                    :key="tab"
+                                    class="flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors"
+                                    :class="addSourceTab === tab
+                                        ? 'border-b-2 border-violet-500 bg-background text-violet-600 dark:text-violet-400'
+                                        : 'text-muted-foreground hover:text-foreground'"
+                                    :disabled="aiSourceLimitReached"
+                                    @click="addSourceTab = tab"
+                                >
+                                    <Icon
+                                        :icon="tab === 'url' ? 'heroicons:globe-alt' : tab === 'text' ? 'heroicons:document-text' : 'heroicons:paper-clip'"
+                                        class="size-3.5"
                                     />
+                                    {{ tab === 'url' ? 'Website URL' : tab === 'text' ? 'Paste Text' : 'Upload File' }}
+                                </button>
+                            </div>
+
+                            <CardContent class="pt-4 pb-4">
+                                <!-- limit banner -->
+                                <div v-if="aiSourceLimitReached" class="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-400">
+                                    <Icon icon="heroicons:exclamation-triangle" class="size-3.5 shrink-0" />
+                                    Limit reached — delete a source to add a new one.
                                 </div>
-                                <div class="flex items-center justify-between rounded-lg border px-3 py-2.5">
-                                    <div>
-                                        <p class="text-sm font-medium">Auto Reply</p>
-                                        <p class="text-[0.7rem] text-muted-foreground">Automatically respond to attendee chat.</p>
-                                    </div>
-                                    <Switch
-                                        :model-value="Boolean(settingsForm.webinar_ai_auto_reply_enabled)"
-                                        @update:model-value="settingsForm.webinar_ai_auto_reply_enabled = Boolean($event)"
+
+                                <!-- URL tab -->
+                                <div v-if="addSourceTab === 'url'" class="space-y-2.5">
+                                    <Input v-model="aiUrlForm.title" class="h-8 text-xs" placeholder="Optional title" />
+                                    <Input v-model="aiUrlForm.url" type="url" class="h-8 text-xs" placeholder="https://example.com/page" />
+                                    <p class="text-[0.68rem] text-muted-foreground">The page will be scraped and its readable text extracted for AI training.</p>
+                                    <Button
+                                        size="sm" class="h-8 text-xs gap-1.5 w-full"
+                                        :disabled="aiUrlForm.processing || aiSourceLimitReached || !aiUrlForm.url.trim()"
+                                        @click="addAiUrlSource"
+                                    >
+                                        <Icon v-if="aiUrlForm.processing" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
+                                        <Icon v-else icon="heroicons:globe-alt" class="size-3.5" />
+                                        {{ aiUrlForm.processing ? 'Scraping…' : 'Add URL source' }}
+                                    </Button>
+                                </div>
+
+                                <!-- Text tab -->
+                                <div v-else-if="addSourceTab === 'text'" class="space-y-2.5">
+                                    <Input v-model="aiTranscriptForm.title" class="h-8 text-xs" placeholder="Optional title" />
+                                    <Textarea
+                                        v-model="aiTranscriptForm.transcript"
+                                        class="min-h-[110px] text-xs resize-y"
+                                        placeholder="Paste product info, FAQ, webinar transcript, or any knowledge text…"
                                     />
+                                    <Button
+                                        size="sm" class="h-8 text-xs gap-1.5 w-full"
+                                        :disabled="aiTranscriptForm.processing || aiSourceLimitReached || !aiTranscriptForm.transcript.trim()"
+                                        @click="addAiTranscriptSource"
+                                    >
+                                        <Icon v-if="aiTranscriptForm.processing" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
+                                        <Icon v-else icon="heroicons:document-text" class="size-3.5" />
+                                        {{ aiTranscriptForm.processing ? 'Saving…' : 'Add text source' }}
+                                    </Button>
                                 </div>
+
+                                <!-- File tab -->
+                                <div v-else class="space-y-2.5">
+                                    <Input v-model="aiFileForm.title" class="h-8 text-xs" placeholder="Optional title" />
+                                    <label class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors hover:border-violet-400 hover:bg-violet-50/40 dark:hover:bg-violet-950/20">
+                                        <Icon icon="heroicons:arrow-up-tray" class="size-6 text-muted-foreground" />
+                                        <span class="text-xs text-muted-foreground">
+                                            <span class="font-medium text-foreground">Click to browse</span> or drag &amp; drop
+                                        </span>
+                                        <span class="text-[0.65rem] text-muted-foreground">PDF · TXT · MD · CSV · XLSX · DOCX — max 20 MB</span>
+                                        <input type="file" class="sr-only" accept=".pdf,.txt,.md,.csv,.xlsx,.xls,.docx" @change="setAiFile" />
+                                    </label>
+                                    <p v-if="aiFileForm.file" class="flex items-center gap-1.5 text-xs text-foreground">
+                                        <Icon icon="heroicons:document" class="size-3.5 text-violet-500" />
+                                        {{ aiFileForm.file.name }}
+                                    </p>
+                                    <Button
+                                        size="sm" class="h-8 text-xs gap-1.5 w-full"
+                                        :disabled="aiFileForm.processing || aiSourceLimitReached || !aiFileForm.file"
+                                        @click="addAiFileSource"
+                                    >
+                                        <Icon v-if="aiFileForm.processing" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
+                                        <Icon v-else icon="heroicons:paper-clip" class="size-3.5" />
+                                        {{ aiFileForm.processing ? 'Uploading…' : 'Upload file source' }}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <!-- ── Indexed sources list ───────────────── -->
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Indexed Sources</p>
+
+                            <div v-if="aiSourceLoading" class="flex items-center gap-2 py-6 text-xs text-muted-foreground">
+                                <Icon icon="heroicons:arrow-path" class="size-4 animate-spin" />
+                                Loading sources…
                             </div>
 
-                            <div class="rounded-lg border bg-muted/20 p-3">
-                                <p class="text-xs font-semibold text-foreground">Knowledge Sources ({{ aiSourceCount }}/{{ AI_SOURCE_LIMIT }})</p>
-                                <p class="text-[0.7rem] text-muted-foreground mt-0.5">
-                                    Add up to {{ AI_SOURCE_LIMIT }} sources. {{ aiSourceSlotsRemaining }} slot(s) remaining.
-                                </p>
-                                <p v-if="aiSourceLimitReached" class="text-[0.7rem] text-amber-600 mt-1">
-                                    Source limit reached. Delete one source to add another.
-                                </p>
+                            <div v-else-if="aiSourcesList.length === 0" class="flex flex-col items-center gap-2 rounded-xl border border-dashed py-10 text-center">
+                                <Icon icon="heroicons:circle-stack" class="size-8 text-muted-foreground/40" />
+                                <p class="text-xs text-muted-foreground">No sources yet. Add one above.</p>
                             </div>
 
-                            <div class="grid gap-3 lg:grid-cols-3">
-                                <Card class="border shadow-sm">
-                                    <CardHeader class="pb-2">
-                                        <CardTitle class="text-sm">Website URL</CardTitle>
-                                    </CardHeader>
-                                    <CardContent class="space-y-2.5">
-                                        <Input v-model="aiUrlForm.title" class="h-8 text-xs" placeholder="Optional title" />
-                                        <Input v-model="aiUrlForm.url" type="url" class="h-8 text-xs" placeholder="https://example.com/page" />
-                                        <Button size="sm" class="h-8 text-xs w-full" :disabled="aiUrlForm.processing || aiSourceLimitReached || !aiUrlForm.url.trim()" @click="addAiUrlSource">
-                                            Add URL
-                                        </Button>
-                                    </CardContent>
-                                </Card>
+                            <div v-else class="space-y-2">
+                                <div
+                                    v-for="source in aiSourcesList"
+                                    :key="source.id"
+                                    class="overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow"
+                                >
+                                    <!-- source header row -->
+                                    <div class="flex items-start gap-3 p-3.5">
+                                        <!-- type icon -->
+                                        <div class="flex size-8 shrink-0 items-center justify-center rounded-lg"
+                                            :class="source.type === 'url' ? 'bg-sky-100 dark:bg-sky-900/30' : source.type === 'text' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-orange-100 dark:bg-orange-900/30'"
+                                        >
+                                            <Icon
+                                                :icon="source.type === 'url' ? 'heroicons:globe-alt' : source.type === 'text' ? 'heroicons:document-text' : 'heroicons:paper-clip'"
+                                                class="size-4"
+                                                :class="source.type === 'url' ? 'text-sky-600' : source.type === 'text' ? 'text-emerald-600' : 'text-orange-600'"
+                                            />
+                                        </div>
 
-                                <Card class="border shadow-sm">
-                                    <CardHeader class="pb-2">
-                                        <CardTitle class="text-sm">Pasted Text</CardTitle>
-                                    </CardHeader>
-                                    <CardContent class="space-y-2.5">
-                                        <Input v-model="aiTranscriptForm.title" class="h-8 text-xs" placeholder="Optional title" />
-                                        <Textarea v-model="aiTranscriptForm.transcript" class="min-h-[92px] text-xs resize-y" placeholder="Paste transcript or notes..." />
-                                        <Button size="sm" class="h-8 text-xs w-full" :disabled="aiTranscriptForm.processing || aiSourceLimitReached || !aiTranscriptForm.transcript.trim()" @click="addAiTranscriptSource">
-                                            Add Text
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-
-                                <Card class="border shadow-sm">
-                                    <CardHeader class="pb-2">
-                                        <CardTitle class="text-sm">Upload File</CardTitle>
-                                    </CardHeader>
-                                    <CardContent class="space-y-2.5">
-                                        <Input v-model="aiFileForm.title" class="h-8 text-xs" placeholder="Optional title" />
-                                        <Input type="file" class="h-8 text-xs" @change="setAiFile" />
-                                        <p class="text-[0.65rem] text-muted-foreground">PDF, TXT, MD, CSV, XLSX, XLS, DOCX (max 20MB)</p>
-                                        <Button size="sm" class="h-8 text-xs w-full" :disabled="aiFileForm.processing || aiSourceLimitReached || !aiFileForm.file" @click="addAiFileSource">
-                                            Upload File
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            <Card class="border shadow-sm">
-                                <CardHeader class="pb-2">
-                                    <CardTitle class="text-sm font-semibold">Indexed Sources</CardTitle>
-                                </CardHeader>
-                                <CardContent class="space-y-2">
-                                    <div v-if="aiSourceLoading" class="text-xs text-muted-foreground">Loading sources...</div>
-                                    <div v-else-if="aiSourcesList.length === 0" class="rounded-lg border border-dashed py-6 text-center text-xs text-muted-foreground">
-                                        No sources yet.
-                                    </div>
-                                    <div v-else class="space-y-2">
-                                        <div v-for="source in aiSourcesList" :key="source.id" class="rounded-lg border p-2.5">
-                                            <div class="flex items-start justify-between gap-2">
-                                                <div class="min-w-0">
-                                                    <p class="text-xs font-semibold text-foreground truncate">{{ source.title || 'Untitled source' }}</p>
-                                                    <p class="text-[0.65rem] text-muted-foreground">{{ source.type }} · {{ source.status }} · {{ source.chunk_count }} chunks</p>
-                                                    <p v-if="source.source_url" class="text-[0.65rem] text-muted-foreground truncate">{{ source.source_url }}</p>
-                                                    <p v-if="source.error_message" class="text-[0.65rem] text-destructive">{{ source.error_message }}</p>
-                                                </div>
-                                                <Button variant="ghost" size="sm" class="h-7 px-2 text-destructive" @click="deleteAiSource(source)">
-                                                    <Icon icon="heroicons:trash" class="size-3.5" />
-                                                </Button>
+                                        <!-- info -->
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <p class="text-sm font-semibold text-foreground truncate">{{ source.title || 'Untitled source' }}</p>
+                                                <!-- status badge -->
+                                                <span
+                                                    class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold"
+                                                    :class="{
+                                                        'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': source.status === 'queued',
+                                                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400': source.status === 'processing',
+                                                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400': source.status === 'ready',
+                                                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400': source.status === 'failed',
+                                                    }"
+                                                >
+                                                    <span class="size-1.5 rounded-full"
+                                                        :class="{
+                                                            'bg-yellow-500': source.status === 'queued',
+                                                            'bg-blue-500 animate-pulse': source.status === 'processing',
+                                                            'bg-emerald-500': source.status === 'ready',
+                                                            'bg-red-500': source.status === 'failed',
+                                                        }"
+                                                    />
+                                                    {{ source.status }}
+                                                </span>
+                                                <!-- chunk count pill -->
+                                                <span v-if="source.chunk_count > 0" class="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[0.65rem] font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+                                                    <Icon icon="heroicons:square-3-stack-3d" class="size-3" />
+                                                    {{ source.chunk_count }} chunks
+                                                </span>
                                             </div>
+                                            <p v-if="source.source_url" class="mt-0.5 text-[0.68rem] text-muted-foreground truncate">{{ source.source_url }}</p>
+                                            <p v-if="source.error_message" class="mt-0.5 text-[0.68rem] text-destructive">{{ source.error_message }}</p>
+                                        </div>
+
+                                        <!-- actions -->
+                                        <div class="flex shrink-0 items-center gap-1">
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger as-child>
+                                                        <Button
+                                                            v-if="source.chunk_count > 0"
+                                                            variant="ghost" size="sm"
+                                                            class="h-7 w-7 p-0 text-muted-foreground hover:text-violet-600"
+                                                            @click="toggleSourceChunks(source)"
+                                                        >
+                                                            <Icon
+                                                                :icon="expandedSourceIds.has(source.id) ? 'heroicons:chevron-up' : 'heroicons:eye'"
+                                                                class="size-3.5"
+                                                            />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top" class="text-xs">
+                                                        {{ expandedSourceIds.has(source.id) ? 'Hide chunks' : 'Preview chunks' }}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                            <Button variant="ghost" size="sm" class="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" @click="deleteAiSource(source)">
+                                                <Icon icon="heroicons:trash" class="size-3.5" />
+                                            </Button>
                                         </div>
                                     </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </CardContent>
-                </Card>
 
-                <div class="flex justify-end">
+                                    <!-- chunk preview panel -->
+                                    <div v-if="expandedSourceIds.has(source.id)" class="border-t bg-muted/20 px-3.5 py-3">
+                                        <div v-if="sourceChunksLoading[source.id]" class="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                                            <Icon icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
+                                            Loading chunks…
+                                        </div>
+                                        <div v-else-if="!sourceChunks[source.id] || sourceChunks[source.id].length === 0" class="py-2 text-xs text-muted-foreground">
+                                            No chunks available.
+                                        </div>
+                                        <div v-else class="space-y-2">
+                                            <p class="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                                                Showing {{ sourceChunks[source.id].length }} of {{ source.chunk_count }} chunks
+                                            </p>
+                                            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                                <div
+                                                    v-for="chunk in sourceChunks[source.id]"
+                                                    :key="chunk.id"
+                                                    class="group relative flex flex-col gap-1.5 rounded-lg border bg-background p-2.5 text-xs shadow-sm"
+                                                >
+                                                    <div class="flex items-center gap-1.5">
+                                                        <span class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-violet-100 px-1 text-[0.6rem] font-bold text-violet-700 dark:bg-violet-900/40 dark:text-violet-400">
+                                                            #{{ chunk.chunk_index }}
+                                                        </span>
+                                                        <span class="text-[0.65rem] text-muted-foreground">chunk</span>
+                                                    </div>
+                                                    <p class="line-clamp-4 text-[0.72rem] leading-relaxed text-foreground/80">{{ chunk.content }}</p>
+                                                    <div class="absolute inset-0 rounded-lg ring-1 ring-transparent transition group-hover:ring-violet-300 dark:group-hover:ring-violet-700" />
+                                                </div>
+                                            </div>
+                                            <p v-if="source.chunk_count > (sourceChunks[source.id]?.length ?? 0)" class="text-[0.65rem] text-muted-foreground">
+                                                + {{ source.chunk_count - (sourceChunks[source.id]?.length ?? 0) }} more chunks stored (showing first 20)
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </template>
+
+                <!-- ── Save button ──────────────────────────────────── -->
+                <div class="flex justify-end pt-1">
                     <Button
                         size="sm"
                         class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
@@ -1840,7 +2088,7 @@ onUnmounted(() => {
                     >
                         <Icon v-if="savingSettings" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
                         <Icon v-else icon="heroicons:check" class="size-3.5" />
-                        {{ savingSettings ? 'Saving…' : 'Save AI assistant settings' }}
+                        {{ savingSettings ? 'Saving…' : 'Save AI settings' }}
                     </Button>
                 </div>
             </TabsContent>
@@ -2301,5 +2549,108 @@ onUnmounted(() => {
             </TabsContent>
 
         </Tabs>
+
+        <!-- ── Share modal ──────────────────────────────────────── -->
+        <Transition
+            enter-active-class="transition duration-150 ease-out"
+            enter-from-class="opacity-0"
+            enter-to-class="opacity-100"
+            leave-active-class="transition duration-100 ease-in"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+        >
+            <div v-if="shareModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="shareModalOpen = false" />
+
+                <Transition
+                    enter-active-class="transition duration-150 ease-out"
+                    enter-from-class="opacity-0 scale-95 translate-y-1"
+                    enter-to-class="opacity-100 scale-100 translate-y-0"
+                    leave-active-class="transition duration-100 ease-in"
+                    leave-from-class="opacity-100 scale-100"
+                    leave-to-class="opacity-0 scale-95"
+                    appear
+                >
+                    <div class="relative z-10 w-full max-w-md rounded-2xl border bg-card p-5 shadow-2xl">
+
+                        <!-- modal header -->
+                        <div class="flex items-start justify-between mb-4">
+                            <div>
+                                <p class="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">Funnel · {{ funnel.name }}</p>
+                                <h3 class="text-base font-bold text-foreground mt-0.5">Share your funnel</h3>
+                            </div>
+                            <button class="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground" @click="shareModalOpen = false">
+                                <Icon icon="heroicons:x-mark" class="size-4" />
+                            </button>
+                        </div>
+
+                        <!-- link picker tabs -->
+                        <div class="mb-4 flex gap-1 rounded-lg border bg-muted/40 p-1">
+                            <button
+                                class="flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition"
+                                :class="shareActiveLink === 'webinar'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'"
+                                @click="shareActiveLink = 'webinar'"
+                            >
+                                <Icon icon="heroicons:video-camera" class="size-3.5" />
+                                Webinar page
+                            </button>
+                            <button
+                                class="flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition"
+                                :class="shareActiveLink === 'optin'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'"
+                                @click="shareActiveLink = 'optin'"
+                            >
+                                <Icon icon="heroicons:cursor-arrow-ripple" class="size-3.5" />
+                                Opt-in page
+                            </button>
+                        </div>
+
+                        <!-- platform grid -->
+                        <div class="grid grid-cols-3 gap-2 mb-4">
+                            <button
+                                v-for="p in [
+                                    { key: 'facebook', label: 'Facebook',  icon: 'simple-icons:facebook', color: '#4a90e2',  bg: 'rgba(24,119,242,0.1)'  },
+                                    { key: 'x',        label: 'X',         icon: 'simple-icons:x',        color: '#e2e8f0',  bg: 'rgba(255,255,255,0.07)' },
+                                    { key: 'whatsapp', label: 'WhatsApp',  icon: 'simple-icons:whatsapp', color: '#25d366',  bg: 'rgba(37,211,102,0.1)'  },
+                                    { key: 'linkedin', label: 'LinkedIn',  icon: 'simple-icons:linkedin', color: '#0a66c2',  bg: 'rgba(10,102,194,0.1)'  },
+                                    { key: 'telegram', label: 'Telegram',  icon: 'simple-icons:telegram', color: '#0088cc',  bg: 'rgba(0,136,204,0.1)'   },
+                                    { key: 'email',    label: 'Email',     icon: 'heroicons:envelope',    color: 'hsl(var(--primary))', bg: 'hsl(var(--muted))' },
+                                ]"
+                                :key="p.key"
+                                class="flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-semibold transition hover:scale-105 active:scale-100"
+                                :style="`background:${p.bg};color:${p.color};border-color:${p.bg};`"
+                                @click="openSharePlatform(p.key)"
+                            >
+                                <Icon :icon="p.icon" class="size-5" />
+                                {{ p.label }}
+                            </button>
+                        </div>
+
+                        <!-- copy link row -->
+                        <div class="flex items-center gap-2 rounded-xl border bg-muted/30 px-3 py-2.5">
+                            <Icon icon="heroicons:link" class="size-3.5 shrink-0 text-muted-foreground" />
+                            <span class="flex-1 truncate text-xs text-muted-foreground">{{ shareCurrentUrl }}</span>
+                            <button
+                                class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition"
+                                :class="shareLinkCopied
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                    : 'bg-primary/10 text-primary hover:bg-primary/20'"
+                                @click="copyShareLink"
+                            >
+                                <span v-if="shareLinkCopied" class="flex items-center gap-1">
+                                    <Icon icon="heroicons:check" class="size-3" /> Copied!
+                                </span>
+                                <span v-else>Copy link</span>
+                            </button>
+                        </div>
+
+                    </div>
+                </Transition>
+            </div>
+        </Transition>
+
     </div>
 </template>
