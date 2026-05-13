@@ -47,6 +47,9 @@ const props = defineProps<{
             exit_popup_cta_url?: string | null;
             redirect_enabled?: boolean;
             redirect_url?: string | null;
+            webinar_ai_enabled?: boolean;
+            webinar_ai_auto_reply_enabled?: boolean;
+            webinar_ai_assistant_name?: string | null;
             traffic_ai_reply_enabled?: boolean;
             traffic_ai_link_override?: string | null;
             traffic_ai_extra_context?: string | null;
@@ -69,6 +72,25 @@ const props = defineProps<{
         attendee_email?: string | null;
         latest_message?: string | null;
         message_count: number;
+    }>;
+    aiSourceUrls: {
+        index: string | null;
+        url: string | null;
+        transcript: string | null;
+        file: string | null;
+        bulk_delete: string | null;
+    };
+    aiSources: Array<{
+        id: number;
+        type: string;
+        title: string | null;
+        source_url: string | null;
+        status: string;
+        error_message: string | null;
+        processed_at: string | null;
+        chunk_count: number;
+        chunks_url: string;
+        delete_url: string;
     }>;
     publicLinks: {
         optin: string;
@@ -168,6 +190,9 @@ watch(activeTab, (tab) => {
     if (tab === 'optin') {
         refreshEditorCanvas();
     }
+    if (tab === 'ai-assistant' && aiSourcesList.value.length === 0 && props.aiSourceUrls.index) {
+        void loadAiSources();
+    }
 });
 
 /* ─── Toolbar actions ──────────────────────────────────────────────────── */
@@ -229,6 +254,9 @@ const settingsForm = useForm<{
     exit_popup_cta_url: string;
     redirect_enabled: boolean;
     redirect_url: string;
+    webinar_ai_enabled: boolean;
+    webinar_ai_auto_reply_enabled: boolean;
+    webinar_ai_assistant_name: string;
     chat_mode: string;
     allow_replay: boolean;
     chat_seed_messages: Array<{ author: string; message: string }>;
@@ -265,6 +293,9 @@ const settingsForm = useForm<{
     exit_popup_cta_url: props.funnel.settings?.exit_popup_cta_url ?? '',
     redirect_enabled: props.funnel.settings?.redirect_enabled ?? false,
     redirect_url: props.funnel.settings?.redirect_url ?? '',
+    webinar_ai_enabled: props.funnel.settings?.webinar_ai_enabled ?? false,
+    webinar_ai_auto_reply_enabled: props.funnel.settings?.webinar_ai_auto_reply_enabled ?? true,
+    webinar_ai_assistant_name: props.funnel.settings?.webinar_ai_assistant_name ?? '',
     chat_mode: props.funnel.settings?.chat_mode ?? 'simulated',
     allow_replay: props.funnel.settings?.allow_replay ?? true,
     chat_seed_messages: props.funnel.settings?.chat_seed_messages ?? [],
@@ -402,6 +433,103 @@ const espProviderIcon: Record<string, string> = {
 function providerIcon(provider: string): string {
     return espProviderIcon[provider.toLowerCase()] ?? 'heroicons:envelope';
 }
+
+/* ─── Webinar AI Assistant state ────────────────────────────────────────── */
+const AI_SOURCE_LIMIT = 3;
+const aiSourcesList = ref(props.aiSources ?? []);
+const aiSourceCount = computed(() => aiSourcesList.value.length);
+const aiSourceLimitReached = computed(() => aiSourceCount.value >= AI_SOURCE_LIMIT);
+const aiSourceSlotsRemaining = computed(() => Math.max(0, AI_SOURCE_LIMIT - aiSourceCount.value));
+const aiSourceLoading = ref(false);
+
+const aiUrlForm = useForm({
+    title: '',
+    url: '',
+});
+
+const aiTranscriptForm = useForm({
+    title: '',
+    transcript: '',
+});
+
+const aiFileForm = useForm<{
+    title: string;
+    file: File | null;
+}>({
+    title: '',
+    file: null,
+});
+
+const loadAiSources = async (): Promise<void> => {
+    if (!props.aiSourceUrls.index) return;
+    aiSourceLoading.value = true;
+    try {
+        const response = await fetch(props.aiSourceUrls.index, {
+            headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        aiSourcesList.value = payload.data ?? [];
+    } catch {
+        // keep current list on fetch failures
+    } finally {
+        aiSourceLoading.value = false;
+    }
+};
+
+const addAiUrlSource = (): void => {
+    if (!props.aiSourceUrls.url || aiSourceLimitReached.value) return;
+    aiUrlForm.post(props.aiSourceUrls.url, {
+        preserveScroll: true,
+        onSuccess: async () => {
+            aiUrlForm.reset();
+            await loadAiSources();
+        },
+    });
+};
+
+const addAiTranscriptSource = (): void => {
+    if (!props.aiSourceUrls.transcript || aiSourceLimitReached.value) return;
+    aiTranscriptForm.post(props.aiSourceUrls.transcript, {
+        preserveScroll: true,
+        onSuccess: async () => {
+            aiTranscriptForm.reset();
+            await loadAiSources();
+        },
+    });
+};
+
+const setAiFile = (event: Event): void => {
+    const input = event.target as HTMLInputElement;
+    aiFileForm.file = input.files?.[0] ?? null;
+};
+
+const addAiFileSource = (): void => {
+    if (!props.aiSourceUrls.file || aiSourceLimitReached.value || !aiFileForm.file) return;
+    aiFileForm.post(props.aiSourceUrls.file, {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: async () => {
+            aiFileForm.reset();
+            await loadAiSources();
+        },
+    });
+};
+
+const deleteAiSource = async (source: { delete_url: string }): Promise<void> => {
+    if (!source.delete_url) return;
+    try {
+        await fetch(source.delete_url, {
+            method: 'DELETE',
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+            },
+        });
+    } finally {
+        await loadAiSources();
+    }
+};
 
 /* ─── Traffic Settings state ───────────────────────────────────────────── */
 const trafficSearch = ref(props.traffic.filters.search ?? '');
@@ -1062,6 +1190,10 @@ onUnmounted(() => {
                     <Icon icon="heroicons:gift" class="size-3.5" />
                     Offer
                 </TabsTrigger>
+                <TabsTrigger value="ai-assistant" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
+                    <Icon icon="heroicons:sparkles" class="size-3.5" />
+                    AI Assistant
+                </TabsTrigger>
                 <TabsTrigger value="integrations" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
                     <Icon icon="heroicons:puzzle-piece" class="size-3.5" />
                     Integrations
@@ -1570,6 +1702,145 @@ onUnmounted(() => {
                         <Icon v-if="savingSettings" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
                         <Icon v-else icon="heroicons:check" class="size-3.5" />
                         {{ savingSettings ? 'Saving…' : 'Save offer settings' }}
+                    </Button>
+                </div>
+            </TabsContent>
+
+            <!-- ── Tab: AI Assistant ── -->
+            <TabsContent value="ai-assistant" class="space-y-4">
+                <Card class="border shadow-sm">
+                    <CardHeader class="pb-3">
+                        <CardTitle class="text-base font-semibold">Webinar AI Assistant</CardTitle>
+                        <CardDescription class="text-xs">
+                            Enable AI chat support with source uploads (URL, pasted text, and files).
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div class="flex w-full items-center justify-between rounded-lg border p-3 text-left">
+                            <div>
+                                <p class="text-sm font-medium">Enable AI Assistant</p>
+                                <p class="text-xs text-muted-foreground">When enabled, AI can answer attendee chat from your uploaded knowledge.</p>
+                            </div>
+                            <Switch
+                                :model-value="Boolean(settingsForm.webinar_ai_enabled)"
+                                @update:model-value="settingsForm.webinar_ai_enabled = Boolean($event)"
+                            />
+                        </div>
+
+                        <div v-if="Boolean(settingsForm.webinar_ai_enabled)" class="space-y-4">
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs font-semibold">Assistant Name</Label>
+                                    <Input
+                                        v-model="settingsForm.webinar_ai_assistant_name"
+                                        class="h-9 text-sm"
+                                        placeholder="Webinar Assistant"
+                                    />
+                                </div>
+                                <div class="flex items-center justify-between rounded-lg border px-3 py-2.5">
+                                    <div>
+                                        <p class="text-sm font-medium">Auto Reply</p>
+                                        <p class="text-[0.7rem] text-muted-foreground">Automatically respond to attendee chat.</p>
+                                    </div>
+                                    <Switch
+                                        :model-value="Boolean(settingsForm.webinar_ai_auto_reply_enabled)"
+                                        @update:model-value="settingsForm.webinar_ai_auto_reply_enabled = Boolean($event)"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg border bg-muted/20 p-3">
+                                <p class="text-xs font-semibold text-foreground">Knowledge Sources ({{ aiSourceCount }}/{{ AI_SOURCE_LIMIT }})</p>
+                                <p class="text-[0.7rem] text-muted-foreground mt-0.5">
+                                    Add up to {{ AI_SOURCE_LIMIT }} sources. {{ aiSourceSlotsRemaining }} slot(s) remaining.
+                                </p>
+                                <p v-if="aiSourceLimitReached" class="text-[0.7rem] text-amber-600 mt-1">
+                                    Source limit reached. Delete one source to add another.
+                                </p>
+                            </div>
+
+                            <div class="grid gap-3 lg:grid-cols-3">
+                                <Card class="border shadow-sm">
+                                    <CardHeader class="pb-2">
+                                        <CardTitle class="text-sm">Website URL</CardTitle>
+                                    </CardHeader>
+                                    <CardContent class="space-y-2.5">
+                                        <Input v-model="aiUrlForm.title" class="h-8 text-xs" placeholder="Optional title" />
+                                        <Input v-model="aiUrlForm.url" type="url" class="h-8 text-xs" placeholder="https://example.com/page" />
+                                        <Button size="sm" class="h-8 text-xs w-full" :disabled="aiUrlForm.processing || aiSourceLimitReached || !aiUrlForm.url.trim()" @click="addAiUrlSource">
+                                            Add URL
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+
+                                <Card class="border shadow-sm">
+                                    <CardHeader class="pb-2">
+                                        <CardTitle class="text-sm">Pasted Text</CardTitle>
+                                    </CardHeader>
+                                    <CardContent class="space-y-2.5">
+                                        <Input v-model="aiTranscriptForm.title" class="h-8 text-xs" placeholder="Optional title" />
+                                        <Textarea v-model="aiTranscriptForm.transcript" class="min-h-[92px] text-xs resize-y" placeholder="Paste transcript or notes..." />
+                                        <Button size="sm" class="h-8 text-xs w-full" :disabled="aiTranscriptForm.processing || aiSourceLimitReached || !aiTranscriptForm.transcript.trim()" @click="addAiTranscriptSource">
+                                            Add Text
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+
+                                <Card class="border shadow-sm">
+                                    <CardHeader class="pb-2">
+                                        <CardTitle class="text-sm">Upload File</CardTitle>
+                                    </CardHeader>
+                                    <CardContent class="space-y-2.5">
+                                        <Input v-model="aiFileForm.title" class="h-8 text-xs" placeholder="Optional title" />
+                                        <Input type="file" class="h-8 text-xs" @change="setAiFile" />
+                                        <p class="text-[0.65rem] text-muted-foreground">PDF, TXT, MD, CSV, XLSX, XLS, DOCX (max 20MB)</p>
+                                        <Button size="sm" class="h-8 text-xs w-full" :disabled="aiFileForm.processing || aiSourceLimitReached || !aiFileForm.file" @click="addAiFileSource">
+                                            Upload File
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            <Card class="border shadow-sm">
+                                <CardHeader class="pb-2">
+                                    <CardTitle class="text-sm font-semibold">Indexed Sources</CardTitle>
+                                </CardHeader>
+                                <CardContent class="space-y-2">
+                                    <div v-if="aiSourceLoading" class="text-xs text-muted-foreground">Loading sources...</div>
+                                    <div v-else-if="aiSourcesList.length === 0" class="rounded-lg border border-dashed py-6 text-center text-xs text-muted-foreground">
+                                        No sources yet.
+                                    </div>
+                                    <div v-else class="space-y-2">
+                                        <div v-for="source in aiSourcesList" :key="source.id" class="rounded-lg border p-2.5">
+                                            <div class="flex items-start justify-between gap-2">
+                                                <div class="min-w-0">
+                                                    <p class="text-xs font-semibold text-foreground truncate">{{ source.title || 'Untitled source' }}</p>
+                                                    <p class="text-[0.65rem] text-muted-foreground">{{ source.type }} · {{ source.status }} · {{ source.chunk_count }} chunks</p>
+                                                    <p v-if="source.source_url" class="text-[0.65rem] text-muted-foreground truncate">{{ source.source_url }}</p>
+                                                    <p v-if="source.error_message" class="text-[0.65rem] text-destructive">{{ source.error_message }}</p>
+                                                </div>
+                                                <Button variant="ghost" size="sm" class="h-7 px-2 text-destructive" @click="deleteAiSource(source)">
+                                                    <Icon icon="heroicons:trash" class="size-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <div class="flex justify-end">
+                    <Button
+                        size="sm"
+                        class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                        :disabled="savingSettings || settingsForm.processing"
+                        @click="saveSettings"
+                    >
+                        <Icon v-if="savingSettings" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
+                        <Icon v-else icon="heroicons:check" class="size-3.5" />
+                        {{ savingSettings ? 'Saving…' : 'Save AI assistant settings' }}
                     </Button>
                 </div>
             </TabsContent>

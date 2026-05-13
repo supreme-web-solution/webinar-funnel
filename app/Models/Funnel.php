@@ -76,4 +76,9 @@ class Funnel extends Model
     {
         return $this->hasMany(FunnelVideoViewStat::class);
     }
+
+    public function aiSources(): HasMany
+    {
+        return $this->hasMany(FunnelAiSource::class);
+    }
 }

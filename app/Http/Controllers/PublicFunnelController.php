@@ -7,6 +7,7 @@ use App\Services\Funnels\PublicFunnelResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -40,6 +41,7 @@ class PublicFunnelController extends Controller
     }
 
     public function webinar(
+        Request $request,
         string $username,
         string $slug,
         PublicFunnelResolver $resolver
@@ -51,6 +53,7 @@ class PublicFunnelController extends Controller
         }
 
         $webinarPage = $funnel->pages->firstWhere('page_type', 'webinar');
+        $conversation = $this->resolveAttendeeConversation($request, (int) $funnel->id);
 
         return Inertia::render('public/Webinar', [
             'funnel' => [
@@ -66,6 +69,10 @@ class PublicFunnelController extends Controller
                 'send' => route('public.chat.send', compact('username', 'slug')),
             ],
             'analyticsEndpoint' => route('public.webinar.stats', compact('username', 'slug')),
+            'chatRealtime' => [
+                'funnel_id' => (int) $funnel->id,
+                'conversation_key' => (string) $conversation['conversation_key'],
+            ],
         ]);
     }
 
@@ -118,5 +125,32 @@ class PublicFunnelController extends Controller
         $stat->save();
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * @return array{conversation_key: string}
+     */
+    private function resolveAttendeeConversation(Request $request, int $funnelId): array
+    {
+        $leadSession = $request->session()->get("funnel_lead.{$funnelId}", []);
+        $email = null;
+
+        if (is_array($leadSession)) {
+            $email = ! empty($leadSession['email']) ? (string) $leadSession['email'] : null;
+        }
+
+        $conversationKey = $request->session()->get("funnel_chat_conversation.{$funnelId}");
+
+        if (! is_string($conversationKey) || $conversationKey === '') {
+            $seed = $email
+                ? Str::lower(trim($email))
+                : (string) $request->session()->getId();
+            $conversationKey = substr(hash('sha256', $funnelId.'|'.$seed), 0, 48);
+            $request->session()->put("funnel_chat_conversation.{$funnelId}", $conversationKey);
+        }
+
+        return [
+            'conversation_key' => $conversationKey,
+        ];
     }
 }

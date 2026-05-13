@@ -8,6 +8,8 @@ use App\Http\Requests\FunnelStoreRequest;
 use App\Models\ChatMessage;
 use App\Models\ChatRoom;
 use App\Models\Funnel;
+use App\Models\FunnelAiSource;
+use App\Models\FunnelAiSourceChunk;
 use App\Models\FunnelPage;
 use App\Models\FunnelVideoViewStat;
 use App\Models\IntegrationAccount;
@@ -161,6 +163,35 @@ class FunnelController extends Controller
             'conversationSummaries' => $conversationSummaries,
             'traffic' => $trafficData,
             'videoStats' => $videoStats,
+            'aiSources' => FunnelAiSource::query()
+                ->where('funnel_id', $funnel->id)
+                ->latest()
+                ->limit(8)
+                ->get()
+                ->map(function (FunnelAiSource $source) use ($funnel): array {
+                    return [
+                        'id' => $source->id,
+                        'type' => $source->type,
+                        'title' => $source->title,
+                        'source_url' => $source->source_url,
+                        'status' => $source->status,
+                        'error_message' => $source->error_message,
+                        'processed_at' => $source->processed_at,
+                        'chunk_count' => (int) FunnelAiSourceChunk::query()
+                            ->where('funnel_ai_source_id', $source->id)
+                            ->count(),
+                        'chunks_url' => route('funnels.ai.sources.chunks', [$funnel->id, $source->id]),
+                        'delete_url' => route('funnels.ai.sources.delete', [$funnel->id, $source->id]),
+                    ];
+                })
+                ->values(),
+            'aiSourceUrls' => [
+                'index' => route('funnels.ai.sources.index', $funnel->id),
+                'url' => route('funnels.ai.sources.store-url', $funnel->id),
+                'transcript' => route('funnels.ai.sources.store-transcript', $funnel->id),
+                'file' => route('funnels.ai.sources.store-file', $funnel->id),
+                'bulk_delete' => route('funnels.ai.sources.bulk-delete', $funnel->id),
+            ],
             'publicLinks' => [
                 'optin' => route('public.optin', [
                     'username' => $username,
@@ -523,6 +554,9 @@ class FunnelController extends Controller
         $settings['exit_popup_cta_url'] = '';
         $settings['redirect_enabled'] = false;
         $settings['redirect_url'] = '';
+        $settings['webinar_ai_enabled'] = false;
+        $settings['webinar_ai_auto_reply_enabled'] = true;
+        $settings['webinar_ai_assistant_name'] = '';
         $settings['chat_mode'] = $settings['chat_mode'] ?? 'simulated';
         $settings['allow_replay'] = array_key_exists('allow_replay', $settings) ? (bool) $settings['allow_replay'] : true;
         $settings['branding'] = $settings['branding'] ?? ['primary' => '#40E0D0', 'secondary' => '#FFAD00'];

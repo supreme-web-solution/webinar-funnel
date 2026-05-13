@@ -2,6 +2,8 @@
 import { Icon } from '@iconify/vue';
 import { Head } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
 
 const props = defineProps<{
     funnel: {
@@ -44,6 +46,10 @@ const props = defineProps<{
         send: string;
     };
     analyticsEndpoint: string;
+    chatRealtime?: {
+        funnel_id: number;
+        conversation_key: string;
+    } | null;
 }>();
 
 const messages = ref(props.chatMessages ?? []);
@@ -52,6 +58,7 @@ const sending = ref(false);
 const chatBody = ref<HTMLElement | null>(null);
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 let poller: number | undefined;
+let echo: Echo<'reverb'> | null = null;
 const soundEnabled = ref(false);
 const startedAtMs = ref(Date.now());
 const elapsedSeconds = ref(0);
@@ -188,6 +195,13 @@ const chatOfferMessages = computed(() =>
     })),
 );
 const shownChatOfferIds = ref<Set<number>>(new Set());
+
+type RealtimeMessage = {
+    id: number;
+    author_name: string;
+    participant_role?: string;
+    message: string;
+};
 
 const exitPopupEnabled = computed(() => props.funnel.settings?.exit_popup_enabled === true);
 const exitPopupShowClose = computed(() => props.funnel.settings?.exit_popup_show_close !== false);
@@ -395,6 +409,59 @@ const fetchMessages = async (): Promise<void> => {
     }
 };
 
+const upsertMessage = (incoming: RealtimeMessage): void => {
+    const idx = messages.value.findIndex((message) => Number(message.id) === Number(incoming.id));
+    if (idx >= 0) {
+        messages.value[idx] = incoming;
+        return;
+    }
+    messages.value.push(incoming);
+    scrollToBottom();
+};
+
+const setupRealtimeChat = (): void => {
+    const realtime = props.chatRealtime;
+    if (!realtime || !realtime.funnel_id || !realtime.conversation_key) {
+        return;
+    }
+
+    const appKey = (import.meta.env.VITE_REVERB_APP_KEY ?? '').toString().trim();
+    const wsHost = (import.meta.env.VITE_REVERB_HOST ?? window.location.hostname).toString();
+    const wsPort = Number(import.meta.env.VITE_REVERB_PORT ?? 8080);
+    const wsScheme = (import.meta.env.VITE_REVERB_SCHEME ?? 'http').toString();
+    const wsPath = (import.meta.env.VITE_REVERB_PATH ?? '').toString();
+    const wsUseTls = wsScheme === 'https';
+
+    if (!appKey) {
+        return;
+    }
+
+    const pusher = new Pusher(appKey, {
+        wsHost,
+        wsPort,
+        wssPort: wsPort,
+        forceTLS: wsUseTls,
+        enabledTransports: ['ws', 'wss'],
+        cluster: 'mt1',
+        wsPath: wsPath || undefined,
+    });
+
+    echo = new Echo({
+        broadcaster: 'reverb',
+        client: pusher,
+    });
+
+    echo
+        .channel(`webinar.${realtime.funnel_id}.${realtime.conversation_key}`)
+        .listen('.webinar.chat.message.created', (event: { message?: RealtimeMessage }) => {
+            const message = event?.message;
+            if (!message || !message.id) {
+                return;
+            }
+            upsertMessage(message);
+        });
+};
+
 const sendMessage = async (): Promise<void> => {
     const msg = messageInput.value.trim();
 
@@ -451,6 +518,7 @@ onMounted(() => {
     }, 15000);
     document.addEventListener('mousemove', onMouseMoveExitIntent, { passive: true });
     document.addEventListener('mouseout', onMouseOutExitIntent, { passive: true });
+    setupRealtimeChat();
 });
 
 onUnmounted(() => {
@@ -462,6 +530,8 @@ onUnmounted(() => {
     postAnalytics('heartbeat');
     document.removeEventListener('mousemove', onMouseMoveExitIntent);
     document.removeEventListener('mouseout', onMouseOutExitIntent);
+    echo?.disconnect();
+    echo = null;
 });
 </script>
 
@@ -553,8 +623,8 @@ onUnmounted(() => {
 
                     <!-- Force stream-style look by masking provider chrome -->
                     <template v-if="videoEmbedUrl">
-                        <div class="pointer-events-none absolute inset-x-0 top-0 z-1 h-12 bg-black/90" />
-                        <div class="pointer-events-none absolute inset-x-0 bottom-0 z-1 h-16 bg-linear-to-t from-black/95 via-black/75 to-transparent" />
+                        <div class="pointer-events-none absolute inset-x-0 top-0 z-1 h-20 bg-black" />
+                        <div class="pointer-events-none absolute inset-x-0 bottom-0 z-1 h-28 bg-black" />
                     </template>
 
                     <!-- Click blocker to prevent hover/click exposing native controls -->

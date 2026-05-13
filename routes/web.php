@@ -5,6 +5,7 @@ use Laravel\Fortify\Features;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\FunnelController;
+use App\Http\Controllers\FunnelAiSourceController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\PublicFunnelController;
@@ -53,6 +54,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('keywords/{keyword}', [FunnelTrafficController::class, 'updateKeyword'])->name('keywords.update');
             Route::delete('keywords/{keyword}', [FunnelTrafficController::class, 'destroyKeyword'])->name('keywords.destroy');
             Route::post('keywords/{keyword}/fetch', [FunnelTrafficController::class, 'fetchNow'])->name('keywords.fetch');
+        });
+
+        Route::prefix('{funnel}/ai-sources')->name('funnels.ai.sources.')->group(function () {
+            Route::get('/', [FunnelAiSourceController::class, 'index'])->name('index');
+            Route::post('/url', [FunnelAiSourceController::class, 'storeUrl'])->name('store-url');
+            Route::post('/transcript', [FunnelAiSourceController::class, 'storeTranscript'])->name('store-transcript');
+            Route::post('/file', [FunnelAiSourceController::class, 'storeFile'])->name('store-file');
+            Route::post('/bulk-delete', [FunnelAiSourceController::class, 'bulkDelete'])->name('bulk-delete');
+            Route::get('/{source}/chunks', [FunnelAiSourceController::class, 'chunks'])->name('chunks');
+            Route::delete('/{source}', [FunnelAiSourceController::class, 'destroy'])->name('delete');
         });
     });
 

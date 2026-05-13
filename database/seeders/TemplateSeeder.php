@@ -38,7 +38,7 @@ class TemplateSeeder extends Seeder
             $webinarDescription = $offer
                 ? $this->buildOfferDescription($offer)
                 : "Step-by-step {$category} roadmap to get faster results, avoid common mistakes, and scale with confidence.";
-            $webinarCtaLabel = 'sign up right away';
+            $webinarCtaLabel = 'Sign up right away';
             $webinarCtaUrl = $offer['jv_page'] ?? 'https://example.com/next-step';
             $affiliateRequestLink = $offer['affiliate_request_link'] ?? null;
             $jvPage = $offer['jv_page'] ?? null;
@@ -106,6 +106,9 @@ class TemplateSeeder extends Seeder
                         'allow_replay'       => true,
                         'redirect_enabled'   => false,
                         'redirect_url'       => '',
+                        'webinar_ai_enabled' => false,
+                        'webinar_ai_auto_reply_enabled' => true,
+                        'webinar_ai_assistant_name' => '',
                         'branding'           => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
                         'chat_seed_messages' => [
                             ['author' => 'Moderator', 'message' => 'Welcome! Let us know where you are joining from 👋'],
@@ -1848,7 +1851,6 @@ CSS;
         <div class="dfy-right">
           <form id="dfy-optin-form" class="dfy-form" data-locked-form="true">
             <div class="dfy-form-top">
-              <span class="dfy-form-badge">FREE ACCESS</span>
               <h2 class="dfy-form-title">Reserve Your Spot</h2>
               <p class="dfy-form-sub">Limited seats available — register now</p>
             </div>
@@ -1889,7 +1891,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-right{}
 .dfy-form{background:rgba(255,255,255,.04);border:1px solid rgba(239,68,68,.25);border-radius:20px;padding:28px;height:100%}
 .dfy-form-top{text-align:center;margin-bottom:22px}
-.dfy-form-badge{display:inline-block;background:rgba(239,68,68,.2);border:1px solid rgba(239,68,68,.4);color:#fca5a5;padding:5px 14px;border-radius:100px;font-size:10px;font-weight:800;letter-spacing:.1em;margin-bottom:10px}
 .dfy-form-title{font-size:1.25rem;font-weight:800;color:#fff;margin-bottom:4px}
 .dfy-form-sub{font-size:.8rem;color:rgba(255,255,255,.4)}
 .dfy-input{display:block;width:100%;padding:13px 16px;border:1px solid rgba(255,255,255,.12);border-radius:9px;background:rgba(255,255,255,.06);color:#fff;font-size:14px;outline:none;margin-bottom:12px;transition:border-color .2s}

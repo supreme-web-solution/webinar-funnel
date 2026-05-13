@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\WebinarChatMessageCreated;
+use App\Jobs\DispatchWebinarAiReplyJob;
 use App\Models\ChatMessage;
 use App\Models\Funnel;
 use App\Services\Funnels\PublicFunnelResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -101,6 +104,12 @@ class ChatController extends Controller
             'published_at' => now(),
         ]);
 
+        WebinarChatMessageCreated::dispatch(
+            (int) $funnel->id,
+            (string) $message->conversation_key,
+            $this->toPublicMessagePayload($message)
+        );
+
         return response()->json(['message' => $message], 201);
     }
 
@@ -157,12 +166,23 @@ class ChatController extends Controller
             'published_at' => now(),
         ]);
 
+        WebinarChatMessageCreated::dispatch(
+            (int) $funnel->id,
+            (string) $message->conversation_key,
+            $this->toPublicMessagePayload($message)
+        );
+
+        if ($funnel->settings?->webinar_ai_enabled && $funnel->settings?->webinar_ai_auto_reply_enabled) {
+            DispatchWebinarAiReplyJob::dispatch((int) $message->id)->delay(now()->addSeconds(2));
+        }
+
         return response()->json(['message' => $message], 201);
     }
 
     private function authorizeFunnel(Funnel $funnel): void
     {
-        abort_unless((int) auth()->id() === (int) $funnel->user_id, 403);
+        $authId = (int) (Auth::id() ?? 0);
+        abort_unless($authId > 0 && $authId === (int) $funnel->user_id, 403);
     }
 
     /**
@@ -232,5 +252,22 @@ class ChatController extends Controller
                 'latest_id' => $latestMessage?->id,
             ];
         })->values();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function toPublicMessagePayload(ChatMessage $message): array
+    {
+        return [
+            'id' => (int) $message->id,
+            'author_name' => (string) $message->author_name,
+            'participant_role' => $message->participant_role,
+            'message' => (string) $message->message,
+            'conversation_key' => (string) $message->conversation_key,
+            'attendee_name' => $message->attendee_name,
+            'attendee_email' => $message->attendee_email,
+            'published_at' => optional($message->published_at)->toISOString(),
+        ];
     }
 }

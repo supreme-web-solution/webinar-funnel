@@ -29,25 +29,20 @@ const activeCategory = ref('all');
 
 const categories = computed(() => {
     const cats = new Set(props.templates.data.map((t) => t.category));
-
     return ['all', ...Array.from(cats).sort()];
 });
 
 const filtered = computed(() => {
     let list = props.templates.data;
-
     if (activeCategory.value !== 'all') {
         list = list.filter((t) => t.category === activeCategory.value);
     }
-
     if (search.value.trim()) {
         const q = search.value.toLowerCase();
-
         list = list.filter(
             (t) => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || (t.conversion_style ?? '').toLowerCase().includes(q),
         );
     }
-
     return list;
 });
 
@@ -64,17 +59,41 @@ function styleClass(s: string | null): string {
     return styleColor[s ?? 'general'] ?? styleColor['general'];
 }
 
-const categoryGradients = [
-    'from-teal-400 to-cyan-500',
-    'from-violet-400 to-purple-500',
-    'from-amber-400 to-orange-500',
-    'from-rose-400 to-pink-500',
-    'from-sky-400 to-blue-500',
-    'from-emerald-400 to-green-500',
-];
+// Per-category accent palettes: [bg-from, bg-to, accentHex, glowHex]
+const categoryPalette: Record<string, [string, string, string, string]> = {
+    consulting:  ['#0a0f1e', '#0e1830', '#40E0D0', 'rgba(64,224,208,0.18)'],
+    marketing:   ['#0f0a1e', '#180e30', '#a78bfa', 'rgba(167,139,250,0.18)'],
+    business:    ['#0a1218', '#0c1a24', '#38bdf8', 'rgba(56,189,248,0.18)'],
+    education:   ['#0f1a0a', '#122010', '#4ade80', 'rgba(74,222,128,0.18)'],
+    ecommerce:   ['#1a100a', '#241508', '#fb923c', 'rgba(251,146,60,0.18)'],
+    finance:     ['#0a0f1e', '#0d1530', '#facc15', 'rgba(250,204,21,0.18)'],
+    health:      ['#0a1812', '#0d2018', '#34d399', 'rgba(52,211,153,0.18)'],
+    'real-estate':['#1a0a10', '#200d14', '#f472b6', 'rgba(244,114,182,0.18)'],
+    crypto:      ['#0a0f1a', '#0d1422', '#f59e0b', 'rgba(245,158,11,0.18)'],
+    coaching:    ['#10080f', '#180d1c', '#e879f9', 'rgba(232,121,249,0.18)'],
+};
 
-function cardGradient(idx: number): string {
-    return categoryGradients[idx % categoryGradients.length];
+const fallbackPalette: [string, string, string, string] = ['#0a0f1e', '#0d1530', '#40E0D0', 'rgba(64,224,208,0.18)'];
+
+function coverPalette(cat: string): [string, string, string, string] {
+    return categoryPalette[cat] ?? fallbackPalette;
+}
+
+const categoryIcon: Record<string, string> = {
+    consulting:   'heroicons:briefcase',
+    marketing:    'heroicons:megaphone',
+    business:     'heroicons:building-office',
+    education:    'heroicons:academic-cap',
+    ecommerce:    'heroicons:shopping-bag',
+    finance:      'heroicons:chart-bar',
+    health:       'heroicons:heart',
+    'real-estate':'heroicons:home',
+    crypto:       'heroicons:currency-dollar',
+    coaching:     'heroicons:user-group',
+};
+
+function coverIcon(cat: string): string {
+    return categoryIcon[cat] ?? 'heroicons:rectangle-stack';
 }
 </script>
 
@@ -131,27 +150,111 @@ function cardGradient(idx: number): string {
                 :key="template.id"
                 class="group relative flex flex-col rounded-xl border bg-card shadow-sm overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
             >
-                <!-- Thumbnail / placeholder -->
-                <div class="relative h-44 overflow-hidden bg-muted">
-                    <img
-                        v-if="template.thumbnail_url"
-                        :src="template.thumbnail_url"
-                        :alt="template.name"
-                        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
+                <!-- Designed cover -->
+                <div
+                    class="relative h-44 overflow-hidden select-none"
+                    :style="`background: linear-gradient(145deg, ${coverPalette(template.category)[0]} 0%, ${coverPalette(template.category)[1]} 100%);`"
+                >
+                    <!-- Dot-grid background pattern (SVG) -->
+                    <svg class="absolute inset-0 h-full w-full opacity-[0.07]" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <pattern id="dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <circle cx="1.5" cy="1.5" r="1.5" fill="white" />
+                            </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#dots)" />
+                    </svg>
+
+                    <!-- Top-right accent glow blob -->
                     <div
-                        v-else
-                        class="flex h-full w-full items-center justify-center bg-gradient-to-br"
-                        :class="cardGradient(idx)"
-                    >
-                        <Icon icon="heroicons:video-camera" class="size-12 text-white/70" />
+                        class="pointer-events-none absolute -top-8 -right-8 h-32 w-32 rounded-full blur-2xl"
+                        :style="`background: ${coverPalette(template.category)[3]};`"
+                    />
+                    <!-- Bottom-left accent glow blob -->
+                    <div
+                        class="pointer-events-none absolute -bottom-6 -left-6 h-24 w-24 rounded-full blur-xl"
+                        :style="`background: ${coverPalette(template.category)[3]};`"
+                    />
+
+                    <!-- Top bar -->
+                    <div class="absolute inset-x-0 top-0 flex items-center justify-between px-3 pt-2.5">
+                        <!-- LIVE badge -->
+                        <span class="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/8 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-widest text-white/70 backdrop-blur-sm">
+                            <span class="size-1.5 rounded-full animate-pulse" :style="`background:${coverPalette(template.category)[2]}`" />
+                            Live Webinar
+                        </span>
+                        <!-- Category icon chip -->
+                        <span
+                            class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide"
+                            :style="`background:${coverPalette(template.category)[3]}; color:${coverPalette(template.category)[2]};`"
+                        >
+                            <Icon :icon="coverIcon(template.category)" class="size-2.5" />
+                            {{ template.category }}
+                        </span>
+                    </div>
+
+                    <!-- Center content -->
+                    <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4">
+                        <!-- Big category icon background -->
+                        <div
+                            class="pointer-events-none absolute opacity-[0.06]"
+                            style="bottom:-8px; right:8px;"
+                        >
+                            <Icon :icon="coverIcon(template.category)" style="width:80px;height:80px;color:white" />
+                        </div>
+
+                        <!-- Funnel flow graphic -->
+                        <div class="flex items-center gap-1.5 mb-1">
+                            <div class="h-5 w-8 rounded-sm opacity-70" :style="`background:${coverPalette(template.category)[2]}22;border:1px solid ${coverPalette(template.category)[2]}55`" />
+                            <Icon icon="heroicons:arrow-right" class="size-2.5 opacity-50" style="color:white" />
+                            <div class="h-5 w-8 rounded-sm opacity-70" :style="`background:${coverPalette(template.category)[2]}22;border:1px solid ${coverPalette(template.category)[2]}55`" />
+                            <Icon icon="heroicons:arrow-right" class="size-2.5 opacity-50" style="color:white" />
+                            <div class="flex h-5 w-8 items-center justify-center rounded-sm" :style="`background:${coverPalette(template.category)[2]}33;border:1px solid ${coverPalette(template.category)[2]}88`">
+                                <Icon icon="heroicons:currency-dollar" class="size-2.5" :style="`color:${coverPalette(template.category)[2]}`" />
+                            </div>
+                        </div>
+
+                        <!-- Template name -->
+                        <h3
+                            class="text-center text-sm font-bold leading-snug text-white drop-shadow"
+                            style="text-shadow: 0 1px 8px rgba(0,0,0,0.7); max-width: 200px;"
+                        >
+                            {{ template.name.replace(/ Offer$/i, '') }}
+                        </h3>
+
+                        <!-- Funnel label -->
+                        <span
+                            class="rounded-full px-2.5 py-0.5 text-[0.6rem] font-semibold tracking-wide"
+                            :style="`background:${coverPalette(template.category)[2]}22; color:${coverPalette(template.category)[2]}; border:1px solid ${coverPalette(template.category)[2]}44`"
+                        >
+                            Webinar Funnel
+                        </span>
+                    </div>
+
+                    <!-- Bottom bar -->
+                    <div class="absolute inset-x-0 bottom-0 flex items-center justify-between border-t px-3 pb-2 pt-1.5" :style="`border-color:${coverPalette(template.category)[2]}22`">
+                        <div class="flex items-center gap-2">
+                            <span class="flex items-center gap-1 text-[0.55rem] text-white/50">
+                                <Icon icon="heroicons:document-text" class="size-3" />
+                                Opt-in page
+                            </span>
+                            <span class="text-white/25 text-[0.55rem]">+</span>
+                            <span class="flex items-center gap-1 text-[0.55rem] text-white/50">
+                                <Icon icon="heroicons:video-camera" class="size-3" />
+                                Webinar room
+                            </span>
+                        </div>
+                        <span class="text-[0.55rem] font-bold" :style="`color:${coverPalette(template.category)[2]}99`">
+                            DFY
+                        </span>
                     </div>
 
                     <!-- Hover overlay -->
-                    <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[1px]">
                         <Link
                             :href="`/funnels/create?template_id=${template.id}`"
-                            class="flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-md hover:bg-primary hover:text-primary-foreground transition-colors"
+                            class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold shadow-xl transition-colors"
+                            :style="`background:${coverPalette(template.category)[2]}; color:#0a0f1e;`"
                         >
                             <Icon icon="heroicons:arrow-right-circle" class="size-4" />
                             Use Template
@@ -159,9 +262,7 @@ function cardGradient(idx: number): string {
                     </div>
 
                     <!-- Template # badge -->
-                    <div class="absolute top-2 left-2 rounded-md bg-black/50 px-1.5 py-0.5 text-[0.6rem] font-medium text-white backdrop-blur-sm">
-                        #{{ template.id }}
-                    </div>
+                    <div class="absolute top-2 left-2" style="display:none"><!-- id moved to top bar --></div>
                 </div>
 
                 <!-- Card body -->

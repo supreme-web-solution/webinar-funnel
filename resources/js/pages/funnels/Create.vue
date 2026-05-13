@@ -71,17 +71,40 @@ const submit = (): void => {
     form.post('/funnels');
 };
 
-const categoryGradients = [
-    'from-teal-400 to-cyan-500',
-    'from-violet-400 to-purple-500',
-    'from-amber-400 to-orange-500',
-    'from-rose-400 to-pink-500',
-    'from-sky-400 to-blue-500',
-    'from-emerald-400 to-green-500',
-];
+const categoryPalette: Record<string, [string, string, string]> = {
+    consulting:    ['#0a0f1e', '#0e1830', '#40E0D0'],
+    marketing:     ['#0f0a1e', '#180e30', '#a78bfa'],
+    business:      ['#0a1218', '#0c1a24', '#38bdf8'],
+    education:     ['#0f1a0a', '#122010', '#4ade80'],
+    ecommerce:     ['#1a100a', '#241508', '#fb923c'],
+    finance:       ['#0a0f1e', '#0d1530', '#facc15'],
+    health:        ['#0a1812', '#0d2018', '#34d399'],
+    'real-estate': ['#1a0a10', '#200d14', '#f472b6'],
+    crypto:        ['#0a0f1a', '#0d1422', '#f59e0b'],
+    coaching:      ['#10080f', '#180d1c', '#e879f9'],
+};
 
-function cardGradient(idx: number): string {
-    return categoryGradients[idx % categoryGradients.length];
+const fallbackCoverPalette: [string, string, string] = ['#0a0f1e', '#0d1530', '#40E0D0'];
+
+function coverPalette(cat: string): [string, string, string] {
+    return categoryPalette[cat] ?? fallbackCoverPalette;
+}
+
+const categoryIcon: Record<string, string> = {
+    consulting:    'heroicons:briefcase',
+    marketing:     'heroicons:megaphone',
+    business:      'heroicons:building-office',
+    education:     'heroicons:academic-cap',
+    ecommerce:     'heroicons:shopping-bag',
+    finance:       'heroicons:chart-bar',
+    health:        'heroicons:heart',
+    'real-estate': 'heroicons:home',
+    crypto:        'heroicons:currency-dollar',
+    coaching:      'heroicons:user-group',
+};
+
+function coverIcon(cat: string): string {
+    return categoryIcon[cat] ?? 'heroicons:rectangle-stack';
 }
 </script>
 
@@ -113,36 +136,71 @@ function cardGradient(idx: number): string {
 
                 <!-- Selected template card -->
                 <Card class="border shadow-sm overflow-hidden">
-                    <div class="relative h-48 bg-muted">
-                        <img
-                            v-if="selectedTemplate?.thumbnail_url"
-                            :src="selectedTemplate.thumbnail_url"
-                            :alt="selectedTemplate?.name"
-                            class="h-full w-full object-cover"
-                        />
+                    <div
+                        class="relative h-48 overflow-hidden select-none"
+                        :style="selectedTemplate ? `background:linear-gradient(145deg,${coverPalette(selectedTemplate.category)[0]} 0%,${coverPalette(selectedTemplate.category)[1]} 100%)` : 'background:#0a0f1e'"
+                    >
+                        <!-- dot grid -->
+                        <svg class="absolute inset-0 h-full w-full opacity-[0.07]" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <pattern id="sdots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                                    <circle cx="1.5" cy="1.5" r="1.5" fill="white" />
+                                </pattern>
+                            </defs>
+                            <rect width="100%" height="100%" fill="url(#sdots)" />
+                        </svg>
+                        <!-- glow blobs -->
                         <div
-                            v-else
-                            class="flex h-full w-full items-center justify-center bg-linear-to-br"
-                            :class="cardGradient(selectedTemplate?.id ?? 0)"
-                        >
-                            <Icon icon="heroicons:video-camera" class="size-14 text-white/70" />
+                            class="pointer-events-none absolute -top-10 -right-10 h-36 w-36 rounded-full blur-2xl"
+                            :style="selectedTemplate ? `background:${coverPalette(selectedTemplate.category)[2]}28` : ''"
+                        />
+                        <!-- top bar -->
+                        <div class="absolute inset-x-0 top-0 flex items-center justify-between px-3 pt-3">
+                            <span class="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/8 px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-widest text-white/60">
+                                <span class="size-1.5 rounded-full animate-pulse" :style="selectedTemplate ? `background:${coverPalette(selectedTemplate.category)[2]}` : 'background:#40E0D0'" />
+                                Live Webinar
+                            </span>
+                            <span
+                                v-if="selectedTemplate"
+                                class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6rem] font-semibold capitalize"
+                                :style="`background:${coverPalette(selectedTemplate.category)[2]}22; color:${coverPalette(selectedTemplate.category)[2]};`"
+                            >
+                                <Icon :icon="coverIcon(selectedTemplate.category)" class="size-2.5" />
+                                {{ selectedTemplate.category }}
+                            </span>
                         </div>
-                        <div class="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
-                        <div class="absolute bottom-3 left-3 right-3">
-                            <p class="text-sm font-semibold text-white leading-tight line-clamp-1">
-                                {{ selectedTemplate?.name }}
-                            </p>
-                            <div class="mt-1 flex items-center gap-1.5">
-                                <span class="rounded-full bg-white/20 px-2 py-0.5 text-[0.6rem] font-medium text-white capitalize backdrop-blur-sm">
-                                    {{ selectedTemplate?.category }}
-                                </span>
-                                <span
-                                    v-if="selectedTemplate?.conversion_style"
-                                    class="rounded-full bg-white/20 px-2 py-0.5 text-[0.6rem] font-medium text-white capitalize backdrop-blur-sm"
-                                >
-                                    {{ selectedTemplate?.conversion_style?.replace('_', ' ') }}
-                                </span>
+                        <!-- center -->
+                        <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4">
+                            <div class="flex items-center gap-1.5 mb-1">
+                                <div class="h-5 w-8 rounded-sm opacity-60" :style="selectedTemplate ? `background:${coverPalette(selectedTemplate.category)[2]}22;border:1px solid ${coverPalette(selectedTemplate.category)[2]}44` : ''" />
+                                <Icon icon="heroicons:arrow-right" class="size-2.5 text-white/40" />
+                                <div class="h-5 w-8 rounded-sm opacity-60" :style="selectedTemplate ? `background:${coverPalette(selectedTemplate.category)[2]}22;border:1px solid ${coverPalette(selectedTemplate.category)[2]}44` : ''" />
+                                <Icon icon="heroicons:arrow-right" class="size-2.5 text-white/40" />
+                                <div class="flex h-5 w-8 items-center justify-center rounded-sm" :style="selectedTemplate ? `background:${coverPalette(selectedTemplate.category)[2]}33;border:1px solid ${coverPalette(selectedTemplate.category)[2]}88` : ''">
+                                    <Icon icon="heroicons:currency-dollar" class="size-2.5" :style="selectedTemplate ? `color:${coverPalette(selectedTemplate.category)[2]}` : 'color:#40E0D0'" />
+                                </div>
                             </div>
+                            <p class="text-center text-sm font-bold text-white leading-snug" style="text-shadow:0 1px 8px rgba(0,0,0,0.7);max-width:220px">
+                                {{ selectedTemplate?.name?.replace(/ Offer$/i, '') ?? 'Select a template' }}
+                            </p>
+                            <span
+                                class="rounded-full px-2.5 py-0.5 text-[0.6rem] font-semibold"
+                                :style="selectedTemplate ? `background:${coverPalette(selectedTemplate.category)[2]}22; color:${coverPalette(selectedTemplate.category)[2]}; border:1px solid ${coverPalette(selectedTemplate.category)[2]}44` : 'background:#40E0D025;color:#40E0D0;border:1px solid #40E0D044'"
+                            >
+                                Webinar Funnel
+                            </span>
+                        </div>
+                        <!-- bottom bar -->
+                        <div class="absolute inset-x-0 bottom-0 flex items-center gap-3 px-3 pb-2 pt-1.5 border-t" :style="selectedTemplate ? `border-color:${coverPalette(selectedTemplate.category)[2]}22` : 'border-color:#40E0D022'">
+                            <span class="flex items-center gap-1 text-[0.55rem] text-white/45">
+                                <Icon icon="heroicons:document-text" class="size-3" />
+                                Opt-in page
+                            </span>
+                            <span class="text-white/20 text-[0.55rem]">+</span>
+                            <span class="flex items-center gap-1 text-[0.55rem] text-white/45">
+                                <Icon icon="heroicons:video-camera" class="size-3" />
+                                Webinar room
+                            </span>
                         </div>
                     </div>
                     <CardContent class="p-3.5">
@@ -231,21 +289,12 @@ function cardGradient(idx: number): string {
                                 :class="form.template_id === t.id ? 'bg-primary/5' : ''"
                                 @click="selectTemplate(t.id)"
                             >
-                                <!-- mini thumb -->
-                                <div class="flex size-9 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-muted">
-                                    <img
-                                        v-if="t.thumbnail_url"
-                                        :src="t.thumbnail_url"
-                                        :alt="t.name"
-                                        class="h-full w-full object-cover"
-                                    />
-                                    <div
-                                        v-else
-                                        class="flex h-full w-full items-center justify-center bg-linear-to-br"
-                                        :class="cardGradient(idx)"
-                                    >
-                                        <Icon icon="heroicons:video-camera" class="size-4 text-white/80" />
-                                    </div>
+                                <!-- mini thumb — designed cover -->
+                                <div
+                                    class="flex size-9 shrink-0 items-center justify-center rounded-lg overflow-hidden relative"
+                                    :style="`background:linear-gradient(135deg,${coverPalette(t.category)[0]} 0%,${coverPalette(t.category)[1]} 100%)`"
+                                >
+                                    <Icon :icon="coverIcon(t.category)" class="size-4" :style="`color:${coverPalette(t.category)[2]}; opacity:0.85`" />
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <p class="text-xs font-medium text-foreground truncate">{{ t.name }}</p>

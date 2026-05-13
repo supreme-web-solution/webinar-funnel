@@ -58,6 +58,9 @@ class FunnelSettingsUpdateRequest extends FormRequest
             'exit_popup_cta_url' => ['nullable', 'url', 'max:2048'],
             'redirect_enabled' => ['nullable', 'boolean'],
             'redirect_url' => ['nullable', 'url', 'max:2048'],
+            'webinar_ai_enabled' => ['nullable', 'boolean'],
+            'webinar_ai_auto_reply_enabled' => ['nullable', 'boolean'],
+            'webinar_ai_assistant_name' => ['nullable', 'string', 'max:120'],
             'integration_account_ids' => ['nullable', 'array'],
             'integration_account_ids.*' => [
                 'integer',
