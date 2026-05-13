@@ -71,7 +71,7 @@ class WebinarAiAssistantService
             ? trim((string) $settings->webinar_ai_assistant_name)
             : 'Webinar Assistant';
 
-        $apiKey = (string) config('services.openai.api_key', '');
+        $apiKey = ltrim(trim((string) config('services.openai.api_key', '')), '=');
         if ($apiKey === '') {
             return $this->keywordFallback($assistantName, $message, $knowledgeBlocks);
         }

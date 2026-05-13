@@ -52,7 +52,8 @@ class IndexFunnelAiSourceJob implements ShouldQueue
             ->where('funnel_ai_source_id', $source->id)
             ->delete();
 
-        $indexed = 0;
+        $totalChunks = 0;
+        $embeddedChunks = 0;
         foreach ($chunks as $idx => $chunkText) {
             $vector = $embeddings->embed($chunkText);
             FunnelAiSourceChunk::query()->create([
@@ -63,14 +64,29 @@ class IndexFunnelAiSourceJob implements ShouldQueue
                 'embedding' => $vector,
                 'embedding_dimensions' => is_array($vector) ? count($vector) : 0,
             ]);
-            $indexed++;
+            $totalChunks++;
+            if (is_array($vector) && $vector !== []) {
+                $embeddedChunks++;
+            }
+        }
+
+        if ($embeddedChunks === 0) {
+            $source->update([
+                'status' => 'failed',
+                'chunk_count' => 0,
+                'processed_at' => now(),
+                'error_message' => 'Embedding generation failed for all chunks. Check OpenAI credentials/quota.',
+            ]);
+            return;
         }
 
         $source->update([
             'status' => 'ready',
-            'chunk_count' => $indexed,
+            'chunk_count' => $embeddedChunks,
             'processed_at' => now(),
-            'error_message' => null,
+            'error_message' => $embeddedChunks < $totalChunks
+                ? "Only {$embeddedChunks}/{$totalChunks} chunks were embedded. Some content may be skipped."
+                : null,
         ]);
     }
 

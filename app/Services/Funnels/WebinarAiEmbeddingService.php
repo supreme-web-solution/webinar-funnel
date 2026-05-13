@@ -12,7 +12,7 @@ class WebinarAiEmbeddingService
      */
     public function embed(string $text): ?array
     {
-        $apiKey = trim((string) config('services.openai.api_key', ''));
+        $apiKey = ltrim(trim((string) config('services.openai.api_key', '')), '=');
         if ($apiKey === '') {
             return null;
         }
