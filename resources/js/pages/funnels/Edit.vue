@@ -380,6 +380,14 @@ const saveSettings = (): void => {
     });
 };
 
+/** Same payload as Save, but no full reload — for Switch auto-save (Reka Switch uses `checked`, not `model-value`). */
+const saveSettingsQuiet = (): void => {
+    settingsForm.patch(`/funnels/${props.funnel.id}/settings`, {
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
+
 const addOfferRow = (): void => {
     settingsForm.offers.push({
         title: '',
@@ -1605,7 +1613,7 @@ onUnmounted(() => {
                                 </div>
                                 <Switch
                                     :checked="settingsForm.allow_replay"
-                                    @update:checked="settingsForm.allow_replay = $event"
+                                    @update:checked="(v) => { settingsForm.allow_replay = v; saveSettingsQuiet(); }"
                                 />
                             </div>
                         </CardContent>
@@ -1657,7 +1665,10 @@ onUnmounted(() => {
                                 <p class="text-sm font-semibold">Offer #{{ index + 1 }}</p>
                                 <div class="flex items-center gap-2">
                                     <Label class="text-xs">Enabled</Label>
-                                    <Switch :checked="offer.enabled" @update:checked="offer.enabled = $event" />
+                                    <Switch
+                                        :checked="offer.enabled"
+                                        @update:checked="(v) => { offer.enabled = v; saveSettingsQuiet(); }"
+                                    />
                                     <Button variant="ghost" size="sm" class="h-7 px-2 text-destructive" @click="removeOfferRow(index)">
                                         <Icon icon="heroicons:trash" class="size-3.5" />
                                     </Button>
@@ -1712,8 +1723,8 @@ onUnmounted(() => {
                                 <p class="text-xs text-muted-foreground">Triggers when cursor moves to top to close or leave tab.</p>
                             </div>
                             <Switch
-                                :model-value="Boolean(settingsForm.exit_popup_enabled)"
-                                @update:model-value="settingsForm.exit_popup_enabled = Boolean($event)"
+                                :checked="settingsForm.exit_popup_enabled"
+                                @update:checked="(v) => { settingsForm.exit_popup_enabled = v; saveSettingsQuiet(); }"
                             />
                         </div>
 
@@ -1754,8 +1765,8 @@ onUnmounted(() => {
                                 <p class="text-xs text-muted-foreground">When enabled, users are redirected as soon as watch time reaches video duration.</p>
                             </div>
                             <Switch
-                                :model-value="Boolean(settingsForm.redirect_enabled)"
-                                @update:model-value="settingsForm.redirect_enabled = Boolean($event)"
+                                :checked="settingsForm.redirect_enabled"
+                                @update:checked="(v) => { settingsForm.redirect_enabled = v; saveSettingsQuiet(); }"
                             />
                         </div>
 
@@ -1801,8 +1812,8 @@ onUnmounted(() => {
                         </div>
                     </div>
                     <Switch
-                        :model-value="Boolean(settingsForm.webinar_ai_enabled)"
-                        @update:model-value="settingsForm.webinar_ai_enabled = Boolean($event)"
+                        :checked="settingsForm.webinar_ai_enabled"
+                        @update:checked="(v) => { settingsForm.webinar_ai_enabled = v; saveSettingsQuiet(); }"
                     />
                 </div>
 
@@ -1825,8 +1836,8 @@ onUnmounted(() => {
                                 <p class="text-[0.7rem] text-muted-foreground leading-relaxed">Automatically respond to every<br>attendee message in real time.</p>
                             </div>
                             <Switch
-                                :model-value="Boolean(settingsForm.webinar_ai_auto_reply_enabled)"
-                                @update:model-value="settingsForm.webinar_ai_auto_reply_enabled = Boolean($event)"
+                                :checked="settingsForm.webinar_ai_auto_reply_enabled"
+                                @update:checked="(v) => { settingsForm.webinar_ai_auto_reply_enabled = v; saveSettingsQuiet(); }"
                             />
                         </div>
                     </div>
@@ -2381,7 +2392,10 @@ onUnmounted(() => {
                                 </div>
                                 <div class="flex items-center justify-between gap-3">
                                     <Label class="text-xs">Enable auto-replies for this funnel</Label>
-                                    <Switch :checked="settingsForm.traffic_ai_reply_enabled" @update:checked="settingsForm.traffic_ai_reply_enabled = $event" />
+                                    <Switch
+                                        :checked="settingsForm.traffic_ai_reply_enabled"
+                                        @update:checked="(v) => { settingsForm.traffic_ai_reply_enabled = v; saveSettingsQuiet(); }"
+                                    />
                                 </div>
                                 <div class="grid gap-2 sm:grid-cols-2">
                                     <div class="space-y-1">
