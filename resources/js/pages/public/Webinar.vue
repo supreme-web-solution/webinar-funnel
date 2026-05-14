@@ -73,20 +73,39 @@ const sentMilestones = ref<Set<string>>(new Set());
 const sessionKey = ref('');
 const redirectedAtEnd = ref(false);
 
-/** Temporary top/bottom bars to hide YouTube/Vimeo chrome — hide after intro window */
-const videoChromeMaskActive = ref(false);
-let chromeMaskHideTimer: number | undefined;
+/** YouTube/Vimeo: top/bottom black bars until sound is enabled, then stay 8s more before lifting */
+const videoIntroActive = ref(false);
+let videoIntroTimer: number | undefined;
 
-const scheduleChromeMaskHide = (): void => {
-    window.clearTimeout(chromeMaskHideTimer);
-    if (!videoEmbedUrl.value) {
-        videoChromeMaskActive.value = false;
+const hasVideoIntroChromeMask = computed(
+    () => Boolean(videoEmbedUrl.value) && (videoProvider.value === 'youtube' || videoProvider.value === 'vimeo'),
+);
+
+/** Top/bottom black bars: YouTube/Vimeo follow intro ref; other embeds stay masked */
+const showChromeMaskBars = computed(
+    () =>
+        Boolean(videoEmbedUrl.value)
+        && (hasVideoIntroChromeMask.value ? videoIntroActive.value : true),
+);
+
+const endVideoIntro = (): void => {
+    videoIntroActive.value = false;
+    if (videoIntroTimer !== undefined) {
+        window.clearTimeout(videoIntroTimer);
+        videoIntroTimer = undefined;
+    }
+};
+
+const scheduleChromeMaskLift = (): void => {
+    if (!hasVideoIntroChromeMask.value) {
         return;
     }
-    videoChromeMaskActive.value = true;
-    chromeMaskHideTimer = window.setTimeout(() => {
-        videoChromeMaskActive.value = false;
-    }, 5000);
+    if (videoIntroTimer !== undefined) {
+        window.clearTimeout(videoIntroTimer);
+    }
+    videoIntroTimer = window.setTimeout(() => {
+        endVideoIntro();
+    }, 8000);
 };
 
 // Simulated live viewer count
@@ -237,6 +256,7 @@ const dismissOfferPopup = (): void => {
 
 const enableSoundAndPlay = (): void => {
     soundEnabled.value = true;
+    scheduleChromeMaskLift();
     const win = iframeRef.value?.contentWindow;
     if (!win) return;
 
@@ -512,15 +532,13 @@ const handleKeydown = (e: KeyboardEvent): void => {
     }
 };
 
-watch(videoEmbedUrl, () => {
-    scheduleChromeMaskHide();
-});
-
 onMounted(() => {
     ensureSessionKey();
     postAnalytics('access');
     scrollToBottom();
-    scheduleChromeMaskHide();
+    if (hasVideoIntroChromeMask.value) {
+        videoIntroActive.value = true;
+    }
     poller = window.setInterval(fetchMessages, 4000);
     // Simulate live viewer count fluctuation
     viewerTimer = window.setInterval(() => {
@@ -543,7 +561,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    window.clearTimeout(chromeMaskHideTimer);
+    endVideoIntro();
     if (poller) window.clearInterval(poller);
     if (viewerTimer) window.clearInterval(viewerTimer);
     if (offerTimer) window.clearInterval(offerTimer);
@@ -643,16 +661,20 @@ onUnmounted(() => {
                         <p class="text-sm">Video not configured yet</p>
                     </div>
 
-                    <!-- Temporary masks to hide provider chrome (removed after 5s) -->
-                    <template
-                        v-if="videoEmbedUrl && videoChromeMaskActive && (videoProvider === 'youtube' || videoProvider === 'vimeo')"
-                    >
-                        <div class="pointer-events-none absolute inset-x-0 top-0 z-1 h-20 bg-black transition-opacity duration-500" />
-                        <div class="pointer-events-none absolute inset-x-0 bottom-0 z-1 h-28 bg-black transition-opacity duration-500" />
-                    </template>
-
                     <!-- Click blocker to prevent hover/click exposing native controls -->
                     <div v-if="videoEmbedUrl" class="absolute inset-0 z-10" />
+
+                    <!-- Force stream-style look by masking provider chrome (above blocker, pointer-events none) -->
+                    <template v-if="videoEmbedUrl">
+                        <div
+                            v-if="showChromeMaskBars"
+                            class="chrome-mask-top pointer-events-none absolute inset-x-0 top-0 z-15 min-h-24 md:min-h-28"
+                        />
+                        <div
+                            v-if="showChromeMaskBars"
+                            class="chrome-mask-bottom pointer-events-none absolute inset-x-0 bottom-0 z-15 min-h-32 md:min-h-40"
+                        />
+                    </template>
 
                     <!-- Sound gate overlay: stream starts muted by default -->
                     <div
@@ -947,5 +969,30 @@ onUnmounted(() => {
     animation: none;
     opacity: 0.9;
     box-shadow: 0 0 20px rgba(64, 224, 208, 0.5);
+}
+
+/* Top/bottom chrome masks: very dark outer + mid, softer at the edge meeting the video */
+.chrome-mask-top {
+    background: linear-gradient(
+        to bottom,
+        #000000 0%,
+        #050505 38%,
+        #020202 58%,
+        rgba(0, 0, 0, 0.55) 82%,
+        rgba(0, 0, 0, 0.12) 96%,
+        rgba(0, 0, 0, 0) 100%
+    );
+}
+
+.chrome-mask-bottom {
+    background: linear-gradient(
+        to top,
+        #000000 0%,
+        #050505 38%,
+        #020202 58%,
+        rgba(0, 0, 0, 0.55) 82%,
+        rgba(0, 0, 0, 0.12) 96%,
+        rgba(0, 0, 0, 0) 100%
+    );
 }
 </style>
