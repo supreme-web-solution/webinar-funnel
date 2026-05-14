@@ -4,6 +4,7 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import grapesjs from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -374,18 +375,41 @@ const savePage = (): void => {
 const saveSettings = (): void => {
     savingSettings.value = true;
     settingsForm.patch(`/funnels/${props.funnel.id}/settings`, {
+        preserveScroll: true,
+        onError: (errors) => {
+            const first = Object.values(errors)[0];
+            if (first) {
+                toast.error(typeof first === 'string' ? first : 'Could not save settings.');
+            }
+        },
         onFinish: () => {
             savingSettings.value = false;
         },
     });
 };
 
-/** Same payload as Save, but no full reload — for Switch auto-save (Reka Switch uses `checked`, not `model-value`). */
-const saveSettingsQuiet = (): void => {
-    settingsForm.patch(`/funnels/${props.funnel.id}/settings`, {
-        preserveScroll: true,
-        preserveState: true,
-    });
+/* Auto-save for individual toggles — debounced so rapid toggles batch into one PATCH. */
+let autoSaveTimer: number | undefined;
+const autoSaveSettings = (label = 'Saved'): void => {
+    if (autoSaveTimer !== undefined) {
+        window.clearTimeout(autoSaveTimer);
+    }
+    autoSaveTimer = window.setTimeout(() => {
+        savingSettings.value = true;
+        settingsForm.patch(`/funnels/${props.funnel.id}/settings`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success(label);
+            },
+            onError: (errors) => {
+                const first = Object.values(errors)[0];
+                toast.error(typeof first === 'string' ? first : 'Could not save change.');
+            },
+            onFinish: () => {
+                savingSettings.value = false;
+            },
+        });
+    }, 350);
 };
 
 const addOfferRow = (): void => {
@@ -1613,7 +1637,10 @@ onUnmounted(() => {
                                 </div>
                                 <Switch
                                     :checked="settingsForm.allow_replay"
-                                    @update:checked="(v) => { settingsForm.allow_replay = v; saveSettingsQuiet(); }"
+                                    @update:checked="
+                                        settingsForm.allow_replay = $event;
+                                        autoSaveSettings(settingsForm.allow_replay ? 'Replay enabled' : 'Replay disabled');
+                                    "
                                 />
                             </div>
                         </CardContent>
@@ -1665,10 +1692,7 @@ onUnmounted(() => {
                                 <p class="text-sm font-semibold">Offer #{{ index + 1 }}</p>
                                 <div class="flex items-center gap-2">
                                     <Label class="text-xs">Enabled</Label>
-                                    <Switch
-                                        :checked="offer.enabled"
-                                        @update:checked="(v) => { offer.enabled = v; saveSettingsQuiet(); }"
-                                    />
+                                    <Switch :checked="offer.enabled" @update:checked="offer.enabled = $event" />
                                     <Button variant="ghost" size="sm" class="h-7 px-2 text-destructive" @click="removeOfferRow(index)">
                                         <Icon icon="heroicons:trash" class="size-3.5" />
                                     </Button>
@@ -1723,8 +1747,11 @@ onUnmounted(() => {
                                 <p class="text-xs text-muted-foreground">Triggers when cursor moves to top to close or leave tab.</p>
                             </div>
                             <Switch
-                                :checked="settingsForm.exit_popup_enabled"
-                                @update:checked="(v) => { settingsForm.exit_popup_enabled = v; saveSettingsQuiet(); }"
+                                :model-value="Boolean(settingsForm.exit_popup_enabled)"
+                                @update:model-value="
+                                    settingsForm.exit_popup_enabled = Boolean($event);
+                                    autoSaveSettings(settingsForm.exit_popup_enabled ? 'Exit popup enabled' : 'Exit popup disabled');
+                                "
                             />
                         </div>
 
@@ -1765,8 +1792,11 @@ onUnmounted(() => {
                                 <p class="text-xs text-muted-foreground">When enabled, users are redirected as soon as watch time reaches video duration.</p>
                             </div>
                             <Switch
-                                :checked="settingsForm.redirect_enabled"
-                                @update:checked="(v) => { settingsForm.redirect_enabled = v; saveSettingsQuiet(); }"
+                                :model-value="Boolean(settingsForm.redirect_enabled)"
+                                @update:model-value="
+                                    settingsForm.redirect_enabled = Boolean($event);
+                                    autoSaveSettings(settingsForm.redirect_enabled ? 'Redirect enabled' : 'Redirect disabled');
+                                "
                             />
                         </div>
 
@@ -1812,8 +1842,11 @@ onUnmounted(() => {
                         </div>
                     </div>
                     <Switch
-                        :checked="settingsForm.webinar_ai_enabled"
-                        @update:checked="(v) => { settingsForm.webinar_ai_enabled = v; saveSettingsQuiet(); }"
+                        :model-value="Boolean(settingsForm.webinar_ai_enabled)"
+                        @update:model-value="
+                            settingsForm.webinar_ai_enabled = Boolean($event);
+                            autoSaveSettings(settingsForm.webinar_ai_enabled ? 'AI Assistant turned on' : 'AI Assistant turned off');
+                        "
                     />
                 </div>
 
@@ -1836,8 +1869,11 @@ onUnmounted(() => {
                                 <p class="text-[0.7rem] text-muted-foreground leading-relaxed">Automatically respond to every<br>attendee message in real time.</p>
                             </div>
                             <Switch
-                                :checked="settingsForm.webinar_ai_auto_reply_enabled"
-                                @update:checked="(v) => { settingsForm.webinar_ai_auto_reply_enabled = v; saveSettingsQuiet(); }"
+                                :model-value="Boolean(settingsForm.webinar_ai_auto_reply_enabled)"
+                                @update:model-value="
+                                    settingsForm.webinar_ai_auto_reply_enabled = Boolean($event);
+                                    autoSaveSettings(settingsForm.webinar_ai_auto_reply_enabled ? 'Auto-reply enabled' : 'Auto-reply disabled');
+                                "
                             />
                         </div>
                     </div>
@@ -2394,7 +2430,10 @@ onUnmounted(() => {
                                     <Label class="text-xs">Enable auto-replies for this funnel</Label>
                                     <Switch
                                         :checked="settingsForm.traffic_ai_reply_enabled"
-                                        @update:checked="(v) => { settingsForm.traffic_ai_reply_enabled = v; saveSettingsQuiet(); }"
+                                        @update:checked="
+                                            settingsForm.traffic_ai_reply_enabled = $event;
+                                            autoSaveSettings(settingsForm.traffic_ai_reply_enabled ? 'Traffic AI reply enabled' : 'Traffic AI reply disabled');
+                                        "
                                     />
                                 </div>
                                 <div class="grid gap-2 sm:grid-cols-2">

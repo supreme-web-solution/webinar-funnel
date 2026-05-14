@@ -46,7 +46,7 @@ class FunnelSettingsUpdateRequest extends FormRequest
             'offers.*.title' => ['required_with:offers', 'string', 'max:200'],
             'offers.*.description' => ['nullable', 'string', 'max:1000'],
             'offers.*.cta_label' => ['required_with:offers', 'string', 'max:120'],
-            'offers.*.cta_url' => ['required_with:offers', 'url', 'max:2048'],
+            'offers.*.cta_url' => ['nullable', 'url', 'max:2048'],
             'offers.*.placement' => ['required_with:offers', 'in:chat,pinned,popup'],
             'offers.*.timing_seconds' => ['required_with:offers', 'integer', 'min:0', 'max:86400'],
             'offers.*.enabled' => ['nullable', 'boolean'],
