@@ -862,8 +862,11 @@ onUnmounted(() => {
                                 {{ offerMsg.author_name }}
                                 <span class="ml-1 opacity-70">• Host</span>
                             </p>
-                            <div class="rounded-xl rounded-tr-sm px-3 py-2 text-sm leading-relaxed text-right" style="background: rgba(64,224,208,0.15); color: rgba(255,255,255,0.9)">
-                                <p class="whitespace-pre-line">{{ offerMsg.message }}</p>
+                            <div
+                                class="rounded-xl rounded-tr-sm px-3 py-2 text-sm leading-relaxed text-right whitespace-pre-line"
+                                style="background: rgba(64,224,208,0.18); color: rgb(15 23 42)"
+                            >
+                                <p>{{ offerMsg.message }}</p>
                                 <a
                                     :href="offerMsg.cta_url"
                                     target="_blank"
