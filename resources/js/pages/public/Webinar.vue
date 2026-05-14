@@ -600,7 +600,7 @@ onUnmounted(() => {
                     :href="webinarCtaUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shrink-0 cta-pulse"
+                    class="hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shrink-0 cta-pulse first-letter:uppercase"
                     style="background:#40E0D0;color:#0a0f1e;"
                 >
                     <Icon icon="heroicons:rocket-launch" class="size-3.5" />
@@ -835,7 +835,7 @@ onUnmounted(() => {
                                 <span v-if="msg.participant_role === 'owner'" class="ml-1 opacity-70">• Host</span>
                             </p>
                             <div
-                                class="rounded-xl px-3 py-2 text-sm leading-relaxed"
+                                class="rounded-xl px-3 py-2 text-sm leading-relaxed whitespace-pre-line"
                                 :class="msg.participant_role === 'owner'
                                     ? 'rounded-tr-sm text-right'
                                     : 'rounded-tl-sm bg-slate-100 text-slate-700'"

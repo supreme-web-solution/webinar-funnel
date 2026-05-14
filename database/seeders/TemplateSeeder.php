@@ -28,11 +28,11 @@ class TemplateSeeder extends Seeder
         $offers = $this->offerData();
 
         for ($i = 1; $i <= 51; $i++) {
-            $offer    = $offers[$i - 1] ?? null;
+            $offer = $offers[$i - 1] ?? null;
             $category = $offer ? $this->getOfferCategory($offer['name']) : $categories[($i - 1) % count($categories)];
-            $style    = $styles[($i - 1) % count($styles)];
-            $name     = $offer['name'] ?? "DFY Webinar Template {$i}";
-            $slug     = Str::slug($name);
+            $style = $styles[($i - 1) % count($styles)];
+            $name = $offer['name'] ?? "DFY Webinar Template {$i}";
+            $slug = Str::slug($name);
             $videoUrl = $offer['video_url'] ?? self::VIDEO_EMBEDS[($i - 1) % count(self::VIDEO_EMBEDS)];
             $webinarTitle = $offer['webinar_title'] ?? "How to grow your {$category} business in 90 days";
             $webinarDescription = $offer
@@ -57,13 +57,13 @@ class TemplateSeeder extends Seeder
             $template = Template::query()->updateOrCreate(
                 ['slug' => $slug],
                 [
-                    'name'             => $name,
-                    'category'         => $category,
+                    'name' => $name,
+                    'category' => $category,
                     'conversion_style' => $style,
-                    'thumbnail_url'    => "https://picsum.photos/seed/dfy-template-{$i}/800/450",
-                    'default_palette'  => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
-                    'is_active'        => true,
-                    'sort_order'       => $i,
+                    'thumbnail_url' => "https://picsum.photos/seed/dfy-template-{$i}/800/450",
+                    'default_palette' => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
+                    'is_active' => true,
+                    'sort_order' => $i,
                 ]
             );
 
@@ -73,43 +73,42 @@ class TemplateSeeder extends Seeder
                 ['version' => 1],
                 [
                     'optin_schema' => [
-                        'html'       => $design['html'],
-                        'css'        => $design['css'],
-                        'hero'       => [
-                            'headline'    => '🔥100% FREE TRAINING REVEALS:',
+                        'html' => $design['html'],
+                        'css' => $design['css'],
+                        'hero' => [
+                            'headline' => '🔥100% FREE TRAINING REVEALS:',
                             'subheadline' => $offer['optin_intro'] ?? 'Learn the complete system in one focused webinar.',
-                            'cta'         => 'Reserve My Spot',
+                            'cta' => 'Reserve My Spot',
                         ],
                         'what_youll_discover' => $offer['bullet_points'] ?? [],
                     ],
                     'webinar_schema' => [
-                        'title'       => $webinarTitle,
+                        'title' => $webinarTitle,
                         'description' => $webinarDescription,
-                        'video'       => ['provider' => 'youtube', 'url' => $videoUrl],
-                        'chat'        => ['position' => 'right', 'enabled' => true],
+                        'video' => ['provider' => 'youtube', 'url' => $videoUrl],
+                        'chat' => ['position' => 'right', 'enabled' => true],
                     ],
                     'default_settings' => [
-                        'webinar_title'      => $webinarTitle,
-                        'webinar_description'=> $webinarDescription,
-                        'video_url'          => $videoUrl,
+                        'webinar_title' => $webinarTitle,
+                        'webinar_description' => $webinarDescription,
+                        'video_url' => $videoUrl,
                         'webinar_duration_seconds' => $webinarDurationSeconds,
-                        'webinar_cta_label'  => $webinarCtaLabel,
-                        'webinar_cta_url'    => $webinarCtaUrl,
+                        'webinar_cta_label' => $webinarCtaLabel,
+                        'webinar_cta_url' => $webinarCtaUrl,
                         'affiliate_request_link' => $affiliateRequestLink,
-                        'jv_page'             => $jvPage,
+                        'jv_page' => $jvPage,
                         'offers' => $this->buildDefaultOffersForTemplate(
                             $offerDisplayName,
                             $primaryOfferSeconds,
-                            $webinarDurationSeconds,
                         ),
-                        'chat_mode'          => 'simulated',
-                        'allow_replay'       => true,
-                        'redirect_enabled'   => false,
-                        'redirect_url'       => '',
+                        'chat_mode' => 'simulated',
+                        'allow_replay' => true,
+                        'redirect_enabled' => false,
+                        'redirect_url' => '',
                         'webinar_ai_enabled' => false,
                         'webinar_ai_auto_reply_enabled' => true,
                         'webinar_ai_assistant_name' => '',
-                        'branding'           => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
+                        'branding' => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
                         'chat_seed_messages' => [
                             ['author' => 'Moderator', 'message' => 'Welcome! Let us know where you are joining from 👋'],
                             ['author' => 'Host', 'message' => 'The webinar starts in just a few minutes — stay tuned!'],
@@ -211,13 +210,11 @@ class TemplateSeeder extends Seeder
     private function buildDefaultOffersForTemplate(
         string $offerDisplayName,
         int $primaryOfferSeconds,
-        ?int $webinarDurationSeconds,
     ): array {
-        $chatOfferSeconds = max(300, $primaryOfferSeconds - 900);
-        $pinnedOfferSeconds = max(300, $primaryOfferSeconds);
-        $popupOfferSeconds = $webinarDurationSeconds !== null
-            ? max($pinnedOfferSeconds + 120, min($pinnedOfferSeconds + 900, $webinarDurationSeconds - 300))
-            : $pinnedOfferSeconds + 900;
+        // First drop at spreadsheet "Offer Time", then +30s, then +2m after the second.
+        $first = max(0, $primaryOfferSeconds);
+        $second = $first + 30;
+        $third = $second + 120;
 
         $title = "Get {$offerDisplayName} Bundle Deal Now!";
         $description = 'Get the all-inclusive bundle deal right away at the webinar only discounted price.';
@@ -229,16 +226,7 @@ class TemplateSeeder extends Seeder
                 'cta_label' => 'Get Deal',
                 'cta_url' => '',
                 'placement' => 'chat',
-                'timing_seconds' => $chatOfferSeconds,
-                'enabled' => true,
-            ],
-            [
-                'title' => $title,
-                'description' => $description,
-                'cta_label' => 'Get Deal',
-                'cta_url' => '',
-                'placement' => 'pinned',
-                'timing_seconds' => $pinnedOfferSeconds,
+                'timing_seconds' => $first,
                 'enabled' => true,
             ],
             [
@@ -247,7 +235,16 @@ class TemplateSeeder extends Seeder
                 'cta_label' => 'Get Deal',
                 'cta_url' => '',
                 'placement' => 'popup',
-                'timing_seconds' => $popupOfferSeconds,
+                'timing_seconds' => $second,
+                'enabled' => true,
+            ],
+            [
+                'title' => $title,
+                'description' => $description,
+                'cta_label' => 'Get Deal',
+                'cta_url' => '',
+                'placement' => 'pinned',
+                'timing_seconds' => $third,
                 'enabled' => true,
             ],
         ];
@@ -257,65 +254,65 @@ class TemplateSeeder extends Seeder
     {
         $map = [
             // Education / info-products / publishing
-            'GuruOS Offer'               => 'education',
-            'KidBooks Ai Offer'          => 'education',
-            'eBook Valet Offer'          => 'education',
-            'Cohortia offer'             => 'education',
-            'Writix Offer'               => 'education',
+            'GuruOS Offer' => 'education',
+            'KidBooks Ai Offer' => 'education',
+            'eBook Valet Offer' => 'education',
+            'Cohortia offer' => 'education',
+            'Writix Offer' => 'education',
 
             // Ecommerce / product visuals
-            'Creativo ai 2.0 Offer'      => 'ecommerce',
-            'Showcase Ai offer'          => 'ecommerce',
+            'Creativo ai 2.0 Offer' => 'ecommerce',
+            'Showcase Ai offer' => 'ecommerce',
 
             // Consulting / agency / local business
-            'Agentic Agency Offer'       => 'consulting',
-            'ClientForce Offer'          => 'consulting',
-            'Outrich Offer'              => 'consulting',
-            'LocalMator Offer'           => 'consulting',
+            'Agentic Agency Offer' => 'consulting',
+            'ClientForce Offer' => 'consulting',
+            'Outrich Offer' => 'consulting',
+            'LocalMator Offer' => 'consulting',
             'Micro Content Agency Offer' => 'consulting',
-            'AiGency Valet Offer'        => 'consulting',
-            'Local Ai Fleet Offer'       => 'consulting',
+            'AiGency Valet Offer' => 'consulting',
+            'Local Ai Fleet Offer' => 'consulting',
 
             // SaaS / software / AI platforms
-            'AiWrappers Offer'           => 'business',
-            'OmniMint Ai offer'          => 'business',
-            'InstantlyClaw Offer'        => 'business',
-            'OpenClaw Cracked Offer'     => 'business',
-            'CogneX Ai Offer'            => 'business',
-            'Helpira Offer'              => 'business',
-            'AI Flip Domains Offer'      => 'business',
-            'Prezent IQ Offer'           => 'business',
+            'AiWrappers Offer' => 'business',
+            'OmniMint Ai offer' => 'business',
+            'InstantlyClaw Offer' => 'business',
+            'OpenClaw Cracked Offer' => 'business',
+            'CogneX Ai Offer' => 'business',
+            'Helpira Offer' => 'business',
+            'AI Flip Domains Offer' => 'business',
+            'Prezent IQ Offer' => 'business',
 
             // Marketing / traffic / content / social media
-            'GEO Optimizer Offer'        => 'marketing',
-            'SerpSling Ai Offer'         => 'marketing',
-            'Traffic Magnets Offer'      => 'marketing',
-            'Cinemation Offer'           => 'marketing',
-            'Hooked Ai Offer'            => 'marketing',
-            'CleverAi Studio Offer'      => 'marketing',
-            'ViralCharacters Offer'      => 'marketing',
-            'GramGennies Offer'          => 'marketing',
-            'Synthesys Actors Offer'     => 'marketing',
-            'Reddify Ai Offer'           => 'marketing',
-            'Imimic Offer'               => 'marketing',
-            'AiPodVids Offer'            => 'marketing',
-            'AiDirectors Offer'          => 'marketing',
-            'InstaEngine Ai Offer'       => 'marketing',
-            'SuperClips Ai offer'        => 'marketing',
-            'TokPrime Ai Offer'          => 'marketing',
-            'OminiSitesAi offer'         => 'marketing',
-            'ChannelBuilder Offer'       => 'marketing',
-            'GoBeaver Ai Offer'          => 'marketing',
-            'Qroq Offer'                 => 'marketing',
-            'AiSeller Offer'             => 'marketing',
-            'AffiliateReel Offer'        => 'marketing',
-            'Articalize Offer'           => 'marketing',
-            'OhSoReal Offer'             => 'marketing',
-            'Vidatia Offer'              => 'marketing',
-            'ViralReel Offer'            => 'marketing',
-            'Ai Talker Offer'            => 'marketing',
-            'MagicPods Ai Offer'         => 'marketing',
-            'Buzz Agent Offer'           => 'marketing',
+            'GEO Optimizer Offer' => 'marketing',
+            'SerpSling Ai Offer' => 'marketing',
+            'Traffic Magnets Offer' => 'marketing',
+            'Cinemation Offer' => 'marketing',
+            'Hooked Ai Offer' => 'marketing',
+            'CleverAi Studio Offer' => 'marketing',
+            'ViralCharacters Offer' => 'marketing',
+            'GramGennies Offer' => 'marketing',
+            'Synthesys Actors Offer' => 'marketing',
+            'Reddify Ai Offer' => 'marketing',
+            'Imimic Offer' => 'marketing',
+            'AiPodVids Offer' => 'marketing',
+            'AiDirectors Offer' => 'marketing',
+            'InstaEngine Ai Offer' => 'marketing',
+            'SuperClips Ai offer' => 'marketing',
+            'TokPrime Ai Offer' => 'marketing',
+            'OminiSitesAi offer' => 'marketing',
+            'ChannelBuilder Offer' => 'marketing',
+            'GoBeaver Ai Offer' => 'marketing',
+            'Qroq Offer' => 'marketing',
+            'AiSeller Offer' => 'marketing',
+            'AffiliateReel Offer' => 'marketing',
+            'Articalize Offer' => 'marketing',
+            'OhSoReal Offer' => 'marketing',
+            'Vidatia Offer' => 'marketing',
+            'ViralReel Offer' => 'marketing',
+            'Ai Talker Offer' => 'marketing',
+            'MagicPods Ai Offer' => 'marketing',
+            'Buzz Agent Offer' => 'marketing',
         ];
 
         return $map[$name] ?? 'business';
@@ -1381,8 +1378,9 @@ class TemplateSeeder extends Seeder
     {
         $out = '';
         foreach ($bullets as $b) {
-            $out .= '<li><span class="' . $checkClass . '">✓</span>' . htmlspecialchars($b, ENT_QUOTES) . '</li>' . "\n";
+            $out .= '<li><span class="'.$checkClass.'">✓</span>'.htmlspecialchars($b, ENT_QUOTES).'</li>'."\n";
         }
+
         return $out;
     }
 
@@ -1390,8 +1388,8 @@ class TemplateSeeder extends Seeder
     private function designDarkTurquoise(?array $offer, string $name, string $category): array
     {
         $heading = '🔥100% FREE TRAINING REVEALS:';
-        $intro    = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
-        $bullets  = $offer['bullet_points'] ?? [];
+        $intro = htmlspecialchars($offer['optin_intro'] ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
+        $bullets = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
 
         $html = <<<HTML
@@ -1422,7 +1420,7 @@ class TemplateSeeder extends Seeder
 </div>
 HTML;
 
-        $css = <<<CSS
+        $css = <<<'CSS'
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-page{min-height:100vh;background:linear-gradient(140deg,#060d1a 0%,#0d2039 60%,#081a30 100%);display:flex;align-items:center;justify-content:center;padding:48px 16px}
@@ -1458,8 +1456,8 @@ CSS;
     private function designAmberDark(?array $offer, string $name, string $category): array
     {
         $heading = '🔥100% FREE TRAINING REVEALS:';
-        $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
-        $bullets     = $offer['bullet_points'] ?? [];
+        $intro = htmlspecialchars($offer['optin_intro'] ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
+        $bullets = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
 
         $html = <<<HTML
@@ -1491,7 +1489,7 @@ CSS;
 </div>
 HTML;
 
-        $css = <<<CSS
+        $css = <<<'CSS'
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-page{min-height:100vh;background:linear-gradient(160deg,#1a0800 0%,#2d1000 50%,#1a0800 100%);display:flex;align-items:center;justify-content:center;padding:48px 16px}
@@ -1527,8 +1525,8 @@ CSS;
     private function designLightTeal(?array $offer, string $name, string $category): array
     {
         $heading = '🔥100% FREE TRAINING REVEALS:';
-        $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
-        $bullets     = $offer['bullet_points'] ?? [];
+        $intro = htmlspecialchars($offer['optin_intro'] ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
+        $bullets = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets, 'dfy-check');
 
         $html = <<<HTML
@@ -1561,7 +1559,7 @@ CSS;
 </div>
 HTML;
 
-        $css = <<<CSS
+        $css = <<<'CSS'
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-page{min-height:100vh;background:linear-gradient(135deg,#f0fdf9 0%,#e0f7f3 100%);display:flex;align-items:center;justify-content:center;padding:40px 16px}
@@ -1599,8 +1597,8 @@ CSS;
     private function designDeepPurple(?array $offer, string $name, string $category): array
     {
         $heading = '🔥100% FREE TRAINING REVEALS:';
-        $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
-        $bullets     = $offer['bullet_points'] ?? [];
+        $intro = htmlspecialchars($offer['optin_intro'] ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
+        $bullets = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
 
         $html = <<<HTML
@@ -1638,7 +1636,7 @@ CSS;
 </div>
 HTML;
 
-        $css = <<<CSS
+        $css = <<<'CSS'
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-page{min-height:100vh;background:linear-gradient(140deg,#0f0720 0%,#1e0a4e 50%,#0f0720 100%);display:flex;align-items:center;justify-content:center;padding:48px 16px;position:relative;overflow:hidden}
@@ -1680,8 +1678,8 @@ CSS;
     private function designMinimalWhite(?array $offer, string $name, string $category): array
     {
         $heading = '🔥100% FREE TRAINING REVEALS:';
-        $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
-        $bullets     = $offer['bullet_points'] ?? [];
+        $intro = htmlspecialchars($offer['optin_intro'] ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
+        $bullets = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets, 'dfy-check');
 
         $html = <<<HTML
@@ -1715,7 +1713,7 @@ CSS;
 </div>
 HTML;
 
-        $css = <<<CSS
+        $css = <<<'CSS'
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc}
 .dfy-page{min-height:100vh;background:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:40px 16px}
@@ -1754,8 +1752,8 @@ CSS;
     private function designEmeraldDark(?array $offer, string $name, string $category): array
     {
         $heading = '🔥100% FREE TRAINING REVEALS:';
-        $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
-        $bullets     = $offer['bullet_points'] ?? [];
+        $intro = htmlspecialchars($offer['optin_intro'] ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
+        $bullets = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
 
         $html = <<<HTML
@@ -1789,7 +1787,7 @@ CSS;
 </div>
 HTML;
 
-        $css = <<<CSS
+        $css = <<<'CSS'
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-page{min-height:100vh;background:linear-gradient(145deg,#021a0e 0%,#063020 55%,#021a0e 100%);display:flex;align-items:center;justify-content:center;padding:48px 16px;position:relative;overflow:hidden}
@@ -1828,8 +1826,8 @@ CSS;
     private function designCrimsonBold(?array $offer, string $name, string $category): array
     {
         $heading = '🔥100% FREE TRAINING REVEALS:';
-        $intro       = htmlspecialchars($offer['optin_intro']   ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
-        $bullets     = $offer['bullet_points'] ?? [];
+        $intro = htmlspecialchars($offer['optin_intro'] ?? "Join this free webinar and discover how to grow your {$category} business fast.", ENT_QUOTES);
+        $bullets = $offer['bullet_points'] ?? [];
         $bulletsHtml = $this->bulletsHtml($bullets);
 
         $html = <<<HTML
@@ -1869,7 +1867,7 @@ CSS;
 </div>
 HTML;
 
-        $css = <<<CSS
+        $css = <<<'CSS'
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 .dfy-page{min-height:100vh;background:linear-gradient(145deg,#130006 0%,#290010 55%,#130006 100%);display:flex;align-items:center;justify-content:center;padding:48px 16px;position:relative;overflow:hidden}

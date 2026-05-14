@@ -7,15 +7,20 @@ use App\Jobs\DispatchWebinarAiReplyJob;
 use App\Models\ChatMessage;
 use App\Models\Funnel;
 use App\Services\Funnels\PublicFunnelResolver;
-use Illuminate\Http\Request;
+use App\Services\Funnels\WebinarPublicChatService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ChatController extends Controller
 {
+    public function __construct(
+        private WebinarPublicChatService $webinarPublicChat,
+    ) {}
+
     public function manage(Funnel $funnel): Response
     {
         $this->authorizeFunnel($funnel);
@@ -122,14 +127,8 @@ class ChatController extends Controller
         $funnel = $resolver->resolve($username, $slug);
         abort_if(! $funnel, 404);
 
-        $conversation = $this->resolveAttendeeConversation($request, $funnel->id);
-
         return response()->json([
-            'messages' => $funnel->chatRoom?->messages()
-                ->where('conversation_key', $conversation['conversation_key'])
-                ->orderBy('id')
-                ->limit(300)
-                ->get() ?? [],
+            'messages' => $this->webinarPublicChat->attendeeMessages($funnel, $request),
         ]);
     }
 
@@ -153,7 +152,8 @@ class ChatController extends Controller
             'is_active' => true,
         ]);
 
-        $conversation = $this->resolveAttendeeConversation($request, $funnel->id);
+        $conversation = $this->webinarPublicChat->resolveConversation($request, $funnel->id);
+        $this->webinarPublicChat->ensureWelcomeMessage($room, $conversation['conversation_key']);
 
         $message = $room->messages()->create([
             'author_name' => $conversation['attendee_name'] ?? 'Webinar Attendee',
@@ -186,38 +186,7 @@ class ChatController extends Controller
     }
 
     /**
-     * @return array{conversation_key: string, attendee_name: string, attendee_email: ?string}
-     */
-    private function resolveAttendeeConversation(Request $request, int $funnelId): array
-    {
-        $leadSession = $request->session()->get("funnel_lead.{$funnelId}", []);
-        $name = 'Anonymous attendee';
-        $email = null;
-
-        if (is_array($leadSession)) {
-            $name = (string) ($leadSession['name'] ?? $name);
-            $email = ! empty($leadSession['email']) ? (string) $leadSession['email'] : null;
-        }
-
-        $conversationKey = $request->session()->get("funnel_chat_conversation.{$funnelId}");
-
-        if (! is_string($conversationKey) || $conversationKey === '') {
-            $seed = $email
-                ? Str::lower(trim($email))
-                : (string) $request->session()->getId();
-            $conversationKey = substr(hash('sha256', $funnelId.'|'.$seed), 0, 48);
-            $request->session()->put("funnel_chat_conversation.{$funnelId}", $conversationKey);
-        }
-
-        return [
-            'conversation_key' => $conversationKey,
-            'attendee_name' => $name,
-            'attendee_email' => $email,
-        ];
-    }
-
-    /**
-     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     * @return Collection<int, array<string, mixed>>
      */
     private function buildConversationsSummary(Funnel $funnel, int $limit)
     {
