@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\EnforcesKeywordMentionCap;
 use App\Mail\KeywordMentionAlert;
 use App\Models\Keyword;
 use App\Models\KeywordFetchState;
@@ -19,9 +20,10 @@ use Illuminate\Support\Str;
 
 class FetchNewsMentions implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, EnforcesKeywordMentionCap, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 180;
+
     public int $tries = 2;
 
     public function __construct(
@@ -33,6 +35,10 @@ class FetchNewsMentions implements ShouldQueue
     public function handle(NewsService $newsService): void
     {
         $this->keyword->refresh();
+
+        if ($this->abortFetchIfKeywordAtMentionCap($this->keyword)) {
+            return;
+        }
 
         if (! $this->keyword->is_active) {
             return;
@@ -55,6 +61,7 @@ class FetchNewsMentions implements ShouldQueue
 
         if (empty($articles)) {
             KeywordFetchState::recordFetch($this->keyword->id, 'news');
+
             return;
         }
 
@@ -80,16 +87,16 @@ class FetchNewsMentions implements ShouldQueue
 
             try {
                 $mention = Mention::create([
-                    'keyword_id'  => $this->keyword->id,
-                    'user_id'     => $this->keyword->user_id,
-                    'post_id'     => Str::uuid()->toString(),
-                    'title'       => Str::limit($article['title'] ?? '', 500, ''),
-                    'content'     => $article['description'] ?? $article['title'] ?? null,
-                    'source'      => $article['source']['name'] ?? 'News',
+                    'keyword_id' => $this->keyword->id,
+                    'user_id' => $this->keyword->user_id,
+                    'post_id' => Str::uuid()->toString(),
+                    'title' => Str::limit($article['title'] ?? '', 500, ''),
+                    'content' => $article['description'] ?? $article['title'] ?? null,
+                    'source' => $article['source']['name'] ?? 'News',
                     'source_type' => 'News',
-                    'username'    => $article['author'] ?? null,
-                    'permalink'   => $url,
-                    'posted_at'   => $postedAt,
+                    'username' => $article['author'] ?? null,
+                    'permalink' => $url,
+                    'posted_at' => $postedAt,
                 ]);
 
                 $savedMentions[] = $mention;
@@ -103,6 +110,8 @@ class FetchNewsMentions implements ShouldQueue
         }
 
         KeywordFetchState::recordFetch($this->keyword->id, 'news');
+
+        $this->enforceKeywordMentionCapAfterFetch($this->keyword);
 
         Log::info('FetchNewsMentions: Done', [
             'keyword_id' => $this->keyword->id,

@@ -19,6 +19,7 @@ use App\Models\SocialAccount;
 use App\Models\Template;
 use App\Services\Funnels\PageSanitizer;
 use App\Services\Funnels\PublicFunnelResolver;
+use App\Services\Mentions\KeywordMentionCapEnforcer;
 use App\Services\TrafficAi\TrafficSocialAccountResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -211,12 +212,24 @@ class FunnelController extends Controller
      */
     private function buildTrafficData(Request $request, Funnel $funnel): array
     {
+        $mentionCap = KeywordMentionCapEnforcer::maxMentionsPerKeyword();
+
         $keywords = Keyword::query()
             ->where('user_id', $funnel->user_id)
             ->where('funnel_id', $funnel->id)
             ->withCount('mentions')
             ->orderByDesc('created_at')
-            ->get();
+            ->get()
+            ->map(fn (Keyword $keyword) => [
+                'id' => $keyword->id,
+                'name' => $keyword->name,
+                'is_active' => (bool) $keyword->is_active,
+                'email_notifications' => (bool) $keyword->email_notifications,
+                'platforms' => $keyword->platforms ?? [],
+                'mentions_count' => (int) $keyword->mentions_count,
+                'mention_cap_reached' => (int) $keyword->mentions_count >= $mentionCap,
+            ])
+            ->values();
 
         $mentionsQuery = Mention::query()
             ->where('user_id', $funnel->user_id)
@@ -278,6 +291,10 @@ class FunnelController extends Controller
                 ->orderBy('platform')
                 ->get(['id', 'platform', 'platform_username', 'posts_today', 'posts_today_reset_on']),
             'max_replies_per_day_per_account' => (int) config('traffic_ai.max_replies_per_day_per_account', 20),
+            'limits' => [
+                'max_keywords_per_funnel' => KeywordMentionCapEnforcer::maxKeywordsPerFunnel(),
+                'max_mentions_per_keyword' => $mentionCap,
+            ],
         ];
     }
 

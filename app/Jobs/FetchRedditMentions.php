@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\EnforcesKeywordMentionCap;
 use App\Mail\KeywordMentionAlert;
 use App\Models\Keyword;
 use App\Models\KeywordFetchState;
@@ -19,9 +20,10 @@ use Illuminate\Support\Str;
 
 class FetchRedditMentions implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, EnforcesKeywordMentionCap, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 180;
+
     public int $tries = 2;
 
     public function __construct(
@@ -33,6 +35,10 @@ class FetchRedditMentions implements ShouldQueue
     public function handle(RedditService $redditService): void
     {
         $this->keyword->refresh();
+
+        if ($this->abortFetchIfKeywordAtMentionCap($this->keyword)) {
+            return;
+        }
 
         if (! $this->keyword->is_active) {
             return;
@@ -55,6 +61,8 @@ class FetchRedditMentions implements ShouldQueue
 
         if (empty($posts)) {
             KeywordFetchState::recordFetch($this->keyword->id, 'reddit');
+            $this->enforceKeywordMentionCapAfterFetch($this->keyword);
+
             return;
         }
 
@@ -81,21 +89,21 @@ class FetchRedditMentions implements ShouldQueue
 
             try {
                 $mention = Mention::create([
-                    'keyword_id'     => $this->keyword->id,
-                    'user_id'        => $this->keyword->user_id,
-                    'post_id'        => $data['id'],
-                    'title'          => Str::limit($data['title'] ?? 'Untitled', 500, ''),
-                    'content'        => $data['selftext'] ?? null,
-                    'source'         => $data['subreddit'] ?? 'Reddit',
-                    'source_type'    => 'Reddit',
-                    'username'       => $data['author'] ?? null,
-                    'votes'          => ($data['ups'] ?? 0) - ($data['downs'] ?? 0),
+                    'keyword_id' => $this->keyword->id,
+                    'user_id' => $this->keyword->user_id,
+                    'post_id' => $data['id'],
+                    'title' => Str::limit($data['title'] ?? 'Untitled', 500, ''),
+                    'content' => $data['selftext'] ?? null,
+                    'source' => $data['subreddit'] ?? 'Reddit',
+                    'source_type' => 'Reddit',
+                    'username' => $data['author'] ?? null,
+                    'votes' => ($data['ups'] ?? 0) - ($data['downs'] ?? 0),
                     'comments_count' => $data['num_comments'] ?? 0,
-                    'category'       => $data['subreddit'] ?? null,
-                    'permalink'      => isset($data['permalink'])
-                        ? 'https://reddit.com' . $data['permalink']
+                    'category' => $data['subreddit'] ?? null,
+                    'permalink' => isset($data['permalink'])
+                        ? 'https://reddit.com'.$data['permalink']
                         : null,
-                    'posted_at'      => isset($data['created_utc'])
+                    'posted_at' => isset($data['created_utc'])
                         ? Carbon::createFromTimestampUTC($data['created_utc'])
                         : null,
                 ]);
@@ -111,6 +119,8 @@ class FetchRedditMentions implements ShouldQueue
         }
 
         KeywordFetchState::recordFetch($this->keyword->id, 'reddit');
+
+        $this->enforceKeywordMentionCapAfterFetch($this->keyword);
 
         Log::info('FetchRedditMentions: Done', [
             'keyword_id' => $this->keyword->id,

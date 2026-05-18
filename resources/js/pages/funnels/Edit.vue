@@ -112,7 +112,12 @@ const props = defineProps<{
             email_notifications: boolean;
             platforms: string[];
             mentions_count: number;
+            mention_cap_reached: boolean;
         }>;
+        limits: {
+            max_keywords_per_funnel: number;
+            max_mentions_per_keyword: number;
+        };
         mentions: {
             data: Array<{
                 id: number;
@@ -689,6 +694,17 @@ function trafficPlatformMeta(key: string) {
     return PLATFORM_META[normalized] ?? { label: key, icon: 'heroicons:globe-alt', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' };
 }
 
+const trafficMaxKeywords = computed(() => props.traffic.limits.max_keywords_per_funnel);
+const trafficMaxMentionsPerKeyword = computed(() => props.traffic.limits.max_mentions_per_keyword);
+const trafficAtKeywordLimit = computed(
+    () => props.traffic.keywords.length >= trafficMaxKeywords.value,
+);
+
+const trafficKeywordCapTooltip = computed(
+    () =>
+        `This keyword reached the limit of ${trafficMaxMentionsPerKeyword.value.toLocaleString()} saved mentions and was paused. Delete old mentions, or delete this keyword and create a new one to keep fetching.`,
+);
+
 const trafficPlatformTabs = computed(() => {
     const all = { key: '', label: 'All', count: props.traffic.stats.total };
     const entries = Object.entries(props.traffic.stats.platforms ?? {}).map(([k, v]) => ({
@@ -736,6 +752,10 @@ function resetTrafficKeywordForm(): void {
 }
 
 function openTrafficKeywordModal(): void {
+    if (trafficAtKeywordLimit.value) {
+        return;
+    }
+
     resetTrafficKeywordForm();
     trafficKeywordModalOpen.value = true;
 }
@@ -754,10 +774,22 @@ function submitTrafficKeyword(): void {
     });
 }
 
-function toggleTrafficKeywordActive(keyword: { id: number; is_active: boolean }): void {
+function toggleTrafficKeywordActive(keyword: {
+    id: number;
+    is_active: boolean;
+    mention_cap_reached: boolean;
+}): void {
+    if (!keyword.is_active && keyword.mention_cap_reached) {
+        return;
+    }
+
     router.patch(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}`, {
         is_active: !keyword.is_active,
     }, { preserveScroll: true });
+}
+
+function canFetchTrafficKeyword(keyword: { mention_cap_reached: boolean }): boolean {
+    return !keyword.mention_cap_reached;
 }
 
 function toggleTrafficKeywordNotifications(keyword: { id: number; email_notifications: boolean }): void {
@@ -2461,18 +2493,30 @@ onUnmounted(() => {
                     <div>
                         <h3 class="text-sm font-semibold text-foreground">Funnel Traffic Settings</h3>
                         <p class="text-xs text-muted-foreground mt-0.5">
-                            Track mentions and conversations per funnel keyword.
+                            Track mentions and conversations per funnel keyword (up to {{ trafficMaxKeywords }} keywords, {{ trafficMaxMentionsPerKeyword.toLocaleString() }} mentions each).
                         </p>
                     </div>
-                    <Button
-                        type="button"
-                        size="sm"
-                        class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
-                        @click="openTrafficKeywordModal"
-                    >
-                        <Icon icon="heroicons:plus" class="size-3.5" />
-                        Add Keyword
-                    </Button>
+                    <TooltipProvider :delay-duration="120">
+                        <Tooltip>
+                            <TooltipTrigger as-child>
+                                <span class="inline-flex">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                                        :disabled="trafficAtKeywordLimit"
+                                        @click="openTrafficKeywordModal"
+                                    >
+                                        <Icon icon="heroicons:plus" class="size-3.5" />
+                                        Add Keyword
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent v-if="trafficAtKeywordLimit" side="bottom" class="max-w-xs text-xs">
+                                This funnel already has the maximum of {{ trafficMaxKeywords }} keywords. Delete one to add another.
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -2638,7 +2682,9 @@ onUnmounted(() => {
                 <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
                     <Card class="border shadow-sm">
                         <CardHeader class="pb-2 pt-4 px-4">
-                            <CardTitle class="text-sm font-semibold">Tracked Keywords ({{ props.traffic.keywords.length }})</CardTitle>
+                            <CardTitle class="text-sm font-semibold">
+                                Tracked Keywords ({{ props.traffic.keywords.length }} / {{ trafficMaxKeywords }})
+                            </CardTitle>
                         </CardHeader>
                         <CardContent class="p-0">
                             <div v-if="props.traffic.keywords.length === 0" class="py-8 text-center text-xs text-muted-foreground">No keywords yet.</div>
@@ -2647,11 +2693,59 @@ onUnmounted(() => {
                                     <div class="flex items-start justify-between gap-2">
                                         <div class="min-w-0 flex-1">
                                             <button class="text-sm font-medium truncate max-w-full text-left" :class="{ 'opacity-50 line-through': !kw.is_active }" @click="trafficKeywordId = trafficKeywordId == kw.id ? '' : kw.id">{{ kw.name }}</button>
-                                            <p class="text-xs text-muted-foreground mt-0.5">{{ kw.mentions_count }} mentions</p>
+                                            <p class="text-xs text-muted-foreground mt-0.5">
+                                                {{ kw.mentions_count.toLocaleString() }} / {{ trafficMaxMentionsPerKeyword.toLocaleString() }} mentions
+                                                <span v-if="kw.mention_cap_reached" class="text-amber-600 dark:text-amber-400"> · cap reached</span>
+                                            </p>
                                         </div>
                                         <div class="flex items-center gap-1 shrink-0">
-                                            <button class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50" title="Fetch now" @click="fetchTrafficKeywordNow(kw)"><Icon icon="heroicons:arrow-path" class="size-3.5" /></button>
-                                            <button class="flex size-7 items-center justify-center rounded-md" :class="kw.is_active ? 'text-[#40E0D0]' : 'text-muted-foreground'" @click="toggleTrafficKeywordActive(kw)"><Icon :icon="kw.is_active ? 'heroicons:pause' : 'heroicons:play'" class="size-3.5" /></button>
+                                            <TooltipProvider :delay-duration="120">
+                                                <Tooltip>
+                                                    <TooltipTrigger as-child>
+                                                        <span class="inline-flex">
+                                                            <button
+                                                                type="button"
+                                                                class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-40"
+                                                                :disabled="!canFetchTrafficKeyword(kw)"
+                                                                @click="fetchTrafficKeywordNow(kw)"
+                                                            >
+                                                                <Icon icon="heroicons:arrow-path" class="size-3.5" />
+                                                            </button>
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent v-if="kw.mention_cap_reached" side="top" class="max-w-xs text-xs">
+                                                        {{ trafficKeywordCapTooltip }}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger as-child>
+                                                        <span class="inline-flex">
+                                                            <button
+                                                                type="button"
+                                                                class="flex size-7 items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-40"
+                                                                :class="kw.is_active ? 'text-[#40E0D0]' : 'text-muted-foreground'"
+                                                                :disabled="!kw.is_active && kw.mention_cap_reached"
+                                                                @click="toggleTrafficKeywordActive(kw)"
+                                                            >
+                                                                <Icon :icon="kw.is_active ? 'heroicons:pause' : 'heroicons:play'" class="size-3.5" />
+                                                            </button>
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent
+                                                        v-if="kw.mention_cap_reached && !kw.is_active"
+                                                        side="top"
+                                                        class="max-w-xs text-xs"
+                                                    >
+                                                        {{ trafficKeywordCapTooltip }}
+                                                    </TooltipContent>
+                                                    <TooltipContent v-else-if="kw.is_active" side="top" class="text-xs">
+                                                        Pause fetching for this keyword
+                                                    </TooltipContent>
+                                                    <TooltipContent v-else side="top" class="text-xs">
+                                                        Resume fetching for this keyword
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                             <button class="flex size-7 items-center justify-center rounded-md" :class="kw.email_notifications ? 'text-[#FFAD00]' : 'text-muted-foreground'" @click="toggleTrafficKeywordNotifications(kw)"><Icon :icon="kw.email_notifications ? 'heroicons:bell' : 'heroicons:bell-slash'" class="size-3.5" /></button>
                                             <button class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive" @click="deleteTrafficKeyword(kw)"><Icon icon="heroicons:trash" class="size-3.5" /></button>
                                         </div>

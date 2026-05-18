@@ -88,12 +88,6 @@ class MentionController extends Controller
 
         $user = $request->user();
 
-        // Check per-user keyword limit
-        $max = (int) config('limits.mentions.max_keywords_per_user', 20);
-        if ($user->keywords()->count() >= $max) {
-            return back()->withErrors(['name' => "You can track up to {$max} keywords."]);
-        }
-
         $keyword = Keyword::firstOrCreate(
             ['user_id' => $user->id, 'funnel_id' => null, 'name' => trim($validated['name'])],
             [

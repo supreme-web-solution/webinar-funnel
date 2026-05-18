@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\EnforcesKeywordMentionCap;
 use App\Mail\KeywordMentionAlert;
 use App\Models\Keyword;
 use App\Models\KeywordFetchState;
@@ -19,9 +20,10 @@ use Illuminate\Support\Str;
 
 class FetchYouTubeMentions implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, EnforcesKeywordMentionCap, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 360;
+
     public int $tries = 2;
 
     public function __construct(
@@ -33,6 +35,10 @@ class FetchYouTubeMentions implements ShouldQueue
     public function handle(YouTubeService $youTubeService): void
     {
         $this->keyword->refresh();
+
+        if ($this->abortFetchIfKeywordAtMentionCap($this->keyword)) {
+            return;
+        }
 
         if (! $this->keyword->is_active) {
             return;
@@ -55,6 +61,7 @@ class FetchYouTubeMentions implements ShouldQueue
 
         if (empty($videos)) {
             KeywordFetchState::recordFetch($this->keyword->id, 'youtube');
+
             return;
         }
 
@@ -94,20 +101,20 @@ class FetchYouTubeMentions implements ShouldQueue
 
             try {
                 $mention = Mention::create([
-                    'keyword_id'     => $this->keyword->id,
-                    'user_id'        => $this->keyword->user_id,
-                    'post_id'        => $postId,
-                    'title'          => Str::limit($snippet['title'] ?? 'Untitled', 500, ''),
-                    'content'        => Str::limit($snippet['description'] ?? '', 2000, ''),
-                    'source'         => $snippet['channelTitle'] ?? 'YouTube',
-                    'source_type'    => 'YouTube',
-                    'username'       => $snippet['channelTitle'] ?? null,
-                    'like_count'     => (int) ($stats['likeCount'] ?? 0),
+                    'keyword_id' => $this->keyword->id,
+                    'user_id' => $this->keyword->user_id,
+                    'post_id' => $postId,
+                    'title' => Str::limit($snippet['title'] ?? 'Untitled', 500, ''),
+                    'content' => Str::limit($snippet['description'] ?? '', 2000, ''),
+                    'source' => $snippet['channelTitle'] ?? 'YouTube',
+                    'source_type' => 'YouTube',
+                    'username' => $snippet['channelTitle'] ?? null,
+                    'like_count' => (int) ($stats['likeCount'] ?? 0),
                     'favourite_count' => (int) ($stats['favoriteCount'] ?? 0),
-                    'views'          => (int) ($stats['viewCount'] ?? 0),
+                    'views' => (int) ($stats['viewCount'] ?? 0),
                     'comments_count' => (int) ($stats['commentCount'] ?? 0),
-                    'permalink'      => $url,
-                    'posted_at'      => $postedAt,
+                    'permalink' => $url,
+                    'posted_at' => $postedAt,
                 ]);
 
                 $savedMentions[] = $mention;
@@ -121,6 +128,8 @@ class FetchYouTubeMentions implements ShouldQueue
         }
 
         KeywordFetchState::recordFetch($this->keyword->id, 'youtube');
+
+        $this->enforceKeywordMentionCapAfterFetch($this->keyword);
 
         Log::info('FetchYouTubeMentions: Done', [
             'keyword_id' => $this->keyword->id,

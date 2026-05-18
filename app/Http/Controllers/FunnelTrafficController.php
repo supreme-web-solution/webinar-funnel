@@ -8,6 +8,7 @@ use App\Jobs\FetchTwitterMentions;
 use App\Jobs\FetchYouTubeMentions;
 use App\Models\Funnel;
 use App\Models\Keyword;
+use App\Services\Mentions\KeywordMentionCapEnforcer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -24,10 +25,10 @@ class FunnelTrafficController extends Controller
         ]);
 
         $user = $request->user();
-        $max = (int) config('limits.mentions.max_keywords_per_user', 20);
+        $max = KeywordMentionCapEnforcer::maxKeywordsPerFunnel();
 
         if ($funnel->keywords()->count() >= $max) {
-            return back()->withErrors(['name' => "This funnel can track up to {$max} keywords."]);
+            return back()->withErrors(['name' => "This funnel can track up to {$max} keywords. Delete one to add another."]);
         }
 
         $keyword = Keyword::firstOrCreate(
@@ -61,6 +62,18 @@ class FunnelTrafficController extends Controller
             'platforms.*' => ['in:reddit,youtube,twitter,news'],
         ]);
 
+        if (
+            array_key_exists('is_active', $validated)
+            && $validated['is_active']
+            && app(KeywordMentionCapEnforcer::class)->hasReachedCap($keyword)
+        ) {
+            $cap = KeywordMentionCapEnforcer::maxMentionsPerKeyword();
+
+            return back()->withErrors([
+                'is_active' => "This keyword has reached the maximum of {$cap} saved mentions. Delete some mentions or remove the keyword and add it again.",
+            ]);
+        }
+
         $keyword->update($validated);
 
         return back()->with('success', 'Traffic keyword updated.');
@@ -78,6 +91,17 @@ class FunnelTrafficController extends Controller
     public function fetchNow(Request $request, Funnel $funnel, Keyword $keyword): RedirectResponse
     {
         $this->authorizeKeyword($request, $funnel, $keyword);
+
+        if (app(KeywordMentionCapEnforcer::class)->hasReachedCap($keyword)) {
+            app(KeywordMentionCapEnforcer::class)->enforceCap($keyword);
+
+            $cap = KeywordMentionCapEnforcer::maxMentionsPerKeyword();
+
+            return back()->withErrors([
+                'fetch' => "This keyword has reached the maximum of {$cap} saved mentions and was paused.",
+            ]);
+        }
+
         $this->dispatchAllPlatformJobs($keyword);
 
         return back()->with('success', "Fetch started for \"{$keyword->name}\".");
@@ -112,4 +136,3 @@ class FunnelTrafficController extends Controller
         );
     }
 }
-

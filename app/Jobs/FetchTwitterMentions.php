@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\EnforcesKeywordMentionCap;
 use App\Mail\KeywordMentionAlert;
 use App\Models\Keyword;
 use App\Models\KeywordFetchState;
@@ -20,7 +21,7 @@ use Illuminate\Support\Str;
 
 class FetchTwitterMentions implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, EnforcesKeywordMentionCap, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 360;
 
@@ -35,6 +36,10 @@ class FetchTwitterMentions implements ShouldQueue
     public function handle(TwitterService $twitterService): void
     {
         $this->keyword->refresh();
+
+        if ($this->abortFetchIfKeywordAtMentionCap($this->keyword)) {
+            return;
+        }
 
         if (! $this->keyword->is_active) {
             return;
@@ -143,6 +148,8 @@ class FetchTwitterMentions implements ShouldQueue
         }
 
         KeywordFetchState::recordFetch($this->keyword->id, 'twitter');
+
+        $this->enforceKeywordMentionCapAfterFetch($this->keyword);
 
         Log::info('FetchTwitterMentions: Done', [
             'keyword_id' => $this->keyword->id,
