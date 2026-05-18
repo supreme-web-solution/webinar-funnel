@@ -26,15 +26,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('settings/social-traffic', [SocialTrafficController::class, 'edit'])->name('settings.social-traffic.edit');
     Route::delete('settings/social-traffic/{socialAccount}', [SocialTrafficController::class, 'disconnect'])->name('settings.social-traffic.disconnect');
 
+});
+
+// Zernio OAuth (auth only — callback must match browser session after external OAuth).
+Route::middleware(['auth'])->group(function () {
     Route::get('settings/social-traffic/reddit/redirect', [SocialTrafficController::class, 'redditRedirect'])->name('settings.social-traffic.reddit.redirect');
     Route::get('settings/social-traffic/youtube/redirect', [SocialTrafficController::class, 'youtubeRedirect'])->name('settings.social-traffic.youtube.redirect');
     Route::get('settings/social-traffic/x/redirect', [SocialTrafficController::class, 'xRedirect'])->name('settings.social-traffic.x.redirect');
-});
 
-// OAuth callbacks must be accessible without the verified middleware
-// (user may not yet have a verified e-mail).
-Route::middleware(['auth'])->group(function () {
-    Route::get('settings/social-traffic/reddit/callback', [SocialTrafficController::class, 'redditCallback'])->name('settings.social-traffic.reddit.callback');
-    Route::get('settings/social-traffic/youtube/callback', [SocialTrafficController::class, 'youtubeCallback'])->name('settings.social-traffic.youtube.callback');
-    Route::get('settings/social-traffic/x/callback', [SocialTrafficController::class, 'xCallback'])->name('settings.social-traffic.x.callback');
+    Route::get('settings/social-traffic/zernio/callback', [SocialTrafficController::class, 'zernioCallback'])
+        ->name('settings.social-traffic.zernio.callback');
+    Route::get('settings/social-traffic/reddit/callback', [SocialTrafficController::class, 'zernioCallback']);
+    Route::get('settings/social-traffic/youtube/callback', [SocialTrafficController::class, 'zernioCallback']);
+    Route::get('settings/social-traffic/x/callback', [SocialTrafficController::class, 'zernioCallback']);
 });

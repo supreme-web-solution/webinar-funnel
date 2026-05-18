@@ -13,6 +13,19 @@ use Inertia\Response;
 
 class PublicFunnelController extends Controller
 {
+    private const GRAPES_GOOGLE_FONTS_URL =
+        'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900'.
+        '&family=Roboto:wght@400;700&family=Open+Sans:wght@400;600;700'.
+        '&family=Lato:wght@400;700&family=Montserrat:wght@400;600;700;900'.
+        '&family=Poppins:wght@400;600;700;900&family=Raleway:wght@400;600;700'.
+        '&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700'.
+        '&family=Plus+Jakarta+Sans:wght@400;600;700&family=Outfit:wght@400;600;700;900'.
+        '&family=Nunito:wght@400;600;700&family=Oswald:wght@400;500;600;700'.
+        '&family=Source+Sans+3:wght@400;600;700'.
+        '&family=Playfair+Display:ital,wght@0,400;0,700;1,400'.
+        '&family=Merriweather:ital,wght@0,400;0,700;1,400'.
+        '&family=Lora:ital,wght@0,400;0,700;1,400&display=swap';
+
     public function __construct(
         private WebinarPublicChatService $webinarPublicChat,
     ) {}
@@ -30,18 +43,32 @@ class PublicFunnelController extends Controller
 
         $optinPage = $funnel->pages->firstWhere('page_type', 'optin');
         $schema = $optinPage?->schema ?? [];
+        $pageHtml = $schema['html'] ?? null;
+        $pageCss = $schema['css'] ?? null;
 
-        return Inertia::render('public/Optin', [
+        $response = Inertia::render('public/Optin', [
             'funnel' => [
                 'name' => $funnel->name,
                 'slug' => $funnel->slug,
                 'owner' => $username,
             ],
-            'pageHtml' => $schema['html'] ?? null,
-            'pageCss' => $schema['css'] ?? null,
+            'pageHtml' => $pageHtml,
+            'pageCss' => $pageCss,
             // Legacy fallback keys kept for old funnel schemas
             'page' => $schema,
         ]);
+
+        if (! filled($pageHtml)) {
+            return $response;
+        }
+
+        return $response
+            ->rootView('public-funnel')
+            ->withViewData([
+                'grapesBuiltPage' => true,
+                'grapesPageCss' => $pageCss,
+                'grapesFontsUrl' => self::GRAPES_GOOGLE_FONTS_URL,
+            ]);
     }
 
     public function webinar(

@@ -5,6 +5,11 @@ return [
     'enabled' => env('TRAFFIC_AI_ENABLED', true),
 
     /**
+     * Max auto-replies per connected social account per calendar day (all funnels combined).
+     */
+    'max_replies_per_day_per_account' => (int) env('TRAFFIC_AI_MAX_REPLIES_PER_DAY', 20),
+
+    /**
      * When false, the observer still loads funnel settings but skips dispatch if disabled.
      */
     'dispatch_on_mention_created' => env('TRAFFIC_AI_DISPATCH_ON_MENTION', true),

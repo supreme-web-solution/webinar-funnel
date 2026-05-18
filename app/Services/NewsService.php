@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class NewsService
 {
@@ -10,33 +11,85 @@ class NewsService
 
     public function searchArticles(string $keyword): array
     {
-        $actorId = config('services.apify.news_actor_id', 'easyapi/google-news-scraper');
-        $maxItems = (int) config('services.apify.max_items_per_search', 25);
+        if (! config('services.apify.news_enabled', true)) {
+            return [];
+        }
+
+        $actorId = (string) config('services.apify.news_actor_id', 'easyapi/google-news-scraper');
+        $maxItems = max(100, (int) config('services.apify.news_max_items', 100));
 
         Log::info('NewsService: Searching articles', ['keyword' => $keyword]);
 
-        $results = $this->apify->runSync($actorId, [
+        $input = [
             'query' => $keyword,
             'maxItems' => $maxItems,
-        ], 120);
+        ];
 
-        // Normalise Apify Google News actor output
+        $language = config('services.apify.news_language');
+        if (is_string($language) && $language !== '') {
+            $input['lr'] = $language;
+        }
+
+        $country = config('services.apify.news_country');
+        if (is_string($country) && $country !== '') {
+            $input['gl'] = $country;
+        }
+
+        $results = $this->runWithRetry($actorId, $input, (int) config('services.apify.news_timeout', 240));
+
         $articles = [];
         foreach ($results as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $title = trim((string) ($item['title'] ?? $item['headline'] ?? ''));
+            $url = $item['url'] ?? $item['link'] ?? $item['permalink'] ?? null;
+
+            if ($title === '' && ! is_string($url)) {
+                continue;
+            }
+
+            if ($title === '') {
+                $title = Str::limit((string) ($item['description'] ?? $item['snippet'] ?? 'News article'), 120, '');
+            }
+
             $articles[] = [
-                'title' => $item['title'] ?? '',
+                'title' => $title,
                 'description' => $item['description'] ?? $item['snippet'] ?? '',
-                'url' => $item['url'] ?? $item['link'] ?? null,
+                'url' => is_string($url) ? $url : null,
                 'author' => $item['author'] ?? $item['source'] ?? 'Unknown',
-                'publishedAt' => $item['publishedAt'] ?? $item['date'] ?? null,
+                'publishedAt' => $item['publishedAt'] ?? $item['date'] ?? $item['published_at'] ?? null,
                 'source' => [
-                    'name' => $item['source'] ?? $item['sourceName'] ?? 'Unknown',
+                    'name' => is_string($item['source'] ?? null)
+                        ? $item['source']
+                        : ($item['sourceName'] ?? 'Unknown'),
                 ],
             ];
         }
 
-        Log::info('NewsService: Articles found', ['count' => count($articles)]);
+        Log::info('NewsService: Articles found', [
+            'count' => count($articles),
+            'raw_items' => count($results),
+        ]);
 
         return $articles;
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @return list<array<string, mixed>>
+     */
+    private function runWithRetry(string $actorId, array $input, int $timeout): array
+    {
+        $results = $this->apify->runSync($actorId, $input, $timeout);
+
+        if ($results !== []) {
+            return $results;
+        }
+
+        Log::info('NewsService: retrying Apify news actor once', ['actor_id' => $actorId]);
+
+        return $this->apify->runSync($actorId, $input, $timeout);
     }
 }

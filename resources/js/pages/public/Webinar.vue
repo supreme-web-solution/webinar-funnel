@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
 import { Head } from '@inertiajs/vue3';
+import { hidePublicPageTransitionLoader, waitForPaint } from '@/lib/publicPageTransitionLoader';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
@@ -532,7 +533,7 @@ const handleKeydown = (e: KeyboardEvent): void => {
     }
 };
 
-onMounted(() => {
+onMounted(async () => {
     ensureSessionKey();
     postAnalytics('access');
     scrollToBottom();
@@ -558,9 +559,14 @@ onMounted(() => {
     document.addEventListener('mousemove', onMouseMoveExitIntent, { passive: true });
     document.addEventListener('mouseout', onMouseOutExitIntent, { passive: true });
     setupRealtimeChat();
+
+    await nextTick();
+    await waitForPaint();
+    hidePublicPageTransitionLoader();
 });
 
 onUnmounted(() => {
+    hidePublicPageTransitionLoader();
     endVideoIntro();
     if (poller) window.clearInterval(poller);
     if (viewerTimer) window.clearInterval(viewerTimer);

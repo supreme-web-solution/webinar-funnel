@@ -4,9 +4,9 @@ namespace App\Jobs\Traffic;
 
 use App\Models\FunnelSetting;
 use App\Models\Mention;
-use App\Models\SocialAccount;
 use App\Models\TrafficReplyAttempt;
 use App\Services\TrafficAi\TrafficReplyGate;
+use App\Services\TrafficAi\TrafficSocialAccountResolver;
 use App\Support\TrafficAiPlatform;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -37,7 +37,7 @@ class EvaluateTrafficAutoReplyJob implements ShouldBeUnique, ShouldQueue
         return 'traffic-ai-eval:'.$this->mentionId;
     }
 
-    public function handle(TrafficReplyGate $gate): void
+    public function handle(TrafficReplyGate $gate, TrafficSocialAccountResolver $accounts): void
     {
         $mention = Mention::query()
             ->with(['keyword.funnel.settings'])
@@ -81,13 +81,10 @@ class EvaluateTrafficAutoReplyJob implements ShouldBeUnique, ShouldQueue
         $map = is_array($settings->traffic_ai_social_account_ids)
             ? $settings->traffic_ai_social_account_ids
             : [];
-        $socialId = isset($map[$platform]) ? (int) $map[$platform] : 0;
 
-        $social = $socialId > 0
-            ? SocialAccount::query()->where('user_id', $mention->user_id)->whereKey($socialId)->first()
-            : null;
+        $social = $accounts->resolveForPlatform($mention->user_id, $platform, $map);
 
-        if (! $social?->hasValidAccessToken()) {
+        if ($social === null) {
             $attempt->update([
                 'status' => TrafficReplyAttempt::STATUS_SKIPPED_NO_ACCOUNT,
                 'skip_reason' => 'no_connected_social_account_for_platform',
@@ -96,16 +93,23 @@ class EvaluateTrafficAutoReplyJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        $dailyCap = (int) config('traffic_ai.max_replies_per_day_per_account', 20);
+
         $todayCount = TrafficReplyAttempt::query()
-            ->where('funnel_id', $mention->keyword->funnel_id)
+            ->where('social_account_id', $social->id)
             ->where('status', TrafficReplyAttempt::STATUS_POSTED)
             ->whereDate('posted_at', now()->toDateString())
             ->count();
 
-        if ($todayCount >= (int) $settings->traffic_ai_max_replies_per_day) {
+        if ($todayCount >= $dailyCap) {
             $attempt->update([
                 'status' => TrafficReplyAttempt::STATUS_SKIPPED_DAILY_CAP,
-                'skip_reason' => 'funnel_daily_reply_cap',
+                'skip_reason' => 'account_daily_reply_cap',
+                'gate_details' => [
+                    'cap' => $dailyCap,
+                    'posted_today' => $todayCount,
+                    'social_account_id' => $social->id,
+                ],
             ]);
 
             return;

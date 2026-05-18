@@ -16,6 +16,7 @@ class SocialAccount extends Model
         'expires_at',
         'platform_username',
         'platform_user_id',
+        'zernio_account_id',
         'daily_post_limit',
         'posts_today',
         'posts_today_reset_on',
@@ -47,6 +48,11 @@ class SocialAccount extends Model
 
     public function hasValidAccessToken(): bool
     {
-        return $this->access_token !== null && $this->access_token !== '';
+        return $this->isConnectedForPosting();
+    }
+
+    public function isConnectedForPosting(): bool
+    {
+        return is_string($this->zernio_account_id) && $this->zernio_account_id !== '';
     }
 }

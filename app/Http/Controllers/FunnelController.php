@@ -19,6 +19,7 @@ use App\Models\SocialAccount;
 use App\Models\Template;
 use App\Services\Funnels\PageSanitizer;
 use App\Services\Funnels\PublicFunnelResolver;
+use App\Services\TrafficAi\TrafficSocialAccountResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -275,7 +276,8 @@ class FunnelController extends Controller
             'social_accounts' => SocialAccount::query()
                 ->where('user_id', $funnel->user_id)
                 ->orderBy('platform')
-                ->get(['id', 'platform', 'platform_username']),
+                ->get(['id', 'platform', 'platform_username', 'posts_today', 'posts_today_reset_on']),
+            'max_replies_per_day_per_account' => (int) config('traffic_ai.max_replies_per_day_per_account', 20),
         ];
     }
 
@@ -333,7 +335,13 @@ class FunnelController extends Controller
         unset($validated['integration_account_ids']);
         unset($validated['integration_configs']);
 
-        $settings = $funnel->settings()->firstOrNew();
+        $settings = $funnel->settings()->firstOrNew(['funnel_id' => $funnel->id]);
+
+        if (array_key_exists('traffic_ai_social_account_ids', $validated)) {
+            $validated['traffic_ai_social_account_ids'] = app(TrafficSocialAccountResolver::class)
+                ->normalizeMapForUser((int) $funnel->user_id, $validated['traffic_ai_social_account_ids']);
+        }
+
         $settings->fill($validated)->save();
 
         $funnel->chatRoom()->updateOrCreate(

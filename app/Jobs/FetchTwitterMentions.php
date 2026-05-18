@@ -22,7 +22,8 @@ class FetchTwitterMentions implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 60;
+    public int $timeout = 360;
+
     public int $tries = 2;
 
     public function __construct(
@@ -39,7 +40,7 @@ class FetchTwitterMentions implements ShouldQueue
             return;
         }
 
-        if (! config('services.twitter.enabled', true)) {
+        if (! config('services.apify.enabled', true) || ! config('services.apify.twitter_enabled', true)) {
             return;
         }
 
@@ -51,7 +52,7 @@ class FetchTwitterMentions implements ShouldQueue
             return;
         }
 
-        Log::info('FetchTwitterMentions: Starting fetch', [
+        Log::info('FetchTwitterMentions: Starting Apify global search', [
             'keyword_id' => $this->keyword->id,
             'keyword_name' => $this->keyword->name,
         ]);
@@ -61,7 +62,7 @@ class FetchTwitterMentions implements ShouldQueue
         $tweets = $result['tweets'] ?? [];
 
         if ($rateLimited) {
-            $cooldownSeconds = (int) config('services.twitter.cooldown_seconds', 900);
+            $cooldownSeconds = (int) config('services.apify.twitter_cooldown_seconds', 900);
             $retryAt = Carbon::now()->addSeconds($cooldownSeconds);
             Cache::put($this->cooldownKey(), $retryAt->toIso8601String(), $retryAt);
             KeywordFetchState::setCooldown($this->keyword->id, 'twitter', $retryAt);
@@ -70,11 +71,13 @@ class FetchTwitterMentions implements ShouldQueue
                 'keyword_id' => $this->keyword->id,
                 'retry_at' => $retryAt->toDateTimeString(),
             ]);
+
             return;
         }
 
         if (empty($tweets)) {
             KeywordFetchState::recordFetch($this->keyword->id, 'twitter');
+
             return;
         }
 
@@ -98,31 +101,35 @@ class FetchTwitterMentions implements ShouldQueue
                 continue;
             }
 
-            $exists = Mention::where('post_id', $tweetId)->exists();
+            $exists = Mention::where('post_id', $tweetId)
+                ->where('keyword_id', $this->keyword->id)
+                ->exists();
 
             if ($exists) {
                 continue;
             }
 
-            $tweetUrl = "https://twitter.com/{$username}/status/{$tweetId}";
+            $tweetUrl = $username
+                ? "https://x.com/{$username}/status/{$tweetId}"
+                : "https://x.com/i/web/status/{$tweetId}";
 
             try {
                 $mention = Mention::create([
-                    'keyword_id'     => $this->keyword->id,
-                    'user_id'        => $this->keyword->user_id,
-                    'post_id'        => $tweetId,
-                    'title'          => Str::limit($text, 500, ''),
-                    'content'        => $text,
-                    'source'         => 'Twitter',
-                    'source_type'    => 'Twitter',
-                    'author_id'      => $authorId,
-                    'username'       => $username,
-                    'like_count'     => (int) ($metrics['like_count'] ?? 0),
-                    'retweet_count'  => (int) ($metrics['retweet_count'] ?? 0),
+                    'keyword_id' => $this->keyword->id,
+                    'user_id' => $this->keyword->user_id,
+                    'post_id' => $tweetId,
+                    'title' => Str::limit($text, 500, ''),
+                    'content' => $text,
+                    'source' => 'Twitter',
+                    'source_type' => 'Twitter',
+                    'author_id' => is_string($authorId) || is_int($authorId) ? (string) $authorId : null,
+                    'username' => $username,
+                    'like_count' => (int) ($metrics['like_count'] ?? 0),
+                    'retweet_count' => (int) ($metrics['retweet_count'] ?? 0),
                     'comments_count' => (int) ($metrics['reply_count'] ?? 0),
-                    'views'          => (int) ($metrics['impression_count'] ?? 0),
-                    'permalink'      => $tweetUrl,
-                    'posted_at'      => $postedAt,
+                    'views' => (int) ($metrics['impression_count'] ?? 0),
+                    'permalink' => $tweetUrl,
+                    'posted_at' => $postedAt,
                 ]);
 
                 $savedMentions[] = $mention;
@@ -147,7 +154,7 @@ class FetchTwitterMentions implements ShouldQueue
 
     protected function cooldownKey(): string
     {
-        return 'twitter_cooldown_keyword_' . $this->keyword->id;
+        return 'twitter_cooldown_keyword_'.$this->keyword->id;
     }
 
     protected function isOnCooldown(): bool

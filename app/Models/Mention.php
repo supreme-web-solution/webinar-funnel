@@ -12,6 +12,7 @@ class Mention extends Model
         'keyword_id',
         'user_id',
         'post_id',
+        'reply_target_id',
         'title',
         'content',
         'source',

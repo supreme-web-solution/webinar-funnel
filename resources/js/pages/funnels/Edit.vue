@@ -9,6 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -54,7 +62,6 @@ const props = defineProps<{
             traffic_ai_reply_enabled?: boolean;
             traffic_ai_link_override?: string | null;
             traffic_ai_extra_context?: string | null;
-            traffic_ai_max_replies_per_day?: number;
             traffic_ai_social_account_ids?: Record<string, number | null>;
             chat_mode: string;
             allow_replay: boolean;
@@ -141,7 +148,14 @@ const props = defineProps<{
             platform?: string;
             keyword_id?: number | string;
         };
-        social_accounts: Array<{ id: number; platform: string; platform_username: string | null }>;
+        social_accounts: Array<{
+            id: number;
+            platform: string;
+            platform_username: string | null;
+            posts_today: number;
+            posts_today_reset_on: string | null;
+        }>;
+        max_replies_per_day_per_account: number;
     };
     videoStats: {
         accessed: number;
@@ -302,7 +316,6 @@ const settingsForm = useForm<{
     traffic_ai_reply_enabled: boolean;
     traffic_ai_link_override: string;
     traffic_ai_extra_context: string;
-    traffic_ai_max_replies_per_day: number;
     traffic_ai_social_account_ids: { reddit: number | null; youtube: number | null; twitter: number | null };
 }>({
     webinar_title: props.funnel.settings?.webinar_title ?? '',
@@ -341,7 +354,6 @@ const settingsForm = useForm<{
     traffic_ai_reply_enabled: props.funnel.settings?.traffic_ai_reply_enabled ?? false,
     traffic_ai_link_override: props.funnel.settings?.traffic_ai_link_override ?? '',
     traffic_ai_extra_context: props.funnel.settings?.traffic_ai_extra_context ?? '',
-    traffic_ai_max_replies_per_day: Number(props.funnel.settings?.traffic_ai_max_replies_per_day ?? 20),
     traffic_ai_social_account_ids: {
         reddit: (props.funnel.settings?.traffic_ai_social_account_ids as Record<string, number | null> | undefined)?.reddit ?? null,
         youtube: (props.funnel.settings?.traffic_ai_social_account_ids as Record<string, number | null> | undefined)?.youtube ?? null,
@@ -387,6 +399,26 @@ const saveSettings = (): void => {
         },
     });
 };
+
+function saveTrafficAiReplyEnabled(enabled: boolean): void {
+    settingsForm.traffic_ai_reply_enabled = enabled;
+    autoAssignTrafficAccounts();
+    savingSettings.value = true;
+    settingsForm.patch(`/funnels/${props.funnel.id}/settings`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success(enabled ? 'Traffic AI reply enabled' : 'Traffic AI reply disabled');
+        },
+        onError: (errors) => {
+            const first = Object.values(errors)[0];
+            toast.error(typeof first === 'string' ? first : 'Could not save auto-reply setting.');
+            settingsForm.traffic_ai_reply_enabled = !enabled;
+        },
+        onFinish: () => {
+            savingSettings.value = false;
+        },
+    });
+}
 
 /* Auto-save for individual toggles — debounced so rapid toggles batch into one PATCH. */
 let autoSaveTimer: number | undefined;
@@ -635,7 +667,7 @@ const toggleSourceChunks = (source: { id: number; chunks_url: string }): void =>
 const trafficSearch = ref(props.traffic.filters.search ?? '');
 const trafficPlatform = ref(props.traffic.filters.platform ?? '');
 const trafficKeywordId = ref<number | string>(props.traffic.filters.keyword_id ?? '');
-const addingTrafficKeyword = ref(false);
+const trafficKeywordModalOpen = ref(false);
 const trafficAiSectionOpen = ref(false);
 let trafficDebounce: ReturnType<typeof setTimeout>;
 
@@ -688,13 +720,27 @@ function toggleTrafficPlatform(p: string): void {
     else trafficKeywordForm.platforms.splice(idx, 1);
 }
 
+function resetTrafficKeywordForm(): void {
+    trafficKeywordForm.reset();
+    trafficKeywordForm.platforms = ['reddit', 'youtube', 'twitter', 'news'];
+    trafficKeywordForm.clearErrors();
+}
+
+function openTrafficKeywordModal(): void {
+    resetTrafficKeywordForm();
+    trafficKeywordModalOpen.value = true;
+}
+
+function closeTrafficKeywordModal(): void {
+    trafficKeywordModalOpen.value = false;
+    resetTrafficKeywordForm();
+}
+
 function submitTrafficKeyword(): void {
     trafficKeywordForm.post(`/funnels/${props.funnel.id}/traffic/keywords`, {
         preserveScroll: true,
         onSuccess: () => {
-            trafficKeywordForm.reset();
-            trafficKeywordForm.platforms = ['reddit', 'youtube', 'twitter', 'news'];
-            addingTrafficKeyword.value = false;
+            closeTrafficKeywordModal();
         },
     });
 }
@@ -732,18 +778,60 @@ function fmtTrafficDate(dt: string | null): string {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const trafficReplyPlatforms = [
+    { key: 'reddit' as const, label: 'Reddit', icon: 'simple-icons:reddit', color: '#ff6b35' },
+    { key: 'youtube' as const, label: 'YouTube', icon: 'simple-icons:youtube', color: '#ff0000' },
+    { key: 'twitter' as const, label: 'X (Twitter)', icon: 'simple-icons:x', color: '#e2e8f0' },
+];
+
 function trafficAccountsForPlatform(platform: string): Array<{ id: number; platform: string; platform_username: string | null }> {
-    return props.traffic.social_accounts.filter((a) => a.platform === platform);
+    return props.traffic.social_accounts.filter((a) => a.platform === platform || (platform === 'twitter' && a.platform === 'x'));
 }
 
-function setTrafficSocialAccount(platform: 'reddit' | 'youtube' | 'twitter', raw: string): void {
-    if (raw === '') {
-        settingsForm.traffic_ai_social_account_ids[platform] = null;
-        return;
-    }
-    const n = Number(raw);
-    settingsForm.traffic_ai_social_account_ids[platform] = Number.isNaN(n) ? null : n;
+function trafficAccountForPlatform(platform: 'reddit' | 'youtube' | 'twitter') {
+    return trafficAccountsForPlatform(platform)[0] ?? null;
 }
+
+const trafficMaxRepliesPerDay = computed(() => props.traffic.max_replies_per_day_per_account ?? 20);
+
+function trafficRepliesPostedToday(platform: 'reddit' | 'youtube' | 'twitter'): number {
+    const account = trafficAccountForPlatform(platform);
+    if (!account) {
+        return 0;
+    }
+    const resetOn = account.posts_today_reset_on;
+    if (resetOn) {
+        const resetDate = new Date(resetOn);
+        const today = new Date();
+        if (
+            resetDate.getFullYear() !== today.getFullYear()
+            || resetDate.getMonth() !== today.getMonth()
+            || resetDate.getDate() !== today.getDate()
+        ) {
+            return 0;
+        }
+    }
+    return account.posts_today ?? 0;
+}
+
+/** One Zernio account per platform — wire IDs automatically. */
+function autoAssignTrafficAccounts(): boolean {
+    let changed = false;
+    for (const p of trafficReplyPlatforms) {
+        const account = trafficAccountForPlatform(p.key);
+        if (account && settingsForm.traffic_ai_social_account_ids[p.key] !== account.id) {
+            settingsForm.traffic_ai_social_account_ids[p.key] = account.id;
+            changed = true;
+        }
+        if (!account && settingsForm.traffic_ai_social_account_ids[p.key] !== null) {
+            settingsForm.traffic_ai_social_account_ids[p.key] = null;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+autoAssignTrafficAccounts();
 
 function trunc(text: string | null, len = 200): string {
     if (!text) return '';
@@ -2367,7 +2455,12 @@ onUnmounted(() => {
                             Track mentions and conversations per funnel keyword.
                         </p>
                     </div>
-                    <Button size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90" @click="addingTrafficKeyword = !addingTrafficKeyword">
+                    <Button
+                        type="button"
+                        size="sm"
+                        class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                        @click="openTrafficKeywordModal"
+                    >
                         <Icon icon="heroicons:plus" class="size-3.5" />
                         Add Keyword
                     </Button>
@@ -2396,8 +2489,8 @@ onUnmounted(() => {
                                     <div class="min-w-0 space-y-0.5">
                                         <CardTitle class="text-sm font-semibold leading-tight">AI traffic auto-reply</CardTitle>
                                         <p class="text-[0.65rem] text-muted-foreground leading-snug">
-                                            <span v-if="!trafficAiSectionOpen">Collapsed — expand to enable, set links, and map Reddit / YouTube / X accounts.</span>
-                                            <span v-else>Map connected accounts and reply rules for this funnel.</span>
+                                            <span v-if="!trafficAiSectionOpen">Collapsed — expand to enable auto-replies and set your link / tone.</span>
+                                            <span v-else>Uses your connected Social posting accounts (one per platform).</span>
                                         </p>
                                     </div>
                                 </CollapsibleTrigger>
@@ -2413,11 +2506,7 @@ onUnmounted(() => {
                         </CardHeader>
                         <CollapsibleContent>
                             <CardContent class="space-y-3 border-t border-border/60 px-4 pb-4 pt-3">
-                                <CardDescription class="text-xs leading-relaxed text-muted-foreground">
-                                    New mentions are evaluated asynchronously, drafted when appropriate, then posted with per-account spacing. Use
-                                    <strong class="text-foreground">Connect accounts</strong>
-                                    (above) to open Settings → Social posting, sign in to Reddit (and later other networks), then pick those accounts in the dropdowns below.
-                                </CardDescription>
+                                
                                 <div class="flex flex-wrap gap-2">
                                     <Button size="sm" class="h-9 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90" as-child>
                                         <Link href="/settings/social-traffic">
@@ -2430,62 +2519,50 @@ onUnmounted(() => {
                                     <Label class="text-xs">Enable auto-replies for this funnel</Label>
                                     <Switch
                                         :checked="settingsForm.traffic_ai_reply_enabled"
-                                        @update:checked="
-                                            settingsForm.traffic_ai_reply_enabled = $event;
-                                            autoSaveSettings(settingsForm.traffic_ai_reply_enabled ? 'Traffic AI reply enabled' : 'Traffic AI reply disabled');
-                                        "
+                                        :disabled="savingSettings || settingsForm.processing"
+                                        @update:checked="saveTrafficAiReplyEnabled($event)"
                                     />
                                 </div>
-                                <div class="grid gap-2 sm:grid-cols-2">
-                                    <div class="space-y-1">
-                                        <Label class="text-xs">Link override (optional)</Label>
-                                        <Input v-model="settingsForm.traffic_ai_link_override" type="url" class="h-9 text-xs" placeholder="Else: affiliate → offer → webinar CTA" />
-                                    </div>
-                                    <div class="space-y-1">
-                                        <Label class="text-xs">Max replies per day (this funnel)</Label>
-                                        <Input v-model.number="settingsForm.traffic_ai_max_replies_per_day" type="number" min="1" max="500" class="h-9 text-xs" />
-                                    </div>
+                                <div class="space-y-1">
+                                    <Label class="text-xs">Link override (optional)</Label>
+                                    <Input v-model="settingsForm.traffic_ai_link_override" type="url" class="h-9 text-xs" placeholder="Else: affiliate → offer → webinar CTA" />
                                 </div>
                                 <div class="space-y-1">
                                     <Label class="text-xs">Extra instructions for the model</Label>
                                     <Textarea v-model="settingsForm.traffic_ai_extra_context" class="min-h-[72px] text-xs resize-y" placeholder="Tone, product angle, compliance notes…" />
                                 </div>
-                                <div class="grid gap-3 sm:grid-cols-3">
-                                    <div class="space-y-1">
-                                        <Label class="text-xs">Reddit account</Label>
-                                        <select
-                                            class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-                                            :value="settingsForm.traffic_ai_social_account_ids.reddit ?? ''"
-                                            @change="setTrafficSocialAccount('reddit', ($event.target as HTMLSelectElement).value)"
+                                <div class="space-y-2">
+                                    <Label class="text-xs">Posting accounts (from Settings → Social posting)</Label>
+                                    <div class="grid gap-2 sm:grid-cols-3">
+                                        <div
+                                            v-for="p in trafficReplyPlatforms"
+                                            :key="p.key"
+                                            class="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5"
+                                            :class="trafficAccountForPlatform(p.key) ? 'border-green-500/40' : ''"
                                         >
-                                            <option value="">— None —</option>
-                                            <option v-for="a in trafficAccountsForPlatform('reddit')" :key="a.id" :value="a.id">{{ a.platform_username || ('#' + a.id) }}</option>
-                                        </select>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <Label class="text-xs">YouTube account</Label>
-                                        <select
-                                            class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-                                            :value="settingsForm.traffic_ai_social_account_ids.youtube ?? ''"
-                                            @change="setTrafficSocialAccount('youtube', ($event.target as HTMLSelectElement).value)"
-                                        >
-                                            <option value="">— None —</option>
-                                            <option v-for="a in trafficAccountsForPlatform('youtube')" :key="a.id" :value="a.id">{{ a.platform_username || ('#' + a.id) }}</option>
-                                        </select>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <Label class="text-xs">X (Twitter) account</Label>
-                                        <select
-                                            class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-                                            :value="settingsForm.traffic_ai_social_account_ids.twitter ?? ''"
-                                            @change="setTrafficSocialAccount('twitter', ($event.target as HTMLSelectElement).value)"
-                                        >
-                                            <option value="">— None —</option>
-                                            <option v-for="a in trafficAccountsForPlatform('twitter')" :key="a.id" :value="a.id">{{ a.platform_username || ('#' + a.id) }}</option>
-                                        </select>
+                                            <div class="flex items-center gap-2">
+                                                <Icon :icon="p.icon" class="size-4 shrink-0" :style="{ color: p.color }" />
+                                                <span class="text-xs font-medium">{{ p.label }}</span>
+                                            </div>
+                                            <p v-if="trafficAccountForPlatform(p.key)" class="mt-1.5 text-[0.65rem] text-green-600 dark:text-green-400">
+                                                Connected · {{ trafficAccountForPlatform(p.key)?.platform_username || 'account linked' }}
+                                            </p>
+                                            <p v-if="trafficAccountForPlatform(p.key)" class="text-[0.65rem] text-muted-foreground">
+                                                {{ trafficRepliesPostedToday(p.key) }} / {{ trafficMaxRepliesPerDay }} replies sent today
+                                            </p>
+                                            <p v-else class="mt-1.5 text-[0.65rem] text-muted-foreground">
+                                                Not connected —
+                                                <Link href="/settings/social-traffic" class="underline hover:text-foreground">connect</Link>
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                                <Button size="sm" class="h-9 text-xs bg-primary text-primary-foreground hover:opacity-90" :disabled="savingSettings || settingsForm.processing" @click="saveSettings">
+                                <Button
+                                    size="sm"
+                                    class="h-9 text-xs bg-primary text-primary-foreground hover:opacity-90"
+                                    :disabled="savingSettings || settingsForm.processing"
+                                    @click="autoAssignTrafficAccounts(); saveSettings();"
+                                >
                                     Save auto-reply settings
                                 </Button>
                             </CardContent>
@@ -2493,33 +2570,61 @@ onUnmounted(() => {
                     </Collapsible>
                 </Card>
 
-                <Card v-if="addingTrafficKeyword" class="border shadow-sm border-primary/30">
-                    <CardHeader class="pb-3 pt-4 px-4">
-                        <CardTitle class="text-sm font-semibold">Track a new traffic keyword</CardTitle>
-                    </CardHeader>
-                    <CardContent class="px-4 pb-4">
-                        <form class="flex flex-col gap-3" @submit.prevent="submitTrafficKeyword">
-                            <div class="flex gap-2">
-                                <Input v-model="trafficKeywordForm.name" placeholder="e.g. your brand name…" class="h-9 text-sm flex-1" autofocus />
-                                <Button type="submit" size="sm" class="h-9 bg-primary text-primary-foreground hover:opacity-90" :disabled="trafficKeywordForm.processing || !trafficKeywordForm.name.trim()">Add & Fetch</Button>
+                <Dialog v-model:open="trafficKeywordModalOpen">
+                    <DialogContent class="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Track a new traffic keyword</DialogTitle>
+                            <DialogDescription>
+                                Search Reddit, YouTube, X, and news for this term and attach mentions to this funnel.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form id="traffic-keyword-form" class="flex flex-col gap-4" @submit.prevent="submitTrafficKeyword">
+                            <div class="space-y-2">
+                                <Label for="traffic-keyword-name" class="text-xs">Keyword</Label>
+                                <Input
+                                    id="traffic-keyword-name"
+                                    v-model="trafficKeywordForm.name"
+                                    placeholder="e.g. your brand name…"
+                                    class="h-9 text-sm"
+                                    autocomplete="off"
+                                />
+                                <p v-if="trafficKeywordForm.errors.name" class="text-xs text-destructive">
+                                    {{ trafficKeywordForm.errors.name }}
+                                </p>
                             </div>
-                            <div class="flex flex-wrap gap-1.5">
-                                <button
-                                    v-for="p in PLATFORM_OPTIONS"
-                                    :key="p"
-                                    type="button"
-                                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors"
-                                    :class="trafficKeywordForm.platforms.includes(p) ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-muted/30 border-border text-muted-foreground'"
-                                    @click="toggleTrafficPlatform(p)"
-                                >
-                                    <Icon :icon="trafficPlatformMeta(p).icon" class="size-3" />
-                                    {{ p }}
-                                </button>
+                            <div class="space-y-2">
+                                <Label class="text-xs">Platforms</Label>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <button
+                                        v-for="p in PLATFORM_OPTIONS"
+                                        :key="p"
+                                        type="button"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors"
+                                        :class="trafficKeywordForm.platforms.includes(p) ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-muted/30 border-border text-muted-foreground'"
+                                        @click="toggleTrafficPlatform(p)"
+                                    >
+                                        <Icon :icon="trafficPlatformMeta(p).icon" class="size-3" />
+                                        {{ p }}
+                                    </button>
+                                </div>
                             </div>
-                            <p v-if="trafficKeywordForm.errors.name" class="text-xs text-destructive">{{ trafficKeywordForm.errors.name }}</p>
                         </form>
-                    </CardContent>
-                </Card>
+                        <DialogFooter class="gap-2 sm:gap-0">
+                            <Button type="button" variant="outline" size="sm" class="h-9" @click="closeTrafficKeywordModal">
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                form="traffic-keyword-form"
+                                size="sm"
+                                class="h-9 bg-primary text-primary-foreground hover:opacity-90"
+                                :disabled="trafficKeywordForm.processing || !trafficKeywordForm.name.trim()"
+                            >
+                                Add & Fetch
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
                 <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
                     <Card class="border shadow-sm">

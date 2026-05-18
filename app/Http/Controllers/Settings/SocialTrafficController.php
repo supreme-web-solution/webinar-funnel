@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\SocialAccount;
+use App\Services\Zernio\ZernioApiException;
+use App\Services\Zernio\ZernioClient;
+use App\Services\Zernio\ZernioProfileManager;
+use App\Services\Zernio\ZernioSocialAccountSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -14,350 +17,343 @@ use Inertia\Response;
 
 class SocialTrafficController extends Controller
 {
-    /* ──────────────────────────────────────────────────────────
-     | Edit / index
-     ─────────────────────────────────────────────────────────── */
+    /** @var array<string, string> Route slug => Zernio connect platform */
+    private const PLATFORM_MAP = [
+        'reddit' => 'reddit',
+        'youtube' => 'youtube',
+        'x' => 'twitter',
+    ];
 
     public function edit(Request $request): Response
     {
+        if (app(ZernioClient::class)->isConfigured()) {
+            app(ZernioSocialAccountSync::class)->syncForUser($request->user());
+        }
+
         $accounts = SocialAccount::query()
             ->where('user_id', $request->user()->id)
             ->orderBy('platform')
-            ->get(['id', 'platform', 'platform_username', 'created_at']);
+            ->get(['id', 'platform', 'platform_username', 'zernio_account_id', 'created_at']);
+
+        $appUrl = rtrim((string) config('app.url'), '/');
+        $requestOrigin = $request->getSchemeAndHttpHost();
 
         return Inertia::render('settings/SocialTraffic', [
             'socialAccounts' => $accounts,
-            'redditConfigured' => $this->redditOAuthConfigured(),
-            'youtubeConfigured' => $this->youtubeOAuthConfigured(),
-            'xConfigured' => $this->xOAuthConfigured(),
+            'zernioConfigured' => app(ZernioClient::class)->isConfigured(),
+            'oauthCallbackUrl' => $this->oauthCallbackUrl('reddit'),
+            'appUrl' => $appUrl,
+            'appUrlMismatch' => $appUrl !== '' && $appUrl !== $requestOrigin,
+            'requestOrigin' => $requestOrigin,
         ]);
     }
-
-    /* ──────────────────────────────────────────────────────────
-     | Disconnect (shared)
-     ─────────────────────────────────────────────────────────── */
 
     public function disconnect(Request $request, SocialAccount $socialAccount): RedirectResponse
     {
         abort_unless((int) $socialAccount->user_id === (int) $request->user()->id, 403);
 
-        $platform = ucfirst($socialAccount->platform);
+        $platform = ucfirst($socialAccount->platform === 'twitter' ? 'X' : $socialAccount->platform);
+        $zernioAccountId = $socialAccount->zernio_account_id;
+
+        if (is_string($zernioAccountId) && $zernioAccountId !== '') {
+            try {
+                app(ZernioClient::class)->disconnectAccount($zernioAccountId);
+            } catch (\Throwable $e) {
+                Log::warning('SocialTrafficController: Zernio disconnect failed', [
+                    'account_id' => $zernioAccountId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         $socialAccount->delete();
 
         return back()->with('success', "{$platform} disconnected.");
     }
 
-    /* ──────────────────────────────────────────────────────────
-     | REDDIT
-     ─────────────────────────────────────────────────────────── */
+    public function connectRedirect(Request $request, string $platform): RedirectResponse
+    {
+        $zernioPlatform = self::PLATFORM_MAP[$platform] ?? null;
+
+        if ($zernioPlatform === null) {
+            abort(404);
+        }
+
+        $zernio = app(ZernioClient::class);
+
+        if (! $zernio->isConfigured()) {
+            return back()->withErrors([$platform => 'Zernio is not configured. Set ZERNIO_API_KEY in your environment.']);
+        }
+
+        try {
+            $profileId = app(ZernioProfileManager::class)->ensureForUser($request->user());
+            $redirectUrl = $this->oauthCallbackUrl($platform);
+            $connect = $zernio->getConnectUrl($zernioPlatform, $profileId, $redirectUrl);
+
+            Log::info('SocialTrafficController: starting Zernio OAuth', [
+                'platform' => $platform,
+                'zernio_platform' => $zernioPlatform,
+                'user_id' => $request->user()->id,
+                'callback_url' => $redirectUrl,
+            ]);
+
+            return $this->redirectExternal($request, $connect['authUrl']);
+        } catch (ZernioApiException $e) {
+            return $this->handleConnectFailure($platform, $e);
+        } catch (\Throwable $e) {
+            Log::error('SocialTrafficController: connect redirect failed', [
+                'platform' => $platform,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->authError($platform, 'Could not start Zernio connection. '.$e->getMessage());
+        }
+    }
+
+    public function zernioCallback(Request $request): RedirectResponse
+    {
+        Log::info('SocialTrafficController: Zernio OAuth callback', [
+            'user_id' => $request->user()?->id,
+            'path' => $request->path(),
+            'query_keys' => array_keys($request->query()),
+            'has_error' => $request->has('error'),
+            'has_code' => $request->has('code'),
+        ]);
+
+        if ($request->user() === null) {
+            Log::warning('SocialTrafficController: Zernio callback without session — use the same host as APP_URL', [
+                'app_url' => config('app.url'),
+                'request_host' => $request->getSchemeAndHttpHost(),
+                'query' => $request->query(),
+            ]);
+
+            session(['url.intended' => $this->socialTrafficSettingsUrl()]);
+
+            return redirect()->guest(route('login'));
+        }
+
+        if ($request->query('error')) {
+            $platform = (string) ($request->query('connected') ?? $request->query('platform') ?? $this->routeSlugFromCallback($request) ?? 'social');
+
+            return $this->authError(
+                $platform,
+                (string) ($request->query('error_description') ?? $request->query('error') ?? 'Authorization was denied.')
+            );
+        }
+
+        $routeSlug = $this->routeSlugFromCallback($request);
+        $zernioPlatform = $routeSlug !== null ? (self::PLATFORM_MAP[$routeSlug] ?? null) : null;
+
+        $code = $request->query('code');
+        $state = $request->query('state');
+
+        if (is_string($code) && $code !== '' && is_string($state) && $state !== '' && is_string($zernioPlatform)) {
+            try {
+                $profileId = app(ZernioProfileManager::class)->ensureForUser($request->user());
+                $result = app(ZernioClient::class)->completeOAuthConnection($zernioPlatform, $code, $state, $profileId);
+
+                Log::info('SocialTrafficController: Zernio OAuth exchange completed', [
+                    'user_id' => $request->user()->id,
+                    'zernio_platform' => $zernioPlatform,
+                    'response_keys' => array_keys($result),
+                ]);
+
+                $localPlatform = app(ZernioSocialAccountSync::class)->persistFromOAuthPayload(
+                    $request->user(),
+                    $zernioPlatform,
+                    $result,
+                );
+
+                if ($localPlatform === null) {
+                    app(ZernioSocialAccountSync::class)->syncForUser($request->user());
+                    $localPlatform = app(ZernioSocialAccountSync::class)->mapPlatform($zernioPlatform);
+                }
+
+                if ($localPlatform !== null) {
+                    return $this->connectionSuccessRedirect($localPlatform);
+                }
+            } catch (\Throwable $e) {
+                Log::error('SocialTrafficController: Zernio OAuth exchange failed', [
+                    'user_id' => $request->user()->id,
+                    'zernio_platform' => $zernioPlatform,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return $this->authError($routeSlug ?? 'social', 'Could not complete connection with Zernio. '.$e->getMessage());
+            }
+        }
+
+        $connected = (string) ($request->query('connected') ?? $request->query('platform') ?? '');
+        $accountId = (string) ($request->query('accountId') ?? $request->query('account_id') ?? $request->query('account') ?? '');
+        $username = $request->query('username') ?? $request->query('user');
+
+        if ($connected !== '' && $accountId !== '') {
+            $localPlatform = app(ZernioSocialAccountSync::class)->mapPlatform($connected);
+
+            if ($localPlatform !== null) {
+                $displayName = is_string($username) && $username !== ''
+                    ? ($localPlatform === 'twitter' && ! Str::startsWith($username, '@') ? '@'.$username : $username)
+                    : null;
+
+                SocialAccount::query()->updateOrCreate(
+                    ['user_id' => $request->user()->id, 'platform' => $localPlatform],
+                    [
+                        'zernio_account_id' => $accountId,
+                        'platform_username' => $displayName,
+                        'access_token' => null,
+                        'refresh_token' => null,
+                        'expires_at' => null,
+                        'daily_post_limit' => (int) config('traffic_ai.max_replies_per_day_per_account', 20),
+                    ]
+                );
+
+                return $this->connectionSuccessRedirect($localPlatform);
+            }
+        }
+
+        $synced = app(ZernioSocialAccountSync::class)->syncForUser($request->user());
+
+        if ($zernioPlatform !== null) {
+            $localPlatform = app(ZernioSocialAccountSync::class)->mapPlatform($zernioPlatform);
+            if ($localPlatform !== null && in_array($localPlatform, $synced, true)) {
+                return $this->connectionSuccessRedirect($localPlatform);
+            }
+        }
+
+        if ($synced !== []) {
+            return $this->connectionSuccessRedirect($synced[0]);
+        }
+
+        Log::warning('SocialTrafficController: incomplete Zernio callback', [
+            'user_id' => $request->user()->id,
+            'query' => $request->query(),
+        ]);
+
+        return $this->authError(
+            $routeSlug ?? 'social',
+            'Could not confirm the connection. Open Social posting again — accounts sync from Zernio when the page loads.'
+        );
+    }
 
     public function redditRedirect(Request $request): RedirectResponse
     {
-        if (! $this->redditOAuthConfigured()) {
-            return back()->withErrors(['reddit' => 'Reddit OAuth is not configured.']);
-        }
-
-        $state = Str::random(40);
-        $request->session()->put('reddit_oauth_state', $state);
-
-        return redirect()->away('https://www.reddit.com/api/v1/authorize?'.http_build_query([
-            'client_id' => config('services.reddit.client_id'),
-            'response_type' => 'code',
-            'state' => $state,
-            'redirect_uri' => config('services.reddit.redirect'),
-            'duration' => 'permanent',
-            'scope' => implode(' ', config('services.reddit.scopes', ['identity', 'read', 'submit'])),
-        ]));
+        return $this->connectRedirect($request, 'reddit');
     }
 
     public function redditCallback(Request $request): RedirectResponse
     {
-        if ($request->query('error')) {
-            return $this->authError('reddit', (string) $request->query('error_description', 'Reddit authorization was denied.'));
-        }
-
-        if (! $this->validateState($request, 'reddit_oauth_state')) {
-            return $this->authError('reddit', 'Invalid OAuth state. Please try again.');
-        }
-
-        $code = (string) $request->query('code', '');
-        if ($code === '') {
-            return $this->authError('reddit', 'Missing authorization code.');
-        }
-
-        try {
-            $basic = base64_encode(config('services.reddit.client_id').':'.config('services.reddit.client_secret'));
-            $ua = $this->redditUserAgent();
-
-            $tokenRes = Http::asForm()
-                ->withHeaders(['Authorization' => 'Basic '.$basic, 'User-Agent' => $ua])
-                ->post('https://www.reddit.com/api/v1/access_token', [
-                    'grant_type' => 'authorization_code',
-                    'code' => $code,
-                    'redirect_uri' => config('services.reddit.redirect'),
-                ]);
-
-            if (! $tokenRes->successful()) {
-                return $this->authError('reddit', 'Could not exchange Reddit authorization code.');
-            }
-
-            $tokens = $tokenRes->json();
-            $access = $tokens['access_token'] ?? null;
-            $refresh = $tokens['refresh_token'] ?? null;
-
-            if (! is_string($access) || $access === '') {
-                return $this->authError('reddit', 'Reddit did not return an access token.');
-            }
-
-            $meRes = Http::withToken($access)->withHeaders(['User-Agent' => $ua])->get('https://oauth.reddit.com/api/v1/me');
-            $me = $meRes->successful() ? $meRes->json() : [];
-            $username = is_array($me) ? ($me['name'] ?? null) : null;
-
-            SocialAccount::query()->updateOrCreate(
-                ['user_id' => $request->user()->id, 'platform' => 'reddit'],
-                [
-                    'access_token' => $access,
-                    'refresh_token' => is_string($refresh) ? $refresh : null,
-                    'platform_username' => is_string($username) ? $username : null,
-                    'expires_at' => null,
-                ]
-            );
-
-            return redirect()->route('settings.social-traffic.edit')->with('success', 'Reddit connected successfully!');
-        } catch (\Throwable $e) {
-            Log::error('Reddit OAuth callback exception', ['error' => $e->getMessage()]);
-
-            return $this->authError('reddit', 'Unexpected error while connecting Reddit.');
-        }
+        return $this->zernioCallback($request);
     }
-
-    /* ──────────────────────────────────────────────────────────
-     | YOUTUBE (Google OAuth)
-     ─────────────────────────────────────────────────────────── */
 
     public function youtubeRedirect(Request $request): RedirectResponse
     {
-        if (! $this->youtubeOAuthConfigured()) {
-            return back()->withErrors(['youtube' => 'YouTube OAuth is not configured (set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET).']);
-        }
-
-        $state = Str::random(40);
-        $request->session()->put('youtube_oauth_state', $state);
-
-        return redirect()->away('https://accounts.google.com/o/oauth2/v2/auth?'.http_build_query([
-            'client_id' => config('services.google.client_id'),
-            'redirect_uri' => config('services.google.redirect'),
-            'response_type' => 'code',
-            'scope' => implode(' ', (array) config('services.google.scopes')),
-            'access_type' => 'offline',
-            'prompt' => 'consent',
-            'state' => $state,
-            'include_granted_scopes' => 'true',
-        ]));
+        return $this->connectRedirect($request, 'youtube');
     }
 
     public function youtubeCallback(Request $request): RedirectResponse
     {
-        if ($request->query('error')) {
-            return $this->authError('youtube', (string) $request->query('error_description', 'YouTube authorization was denied.'));
-        }
-
-        if (! $this->validateState($request, 'youtube_oauth_state')) {
-            return $this->authError('youtube', 'Invalid OAuth state. Please try again.');
-        }
-
-        $code = (string) $request->query('code', '');
-        if ($code === '') {
-            return $this->authError('youtube', 'Missing authorization code.');
-        }
-
-        try {
-            $tokenRes = Http::asForm()->post('https://oauth2.googleapis.com/token', [
-                'code' => $code,
-                'client_id' => config('services.google.client_id'),
-                'client_secret' => config('services.google.client_secret'),
-                'redirect_uri' => config('services.google.redirect'),
-                'grant_type' => 'authorization_code',
-            ]);
-
-            if (! $tokenRes->successful()) {
-                Log::warning('YouTube OAuth token exchange failed', ['body' => Str::limit($tokenRes->body(), 400, '')]);
-
-                return $this->authError('youtube', 'Could not exchange YouTube authorization code.');
-            }
-
-            $tokens = $tokenRes->json();
-            $access = $tokens['access_token'] ?? null;
-            $refresh = $tokens['refresh_token'] ?? null;
-            $expiresIn = isset($tokens['expires_in']) ? (int) $tokens['expires_in'] : null;
-
-            if (! is_string($access) || $access === '') {
-                return $this->authError('youtube', 'Google did not return an access token.');
-            }
-
-            $meRes = Http::withToken($access)->get('https://www.googleapis.com/oauth2/v2/userinfo');
-            $me = $meRes->successful() ? $meRes->json() : [];
-            $email = is_array($me) ? ($me['email'] ?? null) : null;
-            $name = is_array($me) ? ($me['name'] ?? $email) : $email;
-
-            SocialAccount::query()->updateOrCreate(
-                ['user_id' => $request->user()->id, 'platform' => 'youtube'],
-                [
-                    'access_token' => $access,
-                    'refresh_token' => is_string($refresh) ? $refresh : null,
-                    'expires_at' => $expiresIn ? now()->addSeconds($expiresIn) : null,
-                    'platform_username' => is_string($name) ? $name : null,
-                ]
-            );
-
-            return redirect()->route('settings.social-traffic.edit')->with('success', 'YouTube account connected successfully!');
-        } catch (\Throwable $e) {
-            Log::error('YouTube OAuth callback exception', ['error' => $e->getMessage()]);
-
-            return $this->authError('youtube', 'Unexpected error while connecting YouTube.');
-        }
+        return $this->zernioCallback($request);
     }
-
-    /* ──────────────────────────────────────────────────────────
-     | X (Twitter OAuth 2.0 PKCE)
-     ─────────────────────────────────────────────────────────── */
 
     public function xRedirect(Request $request): RedirectResponse
     {
-        if (! $this->xOAuthConfigured()) {
-            return back()->withErrors(['x' => 'X OAuth is not configured (set X_CLIENT_ID and X_CLIENT_SECRET).']);
-        }
-
-        $state = Str::random(40);
-        $codeVerifier = Str::random(64);
-        $codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
-
-        $request->session()->put('x_oauth_state', $state);
-        $request->session()->put('x_code_verifier', $codeVerifier);
-
-        return redirect()->away(config('services.x.authorization_endpoint', 'https://twitter.com/i/oauth2/authorize').'?'.http_build_query([
-            'response_type' => 'code',
-            'client_id' => config('services.x.client_id'),
-            'redirect_uri' => config('services.x.redirect'),
-            'scope' => implode(' ', (array) config('services.x.scopes')),
-            'state' => $state,
-            'code_challenge' => $codeChallenge,
-            'code_challenge_method' => 'S256',
-        ]));
+        return $this->connectRedirect($request, 'x');
     }
 
     public function xCallback(Request $request): RedirectResponse
     {
-        if ($request->query('error')) {
-            return $this->authError('x', (string) $request->query('error_description', 'X authorization was denied.'));
-        }
-
-        if (! $this->validateState($request, 'x_oauth_state')) {
-            return $this->authError('x', 'Invalid OAuth state. Please try again.');
-        }
-
-        $code = (string) $request->query('code', '');
-        $codeVerifier = (string) $request->session()->pull('x_code_verifier', '');
-
-        if ($code === '' || $codeVerifier === '') {
-            return $this->authError('x', 'Missing authorization code or PKCE verifier.');
-        }
-
-        try {
-            $basic = base64_encode(config('services.x.client_id').':'.config('services.x.client_secret'));
-
-            $tokenRes = Http::asForm()
-                ->withHeaders(['Authorization' => 'Basic '.$basic])
-                ->post(config('services.x.token_endpoint', 'https://api.twitter.com/2/oauth2/token'), [
-                    'code' => $code,
-                    'grant_type' => 'authorization_code',
-                    'redirect_uri' => config('services.x.redirect'),
-                    'code_verifier' => $codeVerifier,
-                ]);
-
-            if (! $tokenRes->successful()) {
-                Log::warning('X OAuth token exchange failed', ['body' => Str::limit($tokenRes->body(), 400, '')]);
-
-                return $this->authError('x', 'Could not exchange X authorization code.');
-            }
-
-            $tokens = $tokenRes->json();
-            $access = $tokens['access_token'] ?? null;
-            $refresh = $tokens['refresh_token'] ?? null;
-            $expiresIn = isset($tokens['expires_in']) ? (int) $tokens['expires_in'] : null;
-
-            if (! is_string($access) || $access === '') {
-                return $this->authError('x', 'X did not return an access token.');
-            }
-
-            $meRes = Http::withToken($access)->get(config('services.x.me_endpoint', 'https://api.twitter.com/2/users/me'), ['user.fields' => 'username,name']);
-            $meData = $meRes->successful() ? ($meRes->json()['data'] ?? []) : [];
-            $username = is_array($meData) ? ($meData['username'] ?? null) : null;
-
-            SocialAccount::query()->updateOrCreate(
-                ['user_id' => $request->user()->id, 'platform' => 'twitter'],
-                [
-                    'access_token' => $access,
-                    'refresh_token' => is_string($refresh) ? $refresh : null,
-                    'expires_at' => $expiresIn ? now()->addSeconds($expiresIn) : null,
-                    'platform_username' => is_string($username) ? '@'.$username : null,
-                ]
-            );
-
-            return redirect()->route('settings.social-traffic.edit')->with('success', 'X account connected successfully!');
-        } catch (\Throwable $e) {
-            Log::error('X OAuth callback exception', ['error' => $e->getMessage()]);
-
-            return $this->authError('x', 'Unexpected error while connecting X.');
-        }
+        return $this->zernioCallback($request);
     }
 
-    /* ──────────────────────────────────────────────────────────
-     | Helpers
-     ─────────────────────────────────────────────────────────── */
+    private function connectionSuccessRedirect(string $localPlatform): RedirectResponse
+    {
+        Log::info('SocialTrafficController: account connected via Zernio', [
+            'platform' => $localPlatform,
+        ]);
+
+        $label = match ($localPlatform) {
+            'twitter' => 'X',
+            'reddit' => 'Reddit',
+            'youtube' => 'YouTube',
+            default => ucfirst($localPlatform),
+        };
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "{$label} connected successfully via Zernio!",
+        ]);
+
+        return redirect()->to($this->socialTrafficSettingsUrl());
+    }
 
     private function authError(string $platform, string $message): RedirectResponse
     {
-        return redirect()->route('settings.social-traffic.edit')->withErrors([$platform => $message]);
+        Inertia::flash('toast', [
+            'type' => 'error',
+            'message' => $message,
+        ]);
+
+        return redirect()->to($this->socialTrafficSettingsUrl())->withErrors([$platform => $message]);
     }
 
-    private function validateState(Request $request, string $sessionKey): bool
+    private function handleConnectFailure(string $platform, ZernioApiException $e): RedirectResponse
     {
-        $incoming = (string) $request->query('state', '');
-        $expected = (string) $request->session()->pull($sessionKey, '');
+        Log::warning('SocialTrafficController: Zernio connect blocked', [
+            'platform' => $platform,
+            'code' => $e->code,
+            'status' => $e->httpStatus,
+            'message' => $e->getMessage(),
+        ]);
 
-        return $incoming !== '' && hash_equals($expected, $incoming);
+        Inertia::flash('zernioConnect', [
+            'platform' => $platform,
+            'code' => $e->code ?? 'connect_failed',
+            'message' => $e->getMessage(),
+            'dashboard_url' => $e->dashboardUrl ?? 'https://zernio.com/dashboard?tab=billing',
+            'documentation_url' => $e->documentationUrl ?? 'https://docs.zernio.com/billing/payment-method-required',
+        ]);
+
+        Inertia::flash('toast', [
+            'type' => 'error',
+            'message' => $e->getMessage(),
+        ]);
+
+        return redirect()->to($this->socialTrafficSettingsUrl())->withErrors([$platform => $e->getMessage()]);
     }
 
-    private function redditUserAgent(): string
+    private function oauthCallbackUrl(string $routeSlug): string
     {
-        return sprintf(
-            '%s:%s:%s',
-            config('services.reddit.platform', 'web'),
-            config('services.reddit.app_id', config('app.name')),
-            config('services.reddit.version_string', '1.0')
-        );
+        return match ($routeSlug) {
+            'reddit' => url('/settings/social-traffic/reddit/callback'),
+            'youtube' => url('/settings/social-traffic/youtube/callback'),
+            'x' => url('/settings/social-traffic/x/callback'),
+            default => route('settings.social-traffic.zernio.callback'),
+        };
     }
 
-    private function redditOAuthConfigured(): bool
+    private function routeSlugFromCallback(Request $request): ?string
     {
-        return $this->isConfigured('services.reddit.client_id') && $this->isConfigured('services.reddit.client_secret');
+        $path = $request->path();
+
+        return match (true) {
+            str_ends_with($path, 'reddit/callback') => 'reddit',
+            str_ends_with($path, 'youtube/callback') => 'youtube',
+            str_ends_with($path, 'x/callback') => 'x',
+            default => null,
+        };
     }
 
-    private function youtubeOAuthConfigured(): bool
+    private function socialTrafficSettingsUrl(): string
     {
-        return $this->isConfigured('services.google.client_id') && $this->isConfigured('services.google.client_secret');
+        return route('settings.social-traffic.edit');
     }
 
-    private function xOAuthConfigured(): bool
+    private function redirectExternal(Request $request, string $url): RedirectResponse|\Symfony\Component\HttpFoundation\Response
     {
-        return $this->isConfigured('services.x.client_id') && $this->isConfigured('services.x.client_secret');
-    }
+        if ($request->header('X-Inertia')) {
+            return Inertia::location($url);
+        }
 
-    private function isConfigured(string $key): bool
-    {
-        $val = config($key);
-
-        return is_string($val) && $val !== '';
+        return redirect()->away($url);
     }
 }

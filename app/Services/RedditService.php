@@ -18,9 +18,10 @@ class RedditService
 
         $results = $this->apify->runSync($actorId, [
             'searches' => [$keyword],
-            'type' => 'posts',
             'sort' => $sort,
             'maxItems' => $maxItems,
+            'searchPosts' => true,
+            'searchComments' => false,
         ], 120);
 
         // The Apify Reddit actor returns items with a 'data' wrapper or direct objects

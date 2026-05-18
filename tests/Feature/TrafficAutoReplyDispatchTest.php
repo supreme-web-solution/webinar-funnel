@@ -59,7 +59,7 @@ class TrafficAutoReplyDispatchTest extends TestCase
         $account = SocialAccount::query()->create([
             'user_id' => $user->id,
             'platform' => 'reddit',
-            'access_token' => 'test-token-placeholder',
+            'zernio_account_id' => 'zernio_acct_test',
             'daily_post_limit' => 50,
         ]);
 

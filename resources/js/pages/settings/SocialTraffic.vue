@@ -1,24 +1,56 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+type ZernioConnectFlash = {
+    platform: string;
+    code: string;
+    message: string;
+    dashboard_url: string;
+    documentation_url?: string;
+};
+
 type SocialRow = {
     id: number;
     platform: string;
     platform_username: string | null;
+    zernio_account_id: string | null;
     created_at: string;
 };
 
 const props = defineProps<{
     socialAccounts: SocialRow[];
-    redditConfigured: boolean;
-    youtubeConfigured: boolean;
-    xConfigured: boolean;
+    zernioConfigured: boolean;
+    oauthCallbackUrl?: string;
+    appUrlMismatch?: boolean;
+    appUrl?: string;
+    requestOrigin?: string;
 }>();
+
+const page = usePage();
+
+const zernioConnectAlert = computed(() => {
+    const flash = page.props.flash as { zernioConnect?: ZernioConnectFlash } | undefined;
+    return flash?.zernioConnect ?? null;
+});
+
+function platformErrorKey(platformKey: string): string {
+    return platformKey === 'twitter' ? 'x' : platformKey;
+}
+
+function platformConnectError(platformKey: string): string | undefined {
+    const errors = page.props.errors as Record<string, string> | undefined;
+    if (!errors) {
+        return undefined;
+    }
+    const key = platformErrorKey(platformKey);
+    return errors[key] ?? errors[platformKey];
+}
 
 defineOptions({
     layout: {
@@ -33,9 +65,9 @@ type PlatformInfo = {
     label: string;
     icon: string;
     iconColor: string;
-    configured: boolean;
     redirectHref: string;
     connectLabel: string;
+    billingNote?: string;
 };
 
 const platforms = [
@@ -44,27 +76,25 @@ const platforms = [
         label: 'Reddit',
         icon: 'simple-icons:reddit',
         iconColor: '#ff6b35',
-        get configured() { return props.redditConfigured; },
         redirectHref: '/settings/social-traffic/reddit/redirect',
-        connectLabel: 'Connect Reddit account',
+        connectLabel: 'Connect Reddit',
     },
     {
         key: 'youtube',
         label: 'YouTube',
         icon: 'simple-icons:youtube',
         iconColor: '#ff0000',
-        get configured() { return props.youtubeConfigured; },
         redirectHref: '/settings/social-traffic/youtube/redirect',
-        connectLabel: 'Connect YouTube account',
+        connectLabel: 'Connect YouTube',
     },
     {
         key: 'twitter',
         label: 'X (Twitter)',
         icon: 'simple-icons:x',
         iconColor: '#e2e8f0',
-        get configured() { return props.xConfigured; },
         redirectHref: '/settings/social-traffic/x/redirect',
-        connectLabel: 'Connect X account',
+        connectLabel: 'Connect X',
+        billingNote: '',
     },
 ] satisfies PlatformInfo[];
 
@@ -73,7 +103,20 @@ function platformIcon(key: string) {
 }
 
 function connectedAccount(key: string): SocialRow | undefined {
-    return props.socialAccounts.find((a) => a.platform === key);
+    return props.socialAccounts.find((a) => {
+        if (a.platform === key) {
+            return true;
+        }
+        if (key === 'twitter' && (a.platform === 'twitter' || a.platform === 'x')) {
+            return true;
+        }
+        return false;
+    });
+}
+
+function connectHref(path: string): string {
+    const base = (props.appUrl ?? '').replace(/\/$/, '');
+    return base !== '' ? `${base}${path}` : path;
 }
 
 function disconnect(id: number, platform: string): void {
@@ -93,10 +136,62 @@ function disconnect(id: number, platform: string): void {
         <Heading
             variant="small"
             title="Social posting for traffic auto-replies"
-            description="Connect the accounts the AI should use when posting replies."
+            description="Apify discovers mentions globally (Reddit, YouTube, X, news). Connect accounts here via Zernio so the AI can post replies."
         />
 
-        <!-- Platform cards -->
+        <Card v-if="appUrlMismatch" class="border-amber-500/40 bg-amber-500/5">
+            <CardContent class="space-y-3 p-4 text-sm text-muted-foreground">
+                <p class="font-medium text-foreground">Open the app using APP_URL (required for OAuth)</p>
+                <p>
+                    You are on <code class="text-xs">{{ requestOrigin }}</code> but
+                    <code class="text-xs">APP_URL</code> is <code class="text-xs">{{ appUrl }}</code>.
+                    Connecting social accounts only works when you browse and log in on
+                    <strong>the same host</strong> as <code class="text-xs">APP_URL</code>
+                    (otherwise you are sent to login after OAuth).
+                </p>
+                <Button v-if="appUrl" as-child size="sm" variant="outline">
+                    <a :href="connectHref('/settings/social-traffic')">Open {{ appUrl }}/settings/social-traffic</a>
+                </Button>
+            </CardContent>
+        </Card>
+
+        <Card v-if="!zernioConfigured" class="border-amber-500/40 bg-amber-500/5">
+            <CardContent class="p-4 text-sm text-muted-foreground">
+                Add <code class="text-xs">ZERNIO_API_KEY</code> to your environment to enable account connections and replies.
+            </CardContent>
+        </Card>
+
+        <Card
+            v-else-if="zernioConnectAlert?.code === 'PAYMENT_REQUIRED'"
+            class="border-amber-500/40 bg-amber-500/5"
+        >
+            <CardContent class="space-y-3 p-4 text-sm">
+                <p class="font-medium text-foreground">X (Twitter) needs a payment method on Zernio</p>
+                <p class="text-muted-foreground">{{ zernioConnectAlert.message }}</p>
+                <p class="text-muted-foreground">
+                    To test auto-replies now, connect <strong>Reddit</strong> or <strong>YouTube</strong> below — they do not require this step.
+                    Mention discovery for X still works via Apify without a connected account.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    <Button as-child size="sm" variant="default">
+                        <a :href="zernioConnectAlert.dashboard_url" target="_blank" rel="noopener noreferrer">
+                            Add payment method in Zernio
+                        </a>
+                    </Button>
+                    <Button
+                        v-if="zernioConnectAlert.documentation_url"
+                        as-child
+                        size="sm"
+                        variant="outline"
+                    >
+                        <a :href="zernioConnectAlert.documentation_url" target="_blank" rel="noopener noreferrer">
+                            Why is this required?
+                        </a>
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+
         <div class="space-y-3">
             <Card
                 v-for="platform in platforms"
@@ -105,12 +200,10 @@ function disconnect(id: number, platform: string): void {
                 :class="connectedAccount(platform.key) ? 'border-green-500/40 bg-green-500/5' : ''"
             >
                 <CardContent class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
-                    <!-- Platform icon + name -->
                     <div class="flex shrink-0 size-10 items-center justify-center rounded-xl bg-muted">
                         <Icon :icon="platform.icon" class="size-5" :style="{ color: platform.iconColor }" />
                     </div>
 
-                    <!-- Info -->
                     <div class="flex-1 min-w-0 space-y-1">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="text-sm font-semibold">{{ platform.label }}</span>
@@ -121,13 +214,15 @@ function disconnect(id: number, platform: string): void {
                             >
                                 Connected<span v-if="connectedAccount(platform.key)?.platform_username"> as {{ connectedAccount(platform.key)?.platform_username }}</span>
                             </Badge>
-                            <Badge v-else-if="!platform.configured" variant="outline" class="text-[0.6rem] h-5 text-muted-foreground">
-                                Not configured
-                            </Badge>
                         </div>
+                        <p v-if="platform.billingNote && !connectedAccount(platform.key)" class="text-xs text-muted-foreground">
+                            {{ platform.billingNote }}
+                        </p>
+                        <p v-if="platformConnectError(platform.key)" class="text-xs text-destructive">
+                            {{ platformConnectError(platform.key) }}
+                        </p>
                     </div>
 
-                    <!-- Action button -->
                     <div class="shrink-0">
                         <Button
                             v-if="connectedAccount(platform.key)"
@@ -140,25 +235,24 @@ function disconnect(id: number, platform: string): void {
                             Disconnect
                         </Button>
                         <Button
-                            v-else-if="platform.configured"
+                            v-else-if="zernioConfigured"
                             as-child
                             size="sm"
                             class="h-9 gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
                         >
-                            <Link :href="platform.redirectHref">
+                            <a :href="connectHref(platform.redirectHref)">
                                 <Icon :icon="platform.icon" class="size-3.5" />
                                 {{ platform.connectLabel }}
-                            </Link>
+                            </a>
                         </Button>
                         <Button v-else size="sm" variant="outline" class="h-9 text-xs opacity-50 cursor-not-allowed" disabled>
-                            Configure in .env first
+                            Configure ZERNIO_API_KEY first
                         </Button>
                     </div>
                 </CardContent>
             </Card>
         </div>
 
-        <!-- All connected accounts summary -->
         <Card class="border shadow-sm">
             <CardHeader class="pb-2">
                 <CardTitle class="text-sm font-semibold">All connected accounts</CardTitle>
@@ -186,7 +280,7 @@ function disconnect(id: number, platform: string): void {
                     </li>
                 </ul>
                 <p v-else class="py-4 text-center text-xs text-muted-foreground">
-                    No accounts connected yet. Use the buttons above to connect Reddit, YouTube, or X.
+                    No accounts connected yet. Connect platforms above through Zernio.
                 </p>
             </CardContent>
         </Card>

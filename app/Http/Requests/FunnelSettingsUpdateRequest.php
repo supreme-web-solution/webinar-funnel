@@ -21,6 +21,47 @@ class FunnelSettingsUpdateRequest extends FormRequest
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
+    protected function prepareForValidation(): void
+    {
+        $nullableUrls = [
+            'video_url',
+            'webinar_cta_url',
+            'affiliate_request_link',
+            'jv_page',
+            'exit_popup_cta_url',
+            'redirect_url',
+            'traffic_ai_link_override',
+        ];
+
+        $normalized = [];
+        foreach ($nullableUrls as $key) {
+            if ($this->has($key) && $this->input($key) === '') {
+                $normalized[$key] = null;
+            }
+        }
+
+        if ($this->has('traffic_ai_reply_enabled')) {
+            $normalized['traffic_ai_reply_enabled'] = filter_var(
+                $this->input('traffic_ai_reply_enabled'),
+                FILTER_VALIDATE_BOOLEAN
+            );
+        }
+
+        $accountIds = $this->input('traffic_ai_social_account_ids');
+        if (is_array($accountIds)) {
+            foreach ($accountIds as $platform => $id) {
+                if ($id === '' || $id === false) {
+                    $accountIds[$platform] = null;
+                }
+            }
+            $normalized['traffic_ai_social_account_ids'] = $accountIds;
+        }
+
+        if ($normalized !== []) {
+            $this->merge($normalized);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -71,7 +112,6 @@ class FunnelSettingsUpdateRequest extends FormRequest
             'traffic_ai_reply_enabled' => ['nullable', 'boolean'],
             'traffic_ai_link_override' => ['nullable', 'url', 'max:2048'],
             'traffic_ai_extra_context' => ['nullable', 'string', 'max:5000'],
-            'traffic_ai_max_replies_per_day' => ['nullable', 'integer', 'min:1', 'max:500'],
             'traffic_ai_social_account_ids' => ['nullable', 'array'],
             'traffic_ai_social_account_ids.reddit' => [
                 'nullable',

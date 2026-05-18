@@ -43,10 +43,22 @@ return [
         'actor_id' => env('APIFY_ACTOR_ID', 'practicaltools/apify-reddit-api'),
         // YouTube actor
         'youtube_enabled' => env('APIFY_YOUTUBE_ENABLED', true),
-        'youtube_actor_id' => env('APIFY_YOUTUBE_ACTOR_ID', 'bernardo/youtube-scraper'),
+        'youtube_actor_id' => env('APIFY_YOUTUBE_ACTOR_ID', 'streamers/youtube-scraper'),
+        'youtube_timeout' => env('APIFY_YOUTUBE_TIMEOUT', 300),
         // News actor
         'news_enabled' => env('APIFY_NEWS_ENABLED', true),
         'news_actor_id' => env('APIFY_NEWS_ACTOR_ID', 'easyapi/google-news-scraper'),
+        'news_max_items' => env('APIFY_NEWS_MAX_ITEMS', 100),
+        'news_language' => env('APIFY_NEWS_LANGUAGE', 'lang_en'),
+        'news_country' => env('APIFY_NEWS_COUNTRY', 'US'),
+        'news_timeout' => env('APIFY_NEWS_TIMEOUT', 240),
+        // Twitter/X global keyword search (cookieless; no Zernio account needed for discovery)
+        'twitter_enabled' => env('APIFY_TWITTER_ENABLED', true),
+        'twitter_actor_id' => env('APIFY_TWITTER_ACTOR_ID', 'patient_discovery/twitter-search'),
+        'twitter_timeout' => env('APIFY_TWITTER_TIMEOUT', 300),
+        'twitter_cooldown_seconds' => env('APIFY_TWITTER_COOLDOWN_SECONDS', 900),
+        'twitter_exclude_retweets' => env('APIFY_TWITTER_EXCLUDE_RETWEETS', true),
+        'twitter_lang' => env('APIFY_TWITTER_LANG', 'en'),
     ],
 
     'openai' => [
@@ -60,57 +72,11 @@ return [
         'api_key' => env('SCRAPINGBEE_API_KEY'),
     ],
 
-    // Mentions ingestion (Twitter search).
-    'twitter' => [
-        'bearer_token' => env('TWITTER_BEARER_TOKEN'),
-        'enabled' => env('TWITTER_ENABLED', true),
-        'max_results' => env('TWITTER_MAX_RESULTS', 10),
-        'cooldown_seconds' => env('TWITTER_COOLDOWN_SECONDS', 900),
-    ],
-
-    // Reddit OAuth for posting.
-    'reddit' => [
-        'client_id' => env('REDDIT_CLIENT_ID'),
-        'client_secret' => env('REDDIT_CLIENT_SECRET'),
-        'redirect' => env(
-            'REDDIT_REDIRECT_URI',
-            env('APP_URL', 'http://localhost').'/settings/social-traffic/reddit/callback'
-        ),
-        'scopes' => ['identity', 'read', 'submit'],
-        'platform' => env('REDDIT_PLATFORM', 'web'),
-        'app_id' => env('REDDIT_APP_ID', env('APP_NAME', 'laravel')),
-        'version_string' => env('REDDIT_VERSION_STRING', '1.0'),
-        'bot_username' => env('REDDIT_BOT_USERNAME', 'webbrain001'),
-    ],
-
-    // YouTube OAuth (Google).
-    'google' => [
-        'client_id' => env('GOOGLE_CLIENT_ID'),
-        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-        'redirect' => env(
-            'GOOGLE_REDIRECT_URI',
-            env('APP_URL', 'http://localhost').'/settings/social-traffic/youtube/callback'
-        ),
-        'scopes' => explode(' ', env(
-            'GOOGLE_YOUTUBE_OAUTH_SCOPES',
-            'https://www.googleapis.com/auth/youtube.force-ssl https://www.googleapis.com/auth/userinfo.email'
-        )),
-    ],
-
-    // X OAuth 2.0 (PKCE).
-    'x' => [
-        'client_id' => env('X_CLIENT_ID'),
-        'client_secret' => env('X_CLIENT_SECRET'),
-        'redirect' => env(
-            'X_REDIRECT_URI',
-            env('APP_URL', 'http://localhost').'/settings/social-traffic/x/callback'
-        ),
-        'scopes' => explode(' ', env(
-            'X_OAUTH_SCOPES',
-            'tweet.read tweet.write users.read offline.access'
-        )),
-        'authorization_endpoint' => env('X_AUTHORIZATION_ENDPOINT', 'https://twitter.com/i/oauth2/authorize'),
-        'token_endpoint' => env('X_TOKEN_ENDPOINT', 'https://api.twitter.com/2/oauth2/token'),
-        'me_endpoint' => env('X_ME_ENDPOINT', 'https://api.twitter.com/2/users/me'),
+    // Zernio – OAuth, inbox (Twitter/X), and reply posting for traffic auto-replies.
+    'zernio' => [
+        'api_key' => env('ZERNIO_API_KEY'),
+        'enabled' => env('ZERNIO_ENABLED', true),
+        'base_url' => env('ZERNIO_BASE_URL', 'https://zernio.com/api'),
+        'timeout' => env('ZERNIO_TIMEOUT', 60),
     ],
 ];
