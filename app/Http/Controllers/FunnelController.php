@@ -213,6 +213,7 @@ class FunnelController extends Controller
     private function buildTrafficData(Request $request, Funnel $funnel): array
     {
         $mentionCap = KeywordMentionCapEnforcer::maxMentionsPerKeyword();
+        $capEnforcer = app(KeywordMentionCapEnforcer::class);
 
         $keywords = Keyword::query()
             ->where('user_id', $funnel->user_id)
@@ -220,15 +221,24 @@ class FunnelController extends Controller
             ->withCount('mentions')
             ->orderByDesc('created_at')
             ->get()
-            ->map(fn (Keyword $keyword) => [
-                'id' => $keyword->id,
-                'name' => $keyword->name,
-                'is_active' => (bool) $keyword->is_active,
-                'email_notifications' => (bool) $keyword->email_notifications,
-                'platforms' => $keyword->platforms ?? [],
-                'mentions_count' => (int) $keyword->mentions_count,
-                'mention_cap_reached' => (int) $keyword->mentions_count >= $mentionCap,
-            ])
+            ->map(function (Keyword $keyword) use ($mentionCap, $capEnforcer) {
+                $mentionsCount = (int) $keyword->mentions_count;
+                $capReached = $mentionsCount >= $mentionCap;
+
+                if ($capReached) {
+                    $capEnforcer->enforceCap($keyword);
+                }
+
+                return [
+                    'id' => $keyword->id,
+                    'name' => $keyword->name,
+                    'is_active' => $capReached ? false : (bool) $keyword->is_active,
+                    'email_notifications' => (bool) $keyword->email_notifications,
+                    'platforms' => $keyword->platforms ?? [],
+                    'mentions_count' => $mentionsCount,
+                    'mention_cap_reached' => $capReached,
+                ];
+            })
             ->values();
 
         $mentionsQuery = Mention::query()

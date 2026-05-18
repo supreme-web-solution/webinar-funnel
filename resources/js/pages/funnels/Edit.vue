@@ -702,8 +702,21 @@ const trafficAtKeywordLimit = computed(
 
 const trafficKeywordCapTooltip = computed(
     () =>
-        `This keyword reached the limit of ${trafficMaxMentionsPerKeyword.value.toLocaleString()} saved mentions and was paused. Delete old mentions, or delete this keyword and create a new one to keep fetching.`,
+        `This keyword hit the ${trafficMaxMentionsPerKeyword.value.toLocaleString()} mention limit. Fetching was paused automatically. Delete some mentions, or delete this keyword and add a new one to fetch again.`,
 );
+
+const trafficKeywordFetchCapTooltip = computed(
+    () =>
+        `Fetch is off — this keyword reached the ${trafficMaxMentionsPerKeyword.value.toLocaleString()} mention limit and was paused automatically.`,
+);
+
+function trafficKeywordShowsPaused(kw: { is_active: boolean; mention_cap_reached: boolean }): boolean {
+    return kw.mention_cap_reached || !kw.is_active;
+}
+
+function trafficKeywordPlayPauseDisabled(kw: { mention_cap_reached: boolean }): boolean {
+    return kw.mention_cap_reached;
+}
 
 const trafficPlatformTabs = computed(() => {
     const all = { key: '', label: 'All', count: props.traffic.stats.total };
@@ -779,7 +792,7 @@ function toggleTrafficKeywordActive(keyword: {
     is_active: boolean;
     mention_cap_reached: boolean;
 }): void {
-    if (!keyword.is_active && keyword.mention_cap_reached) {
+    if (trafficKeywordPlayPauseDisabled(keyword)) {
         return;
     }
 
@@ -2692,10 +2705,11 @@ onUnmounted(() => {
                                 <li v-for="kw in props.traffic.keywords" :key="kw.id" class="px-4 py-3">
                                     <div class="flex items-start justify-between gap-2">
                                         <div class="min-w-0 flex-1">
-                                            <button class="text-sm font-medium truncate max-w-full text-left" :class="{ 'opacity-50 line-through': !kw.is_active }" @click="trafficKeywordId = trafficKeywordId == kw.id ? '' : kw.id">{{ kw.name }}</button>
+                                            <button class="text-sm font-medium truncate max-w-full text-left" :class="{ 'opacity-50 line-through': trafficKeywordShowsPaused(kw) }" @click="trafficKeywordId = trafficKeywordId == kw.id ? '' : kw.id">{{ kw.name }}</button>
                                             <p class="text-xs text-muted-foreground mt-0.5">
                                                 {{ kw.mentions_count.toLocaleString() }} / {{ trafficMaxMentionsPerKeyword.toLocaleString() }} mentions
-                                                <span v-if="kw.mention_cap_reached" class="text-amber-600 dark:text-amber-400"> · cap reached</span>
+                                                <span v-if="kw.mention_cap_reached" class="text-amber-600 dark:text-amber-400"> · auto-paused (limit reached)</span>
+                                                <span v-else-if="!kw.is_active" class="text-muted-foreground"> · paused</span>
                                             </p>
                                         </div>
                                         <div class="flex items-center gap-1 shrink-0">
@@ -2714,7 +2728,10 @@ onUnmounted(() => {
                                                         </span>
                                                     </TooltipTrigger>
                                                     <TooltipContent v-if="kw.mention_cap_reached" side="top" class="max-w-xs text-xs">
-                                                        {{ trafficKeywordCapTooltip }}
+                                                        {{ trafficKeywordFetchCapTooltip }}
+                                                    </TooltipContent>
+                                                    <TooltipContent v-else side="top" class="text-xs">
+                                                        Fetch now from all platforms
                                                     </TooltipContent>
                                                 </Tooltip>
                                                 <Tooltip>
@@ -2723,26 +2740,29 @@ onUnmounted(() => {
                                                             <button
                                                                 type="button"
                                                                 class="flex size-7 items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-40"
-                                                                :class="kw.is_active ? 'text-[#40E0D0]' : 'text-muted-foreground'"
-                                                                :disabled="!kw.is_active && kw.mention_cap_reached"
+                                                                :class="trafficKeywordShowsPaused(kw) ? 'text-muted-foreground' : 'text-[#40E0D0]'"
+                                                                :disabled="trafficKeywordPlayPauseDisabled(kw)"
                                                                 @click="toggleTrafficKeywordActive(kw)"
                                                             >
-                                                                <Icon :icon="kw.is_active ? 'heroicons:pause' : 'heroicons:play'" class="size-3.5" />
+                                                                <Icon
+                                                                    :icon="trafficKeywordShowsPaused(kw) ? 'heroicons:pause' : 'heroicons:play'"
+                                                                    class="size-3.5"
+                                                                />
                                                             </button>
                                                         </span>
                                                     </TooltipTrigger>
                                                     <TooltipContent
-                                                        v-if="kw.mention_cap_reached && !kw.is_active"
+                                                        v-if="kw.mention_cap_reached"
                                                         side="top"
                                                         class="max-w-xs text-xs"
                                                     >
                                                         {{ trafficKeywordCapTooltip }}
                                                     </TooltipContent>
                                                     <TooltipContent v-else-if="kw.is_active" side="top" class="text-xs">
-                                                        Pause fetching for this keyword
+                                                        Pause scheduled fetching for this keyword
                                                     </TooltipContent>
                                                     <TooltipContent v-else side="top" class="text-xs">
-                                                        Resume fetching for this keyword
+                                                        Resume scheduled fetching for this keyword
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
