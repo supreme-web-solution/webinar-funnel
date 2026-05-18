@@ -102,6 +102,7 @@ return [
         'redis:traffic-post' => 120,
         'redis:traffic-generate' => 90,
         'redis:traffic-evaluate' => 60,
+        'redis:webinar-ai' => 90,
     ],
 
     /*
@@ -203,7 +204,7 @@ return [
     'defaults' => [
         'supervisor-1' => [
             'connection' => 'redis',
-            'queue' => ['traffic-post', 'traffic-generate', 'traffic-evaluate', 'esp-dispatch', 'default'],
+            'queue' => ['traffic-post', 'traffic-generate', 'traffic-evaluate', 'esp-dispatch', 'webinar-ai', 'default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 6,
