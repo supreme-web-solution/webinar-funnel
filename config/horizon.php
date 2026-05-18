@@ -202,12 +202,25 @@ return [
     */
 
     'defaults' => [
-        'supervisor-1' => [
+        'supervisor-traffic' => [
             'connection' => 'redis',
-            'queue' => ['traffic-post', 'traffic-generate', 'traffic-evaluate', 'esp-dispatch', 'webinar-ai', 'default'],
+            'queue' => ['traffic-post', 'traffic-generate', 'traffic-evaluate'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
-            'maxProcesses' => 6,
+            'maxProcesses' => 8,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 256,
+            'tries' => 3,
+            'timeout' => 120,
+            'nice' => 0,
+        ],
+        'supervisor-general' => [
+            'connection' => 'redis',
+            'queue' => ['esp-dispatch', 'webinar-ai', 'default'],
+            'balance' => 'auto',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 4,
             'maxTime' => 0,
             'maxJobs' => 0,
             'memory' => 256,
@@ -219,16 +232,24 @@ return [
 
     'environments' => [
         'production' => [
-            'supervisor-1' => [
-                'maxProcesses' => 20,
+            'supervisor-traffic' => [
+                'maxProcesses' => (int) env('HORIZON_TRAFFIC_MAX_PROCESSES', 16),
+                'balanceMaxShift' => 2,
+                'balanceCooldown' => 3,
+            ],
+            'supervisor-general' => [
+                'maxProcesses' => (int) env('HORIZON_GENERAL_MAX_PROCESSES', 8),
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
         ],
 
         'local' => [
-            'supervisor-1' => [
-                'maxProcesses' => 3,
+            'supervisor-traffic' => [
+                'maxProcesses' => (int) env('HORIZON_TRAFFIC_MAX_PROCESSES', 4),
+            ],
+            'supervisor-general' => [
+                'maxProcesses' => (int) env('HORIZON_GENERAL_MAX_PROCESSES', 2),
             ],
         ],
     ],

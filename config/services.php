@@ -38,7 +38,12 @@ return [
         'api_token' => env('APIFY_API_TOKEN'),
         'enabled' => env('APIFY_ENABLED', true),
         'max_items_per_search' => env('APIFY_MAX_ITEMS_PER_SEARCH', 25),
-        'default_sort' => env('APIFY_DEFAULT_SORT', 'top'),
+        // Reddit search: sort=new + time=year keeps results recent (Apify actor practicaltools/apify-reddit-api).
+        // Allowed time values: hour, day, week, month, year, all (Reddit has no 90-day bucket).
+        'default_sort' => env('APIFY_DEFAULT_SORT', 'new'),
+        'default_time' => env('APIFY_DEFAULT_TIME', 'year'),
+        // Safety cap after Apify returns (exact 90d is not available in the actor payload).
+        'max_post_age_days' => (int) env('APIFY_MAX_POST_AGE_DAYS', 90),
         // Reddit actor
         'actor_id' => env('APIFY_ACTOR_ID', 'practicaltools/apify-reddit-api'),
         // YouTube actor

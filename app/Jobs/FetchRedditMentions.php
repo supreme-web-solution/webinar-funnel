@@ -79,6 +79,10 @@ class FetchRedditMentions implements ShouldQueue
                 continue;
             }
 
+            if ($this->olderThanConfiguredMaxAge($data['created_utc'] ?? null)) {
+                continue;
+            }
+
             $exists = Mention::where('post_id', $data['id'])
                 ->where('keyword_id', $this->keyword->id)
                 ->exists();
@@ -155,6 +159,21 @@ class FetchRedditMentions implements ShouldQueue
         $date = Carbon::createFromTimestampUTC($createdUtc);
 
         return $date->isBefore($this->fromDate) || $date->isAfter($this->toDate);
+    }
+
+    /**
+     * Apify/Reddit only expose fixed windows (hour…year), not exactly 90 days — drop older rows if any slip through.
+     */
+    protected function olderThanConfiguredMaxAge(mixed $createdUtc): bool
+    {
+        $maxDays = (int) config('services.apify.max_post_age_days', 90);
+        if ($maxDays <= 0 || ! $createdUtc) {
+            return false;
+        }
+
+        $postedAt = Carbon::createFromTimestampUTC((int) $createdUtc);
+
+        return $postedAt->lt(now()->subDays($maxDays));
     }
 
     protected function maybeSendEmail(array $savedMentions, string $platform): void

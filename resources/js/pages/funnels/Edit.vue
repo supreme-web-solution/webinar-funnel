@@ -994,6 +994,21 @@ type TrafficMentionReplyAttempt = NonNullable<
     (typeof props.traffic.mentions.data)[number]['traffic_reply_attempt']
 >;
 
+function trafficReplyPostBlockedMessage(attempt: TrafficMentionReplyAttempt): boolean {
+    const err = (attempt.last_error ?? '').toLowerCase();
+    if (err === '') {
+        return false;
+    }
+
+    return (
+        err.includes('too old') ||
+        err.includes('rate limit') ||
+        err.includes('archived') ||
+        err.includes('locked') ||
+        err.includes('cannot comment')
+    );
+}
+
 function trafficReplyStatusMeta(attempt: TrafficMentionReplyAttempt | null | undefined): {
     label: string;
     class: string;
@@ -1002,13 +1017,26 @@ function trafficReplyStatusMeta(attempt: TrafficMentionReplyAttempt | null | und
         return null;
     }
 
+    if (attempt.status === 'failed') {
+        if (trafficReplyPostBlockedMessage(attempt)) {
+            return {
+                label: 'Not posted',
+                class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400',
+            };
+        }
+
+        return {
+            label: 'Could not post',
+            class: 'border-slate-500/40 bg-slate-500/10 text-muted-foreground',
+        };
+    }
+
     const map: Record<string, { label: string; class: string }> = {
         posted: { label: 'Auto-replied', class: 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400' },
         queued_post: { label: 'Posting…', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
         generating: { label: 'Generating…', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
         pending_evaluation: { label: 'Queued', class: 'border-slate-500/40 bg-slate-500/10 text-muted-foreground' },
-        failed: { label: 'Reply failed', class: 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400' },
-        skipped_gate: { label: 'Skipped (filtered)', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
+        skipped_gate: { label: 'Filtered out', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
         skipped_no_account: { label: 'No account', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
         skipped_daily_cap: { label: 'Daily cap', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
         skipped_unsupported: { label: 'Not supported', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
