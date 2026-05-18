@@ -54,6 +54,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('keywords/{keyword}', [FunnelTrafficController::class, 'updateKeyword'])->name('keywords.update');
             Route::delete('keywords/{keyword}', [FunnelTrafficController::class, 'destroyKeyword'])->name('keywords.destroy');
             Route::post('keywords/{keyword}/fetch', [FunnelTrafficController::class, 'fetchNow'])->name('keywords.fetch');
+            Route::post('mentions/{mention}/draft-reply', [FunnelTrafficController::class, 'draftMentionReply'])->name('mentions.draft-reply');
         });
 
         Route::prefix('{funnel}/ai-sources')->name('funnels.ai.sources.')->group(function () {

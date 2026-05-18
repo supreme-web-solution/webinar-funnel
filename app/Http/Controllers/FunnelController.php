@@ -254,7 +254,7 @@ class FunnelController extends Controller
         $trafficKeywordId = $request->query('traffic_keyword_id');
 
         if ($trafficPlatform !== '') {
-            $mentionsQuery->where('source_type', $trafficPlatform);
+            $mentionsQuery->whereRaw('LOWER(source_type) = ?', [strtolower($trafficPlatform)]);
         }
 
         if ($trafficKeywordId) {
@@ -271,24 +271,25 @@ class FunnelController extends Controller
 
         $mentions = $mentionsQuery->orderByDesc('posted_at')->paginate(10)->withQueryString();
 
-        $platformCounts = Mention::query()
+        $statsQuery = Mention::query()
             ->where('user_id', $funnel->user_id)
-            ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
-            ->selectRaw('source_type, count(*) as cnt')
-            ->groupBy('source_type')
-            ->pluck('cnt', 'source_type');
+            ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id));
+
+        if ($trafficKeywordId) {
+            $statsQuery->where('keyword_id', $trafficKeywordId);
+        }
+
+        $platformCounts = (clone $statsQuery)
+            ->selectRaw('LOWER(source_type) as platform_key, count(*) as cnt')
+            ->groupBy('platform_key')
+            ->pluck('cnt', 'platform_key');
 
         return [
             'keywords' => $keywords,
             'mentions' => $mentions,
             'stats' => [
-                'total' => Mention::query()
-                    ->where('user_id', $funnel->user_id)
-                    ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
-                    ->count(),
-                'this_week' => Mention::query()
-                    ->where('user_id', $funnel->user_id)
-                    ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
+                'total' => (clone $statsQuery)->count(),
+                'this_week' => (clone $statsQuery)
                     ->where('created_at', '>=', now()->startOfWeek())
                     ->count(),
                 'keywords_count' => $keywords->count(),

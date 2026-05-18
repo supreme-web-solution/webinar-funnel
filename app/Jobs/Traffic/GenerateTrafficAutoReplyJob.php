@@ -4,13 +4,13 @@ namespace App\Jobs\Traffic;
 
 use App\Models\TrafficReplyAttempt;
 use App\Services\TrafficAi\TrafficReplyGenerator;
+use App\Support\TrafficAiLogger;
 use App\Support\TrafficAiPlatform;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 class GenerateTrafficAutoReplyJob implements ShouldQueue
 {
@@ -28,11 +28,20 @@ class GenerateTrafficAutoReplyJob implements ShouldQueue
 
     public function handle(TrafficReplyGenerator $generator): void
     {
+        TrafficAiLogger::info('GenerateTrafficAutoReplyJob started', [
+            'attempt_id' => $this->trafficReplyAttemptId,
+        ]);
+
         $attempt = TrafficReplyAttempt::query()
             ->with(['mention', 'funnel.settings', 'socialAccount'])
             ->find($this->trafficReplyAttemptId);
 
         if (! $attempt || $attempt->status !== TrafficReplyAttempt::STATUS_GENERATING) {
+            TrafficAiLogger::info('GenerateTrafficAutoReplyJob skipped — wrong or missing attempt', [
+                'attempt_id' => $this->trafficReplyAttemptId,
+                'status' => $attempt?->status,
+            ]);
+
             return;
         }
 
@@ -44,6 +53,10 @@ class GenerateTrafficAutoReplyJob implements ShouldQueue
             $attempt->update([
                 'status' => TrafficReplyAttempt::STATUS_FAILED,
                 'last_error' => 'Missing mention, settings, or social account',
+            ]);
+
+            TrafficAiLogger::warning('GenerateTrafficAutoReplyJob failed — missing data', [
+                'attempt_id' => $attempt->id,
             ]);
 
             return;
@@ -58,6 +71,11 @@ class GenerateTrafficAutoReplyJob implements ShouldQueue
                 'last_error' => 'No affiliate / override link configured for this funnel',
             ]);
 
+            TrafficAiLogger::warning('GenerateTrafficAutoReplyJob failed — no affiliate link', [
+                'attempt_id' => $attempt->id,
+                'funnel_id' => $attempt->funnel_id,
+            ]);
+
             return;
         }
 
@@ -67,6 +85,10 @@ class GenerateTrafficAutoReplyJob implements ShouldQueue
             $attempt->update([
                 'status' => TrafficReplyAttempt::STATUS_FAILED,
                 'last_error' => 'Empty generated reply',
+            ]);
+
+            TrafficAiLogger::warning('GenerateTrafficAutoReplyJob failed — empty reply', [
+                'attempt_id' => $attempt->id,
             ]);
 
             return;
@@ -80,9 +102,11 @@ class GenerateTrafficAutoReplyJob implements ShouldQueue
         $delay = random_int(5, 25);
         PostTrafficAutoReplyJob::dispatch($attempt->id, (int) $social->id)->delay(now()->addSeconds($delay));
 
-        Log::info('GenerateTrafficAutoReplyJob: reply queued for posting', [
+        TrafficAiLogger::info('GenerateTrafficAutoReplyJob queued post', [
             'attempt_id' => $attempt->id,
-            'delay' => $delay,
+            'mention_id' => $mention->id,
+            'post_delay_seconds' => $delay,
+            'reply_length' => strlen($text),
         ]);
     }
 }

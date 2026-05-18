@@ -730,13 +730,45 @@ function trafficKeywordPlayPauseDisabled(kw: { mention_cap_reached: boolean }): 
     return kw.mention_cap_reached;
 }
 
+function trafficKeywordFilterActive(kw: { id: number }): boolean {
+    return String(trafficKeywordId.value) === String(kw.id);
+}
+
+function toggleTrafficKeywordFilter(kw: { id: number }): void {
+    trafficKeywordId.value = trafficKeywordFilterActive(kw) ? '' : kw.id;
+}
+
+const trafficActiveKeyword = computed(() => {
+    if (!trafficKeywordId.value) {
+        return null;
+    }
+
+    return props.traffic.keywords.find((kw) => String(kw.id) === String(trafficKeywordId.value)) ?? null;
+});
+
+const trafficStatsScopeLabel = computed(() =>
+    trafficActiveKeyword.value ? `for #${trafficActiveKeyword.value.name}` : 'all keywords',
+);
+
 const trafficPlatformTabs = computed(() => {
+    const platformLabels: Record<string, string> = {
+        reddit: 'Reddit',
+        youtube: 'YouTube',
+        twitter: 'X (Twitter)',
+        news: 'News',
+    };
+
     const all = { key: '', label: 'All', count: props.traffic.stats.total };
-    const entries = Object.entries(props.traffic.stats.platforms ?? {}).map(([k, v]) => ({
-        key: String(k).toLowerCase(),
-        label: k,
-        count: Number(v),
-    }));
+    const entries = Object.entries(props.traffic.stats.platforms ?? {}).map(([k, v]) => {
+        const key = String(k).toLowerCase();
+
+        return {
+            key,
+            label: platformLabels[key] ?? key.charAt(0).toUpperCase() + key.slice(1),
+            count: Number(v),
+        };
+    });
+
     return [all, ...entries];
 });
 
@@ -896,6 +928,74 @@ function trafficReplyStatusHint(attempt: TrafficMentionReplyAttempt | null | und
 
 function trafficMentionAutoReplied(attempt: TrafficMentionReplyAttempt | null | undefined): boolean {
     return attempt?.status === 'posted';
+}
+
+type TrafficMentionRow = (typeof props.traffic.mentions.data)[number];
+
+const trafficReplyDraftModalOpen = ref(false);
+const trafficReplyDraftLoading = ref(false);
+const trafficReplyDraftText = ref('');
+const trafficReplyDraftWarning = ref<string | null>(null);
+const trafficReplyDraftSource = ref<'openai' | 'fallback' | null>(null);
+const trafficReplyDraftMention = ref<TrafficMentionRow | null>(null);
+
+function trafficMentionCanDraftReply(mention: TrafficMentionRow): boolean {
+    return String(mention.source_type ?? '').toLowerCase() !== 'news';
+}
+
+async function openTrafficReplyDraftModal(mention: TrafficMentionRow): Promise<void> {
+    trafficReplyDraftMention.value = mention;
+    trafficReplyDraftText.value = '';
+    trafficReplyDraftWarning.value = null;
+    trafficReplyDraftSource.value = null;
+    trafficReplyDraftModalOpen.value = true;
+    trafficReplyDraftLoading.value = true;
+
+    try {
+        const response = await fetch(`/funnels/${props.funnel.id}/traffic/mentions/${mention.id}/draft-reply`, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
+            },
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            trafficReplyDraftModalOpen.value = false;
+            toast.error(typeof payload.message === 'string' ? payload.message : 'Could not generate reply.');
+
+            return;
+        }
+
+        trafficReplyDraftText.value = typeof payload.reply === 'string' ? payload.reply : '';
+        trafficReplyDraftSource.value = payload.source === 'openai' || payload.source === 'fallback' ? payload.source : null;
+        trafficReplyDraftWarning.value = typeof payload.warning === 'string' ? payload.warning : null;
+
+        if (trafficReplyDraftWarning.value) {
+            toast.warning(trafficReplyDraftWarning.value);
+        }
+    } catch {
+        trafficReplyDraftModalOpen.value = false;
+        toast.error('Could not generate reply.');
+    } finally {
+        trafficReplyDraftLoading.value = false;
+    }
+}
+
+async function copyTrafficReplyDraft(): Promise<void> {
+    if (!trafficReplyDraftText.value) {
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(trafficReplyDraftText.value);
+        toast.success('Reply copied to clipboard');
+    } catch {
+        toast.error('Could not copy to clipboard');
+    }
 }
 
 const trafficReplyPlatforms = [
@@ -2599,8 +2699,8 @@ onUnmounted(() => {
                 </div>
 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Total Mentions</p><p class="text-2xl font-bold mt-1">{{ props.traffic.stats.total.toLocaleString() }}</p></CardContent></Card>
-                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">This Week</p><p class="text-2xl font-bold mt-1 text-[#40E0D0]">{{ props.traffic.stats.this_week.toLocaleString() }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Total Mentions <span class="text-muted-foreground/70">({{ trafficStatsScopeLabel }})</span></p><p class="text-2xl font-bold mt-1">{{ props.traffic.stats.total.toLocaleString() }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">This Week <span class="text-muted-foreground/70">({{ trafficStatsScopeLabel }})</span></p><p class="text-2xl font-bold mt-1 text-[#40E0D0]">{{ props.traffic.stats.this_week.toLocaleString() }}</p></CardContent></Card>
                     <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Keywords</p><p class="text-2xl font-bold mt-1 text-[#FFAD00]">{{ props.traffic.stats.keywords_count }}</p></CardContent></Card>
                     <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Platforms</p><p class="text-2xl font-bold mt-1 text-[#a78bfa]">{{ Object.keys(props.traffic.stats.platforms ?? {}).length }}</p></CardContent></Card>
                 </div>
@@ -2660,8 +2760,15 @@ onUnmounted(() => {
                                     <Input v-model="settingsForm.traffic_ai_link_override" type="url" class="h-9 text-xs" placeholder="Else: affiliate → offer → webinar CTA" />
                                 </div>
                                 <div class="space-y-1">
-                                    <Label class="text-xs">Extra instructions for the model</Label>
-                                    <Textarea v-model="settingsForm.traffic_ai_extra_context" class="min-h-[72px] text-xs resize-y" placeholder="Tone, product angle, compliance notes…" />
+                                    <Label class="text-xs">More context</Label>
+                                    <p class="text-[0.65rem] text-muted-foreground leading-snug">
+                                        Optional background for AI replies — used by auto-reply and Draft reply on mentions.
+                                    </p>
+                                    <Textarea
+                                        v-model="settingsForm.traffic_ai_extra_context"
+                                        class="min-h-[72px] text-xs resize-y"
+                                        placeholder="Your product, audience, tone, what to avoid…"
+                                    />
                                 </div>
                                 <div class="space-y-2">
                                     <Label class="text-xs">Posting accounts (from Settings → Social posting)</Label>
@@ -2758,6 +2865,57 @@ onUnmounted(() => {
                     </DialogContent>
                 </Dialog>
 
+                <Dialog v-model:open="trafficReplyDraftModalOpen">
+                    <DialogContent class="sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>Draft reply</DialogTitle>
+                            <DialogDescription>
+                                Copy this reply, open the post, and paste it as a comment. This does not auto-post.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div v-if="trafficReplyDraftMention" class="space-y-3">
+                            <p
+                                v-if="trafficReplyDraftWarning"
+                                class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+                            >
+                                {{ trafficReplyDraftWarning }}
+                            </p>
+                            <p v-else-if="trafficReplyDraftSource === 'openai'" class="text-[0.65rem] text-muted-foreground">
+                                Generated with AI using your More context and this post.
+                            </p>
+                            <p class="text-xs text-muted-foreground line-clamp-2">
+                                {{ trunc(trafficReplyDraftMention.title ?? trafficReplyDraftMention.content ?? '', 160) }}
+                            </p>
+                            <Textarea
+                                v-model="trafficReplyDraftText"
+                                class="min-h-[140px] text-sm"
+                                :disabled="trafficReplyDraftLoading"
+                                placeholder="Generating reply…"
+                            />
+                            <a
+                                v-if="trafficReplyDraftMention.permalink"
+                                :href="trafficReplyDraftMention.permalink"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                            >
+                                <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
+                                Open post to comment
+                            </a>
+                        </div>
+                        <DialogFooter class="gap-2 sm:gap-0">
+                            <Button type="button" variant="outline" @click="trafficReplyDraftModalOpen = false">Close</Button>
+                            <Button
+                                type="button"
+                                :disabled="trafficReplyDraftLoading || !trafficReplyDraftText"
+                                @click="copyTrafficReplyDraft"
+                            >
+                                Copy reply
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
                 <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
                     <Card class="border shadow-sm">
                         <CardHeader class="pb-2 pt-4 px-4">
@@ -2768,17 +2926,38 @@ onUnmounted(() => {
                         <CardContent class="p-0">
                             <div v-if="props.traffic.keywords.length === 0" class="py-8 text-center text-xs text-muted-foreground">No keywords yet.</div>
                             <ul v-else class="divide-y divide-border">
-                                <li v-for="kw in props.traffic.keywords" :key="kw.id" class="px-4 py-3">
+                                <li
+                                    v-for="kw in props.traffic.keywords"
+                                    :key="kw.id"
+                                    role="button"
+                                    tabindex="0"
+                                    class="px-4 py-3 cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                    :class="trafficKeywordFilterActive(kw) ? 'bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'"
+                                    :aria-pressed="trafficKeywordFilterActive(kw)"
+                                    @click="toggleTrafficKeywordFilter(kw)"
+                                    @keydown.enter.prevent="toggleTrafficKeywordFilter(kw)"
+                                    @keydown.space.prevent="toggleTrafficKeywordFilter(kw)"
+                                >
                                     <div class="flex items-start justify-between gap-2">
                                         <div class="min-w-0 flex-1">
-                                            <button class="text-sm font-medium truncate max-w-full text-left" :class="{ 'opacity-50 line-through': trafficKeywordShowsPaused(kw) }" @click="trafficKeywordId = trafficKeywordId == kw.id ? '' : kw.id">{{ kw.name }}</button>
+                                            <p
+                                                class="text-sm font-medium truncate max-w-full"
+                                                :class="{
+                                                    'text-primary': trafficKeywordFilterActive(kw),
+                                                    'line-through opacity-60': !kw.is_active && !kw.mention_cap_reached,
+                                                    'text-amber-800 dark:text-amber-300': kw.mention_cap_reached && !trafficKeywordFilterActive(kw),
+                                                }"
+                                            >
+                                                {{ kw.name }}
+                                            </p>
                                             <p class="text-xs text-muted-foreground mt-0.5">
                                                 {{ kw.mentions_count.toLocaleString() }} / {{ trafficMaxMentionsPerKeyword.toLocaleString() }} mentions
                                                 <span v-if="kw.mention_cap_reached" class="text-amber-600 dark:text-amber-400"> · auto-paused (limit reached)</span>
                                                 <span v-else-if="!kw.is_active" class="text-muted-foreground"> · paused</span>
+                                                <span v-if="trafficKeywordFilterActive(kw)" class="text-primary"> · filtering mentions</span>
                                             </p>
                                         </div>
-                                        <div class="flex items-center gap-1 shrink-0">
+                                        <div class="flex items-center gap-1 shrink-0" @click.stop>
                                             <TooltipProvider :delay-duration="120">
                                                 <Tooltip>
                                                     <TooltipTrigger as-child>
@@ -2844,7 +3023,11 @@ onUnmounted(() => {
                     <div class="space-y-3">
                         <Card class="border shadow-sm">
                             <CardContent class="p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div class="flex items-center gap-1 flex-wrap">
+                                <div class="flex flex-col gap-1.5 min-w-0">
+                                    <p v-if="trafficActiveKeyword" class="text-[0.65rem] text-muted-foreground">
+                                        Platform counts {{ trafficStatsScopeLabel }}
+                                    </p>
+                                    <div class="flex items-center gap-1 flex-wrap">
                                     <button
                                         v-for="tab in trafficPlatformTabs"
                                         :key="tab.key"
@@ -2857,6 +3040,7 @@ onUnmounted(() => {
                                         {{ tab.label }}
                                         <span class="text-[0.6rem] text-muted-foreground">{{ tab.count }}</span>
                                     </button>
+                                    </div>
                                 </div>
                                 <div class="relative shrink-0">
                                     <Icon icon="heroicons:magnifying-glass" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
@@ -2895,7 +3079,23 @@ onUnmounted(() => {
                                                     </Badge>
                                                     <span v-if="mention.keyword" class="text-[0.65rem] text-muted-foreground truncate">#{{ mention.keyword.name }}</span>
                                                 </div>
-                                                <div class="flex items-center gap-2 shrink-0">
+                                                <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                                                    <Button
+                                                        v-if="trafficMentionCanDraftReply(mention)"
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        class="h-7 px-2 text-[0.65rem]"
+                                                        :disabled="trafficReplyDraftLoading && trafficReplyDraftMention?.id === mention.id"
+                                                        @click.stop="openTrafficReplyDraftModal(mention)"
+                                                    >
+                                                        <Icon
+                                                            icon="heroicons:sparkles"
+                                                            class="size-3.5 mr-1"
+                                                            :class="{ 'animate-pulse': trafficReplyDraftLoading && trafficReplyDraftMention?.id === mention.id }"
+                                                        />
+                                                        Draft reply
+                                                    </Button>
                                                     <a
                                                         v-if="mention.permalink"
                                                         :href="mention.permalink"

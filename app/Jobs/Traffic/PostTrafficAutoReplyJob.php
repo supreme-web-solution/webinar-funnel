@@ -12,7 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
+use App\Support\TrafficAiLogger;
 
 class PostTrafficAutoReplyJob implements ShouldQueue
 {
@@ -50,8 +50,18 @@ class PostTrafficAutoReplyJob implements ShouldQueue
             ->find($this->trafficReplyAttemptId);
 
         if (! $attempt || $attempt->status !== TrafficReplyAttempt::STATUS_QUEUED_POST) {
+            TrafficAiLogger::info('PostTrafficAutoReplyJob skipped — wrong or missing attempt', [
+                'attempt_id' => $this->trafficReplyAttemptId,
+                'status' => $attempt?->status,
+            ]);
+
             return;
         }
+
+        TrafficAiLogger::info('PostTrafficAutoReplyJob started', [
+            'attempt_id' => $attempt->id,
+            'mention_id' => $attempt->mention_id,
+        ]);
 
         $social = $attempt->socialAccount;
         $mention = $attempt->mention;
@@ -80,9 +90,9 @@ class PostTrafficAutoReplyJob implements ShouldQueue
             $attempt->increment('post_dispatch_count');
             self::dispatch($this->trafficReplyAttemptId, $this->socialAccountId)->delay(now()->addSeconds($wait));
 
-            Log::info('PostTrafficAutoReplyJob: deferred for spacing', [
+            TrafficAiLogger::info('PostTrafficAutoReplyJob deferred for spacing', [
                 'attempt_id' => $attempt->id,
-                'wait' => $wait,
+                'wait_seconds' => $wait,
             ]);
 
             return;
@@ -104,6 +114,11 @@ class PostTrafficAutoReplyJob implements ShouldQueue
                 'last_error' => (string) ($result['error'] ?? 'Post failed'),
             ]);
 
+            TrafficAiLogger::warning('PostTrafficAutoReplyJob failed', [
+                'attempt_id' => $attempt->id,
+                'error' => $result['error'] ?? 'Post failed',
+            ]);
+
             return;
         }
 
@@ -118,9 +133,10 @@ class PostTrafficAutoReplyJob implements ShouldQueue
 
         $mention->update(['status' => 'replied']);
 
-        Log::info('PostTrafficAutoReplyJob: posted', [
+        TrafficAiLogger::info('PostTrafficAutoReplyJob posted successfully', [
             'attempt_id' => $attempt->id,
             'mention_id' => $mention->id,
+            'external_comment_id' => $result['external_id'] ?? null,
         ]);
     }
 }

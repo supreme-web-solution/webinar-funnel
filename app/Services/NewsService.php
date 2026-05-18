@@ -32,7 +32,10 @@ class NewsService
 
         $country = config('services.apify.news_country');
         if (is_string($country) && $country !== '') {
-            $input['gl'] = $country;
+            $gl = strtolower(trim($country));
+            if (strlen($gl) === 2) {
+                $input['gl'] = $gl;
+            }
         }
 
         $results = $this->runWithRetry($actorId, $input, (int) config('services.apify.news_timeout', 240));

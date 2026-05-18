@@ -8,7 +8,12 @@ use App\Jobs\FetchTwitterMentions;
 use App\Jobs\FetchYouTubeMentions;
 use App\Models\Funnel;
 use App\Models\Keyword;
+use App\Models\Mention;
 use App\Services\Mentions\KeywordMentionCapEnforcer;
+use App\Services\TrafficAi\TrafficReplyGenerator;
+use App\Support\TrafficAiLogger;
+use App\Support\TrafficAiPlatform;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -88,6 +93,69 @@ class FunnelTrafficController extends Controller
         return back()->with('success', "Traffic keyword \"{$name}\" deleted.");
     }
 
+    public function draftMentionReply(
+        Request $request,
+        Funnel $funnel,
+        Mention $mention,
+        TrafficReplyGenerator $generator,
+    ): JsonResponse {
+        $this->authorizeMention($request, $funnel, $mention);
+
+        $mention->loadMissing('keyword.funnel.settings');
+        $settings = $mention->keyword?->funnel?->settings;
+
+        if (! $settings) {
+            return response()->json([
+                'message' => 'Funnel settings are missing for this mention.',
+            ], 422);
+        }
+
+        $platform = TrafficAiPlatform::fromMentionSource($mention->source_type);
+
+        if ($platform === null || $platform === 'news') {
+            return response()->json([
+                'message' => 'Manual reply drafts are not supported for news mentions.',
+            ], 422);
+        }
+
+        $link = $settings->effectiveTrafficAffiliateLink();
+
+        if ($link === null || $link === '') {
+            return response()->json([
+                'message' => 'Add an affiliate link or Traffic AI link override in funnel settings first.',
+            ], 422);
+        }
+
+        $generated = $generator->generateWithMeta($mention, $settings, $link, $platform);
+
+        if ($generated['text'] === '') {
+            return response()->json([
+                'message' => 'Could not generate a reply. Check your OpenAI key or try again.',
+            ], 422);
+        }
+
+        TrafficAiLogger::info('manual reply drafted from funnel UI', [
+            'mention_id' => $mention->id,
+            'funnel_id' => $funnel->id,
+            'platform' => $platform,
+            'reply_length' => strlen($generated['text']),
+            'source' => $generated['source'],
+        ]);
+
+        return response()->json([
+            'reply' => $generated['text'],
+            'source' => $generated['source'],
+            'warning' => $generated['warning'],
+            'permalink' => $mention->permalink,
+            'platform' => $platform,
+            'mention' => [
+                'id' => $mention->id,
+                'title' => $mention->title,
+                'source_type' => $mention->source_type,
+            ],
+        ]);
+    }
+
     public function fetchNow(Request $request, Funnel $funnel, Keyword $keyword): RedirectResponse
     {
         $this->authorizeKeyword($request, $funnel, $keyword);
@@ -132,6 +200,20 @@ class FunnelTrafficController extends Controller
         abort_unless(
             $keyword->user_id === $request->user()->id
                 && (int) $keyword->funnel_id === (int) $funnel->id,
+            403
+        );
+    }
+
+    private function authorizeMention(Request $request, Funnel $funnel, Mention $mention): void
+    {
+        $this->authorizeFunnel($funnel);
+
+        $mention->loadMissing('keyword');
+
+        abort_unless(
+            (int) $mention->user_id === (int) $request->user()->id
+                && $mention->keyword
+                && (int) $mention->keyword->funnel_id === (int) $funnel->id,
             403
         );
     }
