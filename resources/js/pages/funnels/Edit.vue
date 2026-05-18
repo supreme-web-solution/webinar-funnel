@@ -714,6 +714,11 @@ function trafficKeywordShowsPaused(kw: { is_active: boolean; mention_cap_reached
     return kw.mention_cap_reached || !kw.is_active;
 }
 
+/** Active tracking: show pause icon (click to pause). Paused: show play icon (click to resume). */
+function trafficKeywordIsFetching(kw: { is_active: boolean; mention_cap_reached: boolean }): boolean {
+    return kw.is_active && !kw.mention_cap_reached;
+}
+
 function trafficKeywordPlayPauseDisabled(kw: { mention_cap_reached: boolean }): boolean {
     return kw.mention_cap_reached;
 }
@@ -2740,12 +2745,12 @@ onUnmounted(() => {
                                                             <button
                                                                 type="button"
                                                                 class="flex size-7 items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-40"
-                                                                :class="trafficKeywordShowsPaused(kw) ? 'text-muted-foreground' : 'text-[#40E0D0]'"
+                                                                :class="trafficKeywordIsFetching(kw) ? 'text-[#40E0D0]' : 'text-muted-foreground'"
                                                                 :disabled="trafficKeywordPlayPauseDisabled(kw)"
                                                                 @click="toggleTrafficKeywordActive(kw)"
                                                             >
                                                                 <Icon
-                                                                    :icon="trafficKeywordShowsPaused(kw) ? 'heroicons:pause' : 'heroicons:play'"
+                                                                    :icon="trafficKeywordIsFetching(kw) ? 'heroicons:pause' : 'heroicons:play'"
                                                                     class="size-3.5"
                                                                 />
                                                             </button>
