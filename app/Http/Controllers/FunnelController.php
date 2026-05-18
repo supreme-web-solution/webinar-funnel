@@ -244,7 +244,10 @@ class FunnelController extends Controller
         $mentionsQuery = Mention::query()
             ->where('user_id', $funnel->user_id)
             ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
-            ->with('keyword:id,name,funnel_id');
+            ->with([
+                'keyword:id,name,funnel_id',
+                'trafficReplyAttempt:id,mention_id,status,skip_reason,last_error,posted_at,external_comment_id',
+            ]);
 
         $trafficSearch = trim((string) $request->query('traffic_search', ''));
         $trafficPlatform = (string) $request->query('traffic_platform', '');

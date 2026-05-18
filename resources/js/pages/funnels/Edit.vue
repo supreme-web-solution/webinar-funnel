@@ -134,6 +134,13 @@ const props = defineProps<{
                 permalink: string | null;
                 posted_at: string | null;
                 keyword: { id: number; name: string } | null;
+                traffic_reply_attempt?: {
+                    status: string;
+                    skip_reason: string | null;
+                    last_error: string | null;
+                    posted_at: string | null;
+                    external_comment_id: string | null;
+                } | null;
             }>;
             total: number;
             from: number | null;
@@ -835,6 +842,60 @@ function fmtTrafficDate(dt: string | null): string {
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+type TrafficMentionReplyAttempt = NonNullable<
+    (typeof props.traffic.mentions.data)[number]['traffic_reply_attempt']
+>;
+
+function trafficReplyStatusMeta(attempt: TrafficMentionReplyAttempt | null | undefined): {
+    label: string;
+    class: string;
+} | null {
+    if (!attempt) {
+        return null;
+    }
+
+    const map: Record<string, { label: string; class: string }> = {
+        posted: { label: 'Auto-replied', class: 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400' },
+        queued_post: { label: 'Posting…', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
+        generating: { label: 'Generating…', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
+        pending_evaluation: { label: 'Queued', class: 'border-slate-500/40 bg-slate-500/10 text-muted-foreground' },
+        failed: { label: 'Reply failed', class: 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400' },
+        skipped_gate: { label: 'Skipped (filtered)', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
+        skipped_no_account: { label: 'No account', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
+        skipped_daily_cap: { label: 'Daily cap', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
+        skipped_unsupported: { label: 'Not supported', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
+    };
+
+    return map[attempt.status] ?? {
+        label: attempt.status.replaceAll('_', ' '),
+        class: 'border-border bg-muted/30 text-muted-foreground',
+    };
+}
+
+function trafficReplyStatusHint(attempt: TrafficMentionReplyAttempt | null | undefined): string | null {
+    if (!attempt) {
+        return null;
+    }
+
+    if (attempt.status === 'posted' && attempt.posted_at) {
+        return `Posted ${fmtTrafficDate(attempt.posted_at)}`;
+    }
+
+    if (attempt.last_error) {
+        return attempt.last_error;
+    }
+
+    if (attempt.skip_reason) {
+        return attempt.skip_reason.replaceAll('_', ' ');
+    }
+
+    return null;
+}
+
+function trafficMentionAutoReplied(attempt: TrafficMentionReplyAttempt | null | undefined): boolean {
+    return attempt?.status === 'posted';
 }
 
 const trafficReplyPlatforms = [
@@ -2817,14 +2878,63 @@ onUnmounted(() => {
                                         </div>
                                         <div class="flex-1 min-w-0">
                                             <div class="flex items-center justify-between gap-2 mb-1">
-                                                <div class="flex items-center gap-2 min-w-0">
+                                                <div class="flex items-center gap-2 min-w-0 flex-wrap">
                                                     <Badge class="text-[0.6rem] px-1.5 py-0 border font-semibold">{{ mention.source_type }}</Badge>
+                                                    <Badge
+                                                        v-if="trafficReplyStatusMeta(mention.traffic_reply_attempt)"
+                                                        class="inline-flex items-center gap-0.5 text-[0.6rem] px-1.5 py-0 border font-semibold"
+                                                        :class="trafficReplyStatusMeta(mention.traffic_reply_attempt)!.class"
+                                                        :title="trafficReplyStatusHint(mention.traffic_reply_attempt) ?? undefined"
+                                                    >
+                                                        <Icon
+                                                            v-if="trafficMentionAutoReplied(mention.traffic_reply_attempt)"
+                                                            icon="heroicons:chat-bubble-left-ellipsis-solid"
+                                                            class="size-3"
+                                                        />
+                                                        {{ trafficReplyStatusMeta(mention.traffic_reply_attempt)!.label }}
+                                                    </Badge>
                                                     <span v-if="mention.keyword" class="text-[0.65rem] text-muted-foreground truncate">#{{ mention.keyword.name }}</span>
                                                 </div>
-                                                <span class="text-[0.65rem] text-muted-foreground">{{ fmtTrafficDate(mention.posted_at) }}</span>
+                                                <div class="flex items-center gap-2 shrink-0">
+                                                    <a
+                                                        v-if="mention.permalink"
+                                                        :href="mention.permalink"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        class="inline-flex items-center gap-1 text-[0.65rem] font-medium text-primary hover:underline"
+                                                    >
+                                                        <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
+                                                        Open
+                                                    </a>
+                                                    <span class="text-[0.65rem] text-muted-foreground">{{ fmtTrafficDate(mention.posted_at) }}</span>
+                                                </div>
                                             </div>
-                                            <p v-if="mention.title" class="text-sm font-semibold leading-snug mb-1">{{ trunc(mention.title, 140) }}</p>
+                                            <a
+                                                v-if="mention.title && mention.permalink"
+                                                :href="mention.permalink"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="text-sm font-semibold leading-snug mb-1 text-primary hover:underline block"
+                                            >
+                                                {{ trunc(mention.title, 140) }}
+                                            </a>
+                                            <p v-else-if="mention.title" class="text-sm font-semibold leading-snug mb-1">{{ trunc(mention.title, 140) }}</p>
                                             <p v-if="mention.content && mention.content !== mention.title" class="text-xs text-muted-foreground leading-relaxed">{{ trunc(mention.content, 220) }}</p>
+                                            <p
+                                                v-if="trafficMentionAutoReplied(mention.traffic_reply_attempt)"
+                                                class="mt-1.5 text-[0.65rem] text-green-700 dark:text-green-400"
+                                            >
+                                                Your app posted an auto-reply
+                                                <template v-if="mention.traffic_reply_attempt?.posted_at">
+                                                    · {{ fmtTrafficDate(mention.traffic_reply_attempt.posted_at) }}
+                                                </template>
+                                            </p>
+                                            <p
+                                                v-else-if="trafficReplyStatusHint(mention.traffic_reply_attempt)"
+                                                class="mt-1.5 text-[0.65rem] text-muted-foreground"
+                                            >
+                                                {{ trafficReplyStatusHint(mention.traffic_reply_attempt) }}
+                                            </p>
                                         </div>
                                     </div>
                                 </CardContent>
