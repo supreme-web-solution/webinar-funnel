@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FunnelVideoViewStat;
+use App\Services\Funnels\FunnelPageViewRecorder;
 use App\Services\Funnels\PublicFunnelResolver;
 use App\Services\Funnels\WebinarPublicChatService;
 use Illuminate\Http\JsonResponse;
@@ -28,9 +29,11 @@ class PublicFunnelController extends Controller
 
     public function __construct(
         private WebinarPublicChatService $webinarPublicChat,
+        private FunnelPageViewRecorder $pageViewRecorder,
     ) {}
 
     public function optin(
+        Request $request,
         string $username,
         string $slug,
         PublicFunnelResolver $resolver
@@ -40,6 +43,8 @@ class PublicFunnelController extends Controller
         if (! $funnel) {
             abort(404);
         }
+
+        $this->pageViewRecorder->record($funnel, 'optin', $request);
 
         $optinPage = $funnel->pages->firstWhere('page_type', 'optin');
         $schema = $optinPage?->schema ?? [];
@@ -82,6 +87,8 @@ class PublicFunnelController extends Controller
         if (! $funnel) {
             abort(404);
         }
+
+        $this->pageViewRecorder->record($funnel, 'webinar', $request);
 
         $webinarPage = $funnel->pages->firstWhere('page_type', 'webinar');
         $resolved = $this->webinarPublicChat->resolveConversation($request, (int) $funnel->id);

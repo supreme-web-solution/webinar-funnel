@@ -18,6 +18,8 @@ class Template extends Model
         'conversion_style',
         'thumbnail_url',
         'default_palette',
+        'suggested_keywords',
+        'vendor_contact',
         'is_active',
         'sort_order',
     ];
@@ -27,6 +29,8 @@ class Template extends Model
         return [
             'uuid' => 'string',
             'default_palette' => 'array',
+            'suggested_keywords' => 'array',
+            'vendor_contact' => 'array',
             'is_active' => 'boolean',
         ];
     }

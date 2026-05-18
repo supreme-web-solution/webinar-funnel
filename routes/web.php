@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TutorialController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\FunnelController;
 use App\Http\Controllers\FunnelAiSourceController;
@@ -21,13 +22,14 @@ Route::get('/', function () {
         : redirect()->route('login');
 })->name('home');
 
-$reservedPublicPrefix = '^(?!(dashboard|templates|funnels|integrations|settings|users|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads)$)[A-Za-z0-9_-]+';
+$reservedPublicPrefix = '^(?!(tutorial|dashboard|templates|funnels|integrations|settings|users|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads)$)[A-Za-z0-9_-]+';
 
 // Route::inertia('/', 'Welcome', [
 //     'canRegister' => Features::enabled(Features::registration()),
 // ])->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('tutorial', TutorialController::class)->name('tutorial');
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
     Route::get('templates', [TemplateController::class, 'index'])->name('templates.index');

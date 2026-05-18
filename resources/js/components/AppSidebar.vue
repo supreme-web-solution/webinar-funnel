@@ -19,6 +19,11 @@ import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
+        title: 'Tutorial',
+        href: '/tutorial',
+        icon: 'heroicons:academic-cap',
+    },
+    {
         title: 'Dashboard',
         href: '/dashboard',
         icon: 'heroicons:squares-2x2',

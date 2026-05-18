@@ -26,6 +26,10 @@ class TemplateSeeder extends Seeder
 
         $styles = ['high-ticket', 'lead-gen', 'product-launch', 'evergreen', 'live-event'];
         $offers = $this->offerData();
+        /** @var array<int, list<string>> $suggestedKeywordsByIndex */
+        $suggestedKeywordsByIndex = require database_path('data/template_suggested_keywords.php');
+        /** @var array<int, array<string, mixed>|null> $vendorContactsByIndex */
+        $vendorContactsByIndex = require database_path('data/template_vendor_contacts.php');
 
         for ($i = 1; $i <= 51; $i++) {
             $offer = $offers[$i - 1] ?? null;
@@ -62,6 +66,10 @@ class TemplateSeeder extends Seeder
                     'conversion_style' => $style,
                     'thumbnail_url' => "https://picsum.photos/seed/dfy-template-{$i}/800/450",
                     'default_palette' => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
+                    'suggested_keywords' => array_values(
+                        array_slice($suggestedKeywordsByIndex[$i - 1] ?? [], 0, 5)
+                    ),
+                    'vendor_contact' => $vendorContactsByIndex[$i - 1] ?? null,
                     'is_active' => true,
                     'sort_order' => $i,
                 ]
@@ -97,6 +105,7 @@ class TemplateSeeder extends Seeder
                         'webinar_cta_url' => $webinarCtaUrl,
                         'affiliate_request_link' => $affiliateRequestLink,
                         'jv_page' => $jvPage,
+                        'vendor_contact' => $vendorContactsByIndex[$i - 1] ?? null,
                         'offers' => $this->buildDefaultOffersForTemplate(
                             $offerDisplayName,
                             $primaryOfferSeconds,

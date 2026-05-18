@@ -112,6 +112,10 @@ class FunnelController extends Controller
                 'allow_replay' => true,
             ]);
 
+        if (empty($defaultSettings['vendor_contact']) && filled($template->vendor_contact)) {
+            $defaultSettings['vendor_contact'] = $template->vendor_contact;
+        }
+
         $funnel = Funnel::query()->create([
             'user_id' => $request->user()->id,
             'template_id' => $template->id,
@@ -151,6 +155,17 @@ class FunnelController extends Controller
         $this->authorizeFunnel($funnel);
 
         $funnel->load(['template', 'pages', 'settings', 'chatRoom', 'integrations.integrationAccount']);
+
+        $settings = $funnel->settings;
+        if (
+            $settings
+            && empty($settings->vendor_contact)
+            && filled($funnel->template?->vendor_contact)
+        ) {
+            $settings->forceFill(['vendor_contact' => $funnel->template->vendor_contact])->saveQuietly();
+            $settings->refresh();
+        }
+
         $integrationAccounts = IntegrationAccount::query()
             ->where('user_id', auth()->id())
             ->get(['id', 'name', 'provider']);
@@ -294,8 +309,23 @@ class FunnelController extends Controller
             ->groupBy('platform_key')
             ->pluck('cnt', 'platform_key');
 
+        $suggestedKeywords = $funnel->template?->suggested_keywords ?? [];
+        $trackedNames = $keywords
+            ->pluck('name')
+            ->map(fn (string $name): string => mb_strtolower(trim($name)))
+            ->all();
+
+        $availableSuggestedKeywords = collect(is_array($suggestedKeywords) ? $suggestedKeywords : [])
+            ->map(fn ($keyword): string => trim((string) $keyword))
+            ->filter(fn (string $keyword): bool => $keyword !== '')
+            ->unique()
+            ->reject(fn (string $keyword): bool => in_array(mb_strtolower($keyword), $trackedNames, true))
+            ->values()
+            ->all();
+
         return [
             'keywords' => $keywords,
+            'suggested_keywords' => $availableSuggestedKeywords,
             'mentions' => $mentions,
             'stats' => [
                 'total' => (clone $statsQuery)->count(),

@@ -14,6 +14,9 @@ const props = defineProps<{
         leadCount: number;
         recentLeads: number;
         previousWeekLeads: number;
+        totalViewCount: number;
+        recentViewCount: number;
+        previousWeekViewCount: number;
     };
     topFunnels: Array<{
         id: number;
@@ -58,20 +61,19 @@ const currentDate = computed(() =>
     new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
 );
 
-function leadTrend(): { value: number; positive: boolean } {
-    const prev = props.metrics.previousWeekLeads;
-    const curr = props.metrics.recentLeads;
-
-    if (prev === 0) {
-        return { value: curr > 0 ? 100 : 0, positive: true };
+function weekTrend(current: number, previous: number): { value: number; positive: boolean } {
+    if (previous === 0) {
+        return { value: current > 0 ? 100 : 0, positive: true };
     }
 
-    const pct = Math.round(((curr - prev) / prev) * 100);
+    const pct = Math.round(((current - previous) / previous) * 100);
 
     return { value: Math.abs(pct), positive: pct >= 0 };
 }
 
-const trend = computed(() => leadTrend());
+const leadTrend = computed(() => weekTrend(props.metrics.recentLeads, props.metrics.previousWeekLeads));
+
+const viewTrend = computed(() => weekTrend(props.metrics.recentViewCount, props.metrics.previousWeekViewCount));
 
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
     if (status === 'published') {
@@ -126,43 +128,21 @@ function fmtDate(iso: string): string {
         <!-- ── KPI metric cards ── -->
         <div class="grid gap-4 grid-cols-2 lg:grid-cols-4">
 
-            <!-- Total Funnels -->
+            <!-- Published funnels -->
             <Card class="border-emerald-200/60 bg-linear-to-br from-white to-emerald-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Total Funnels
+                        Published Funnels
                     </CardTitle>
                     <div class="flex size-8 items-center justify-center rounded-lg bg-primary/10">
-                        <Icon icon="heroicons:funnel" class="size-4 text-primary" />
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <p class="text-3xl font-bold text-foreground">{{ metrics.funnelCount }}</p>
-                    <p class="text-xs text-muted-foreground mt-1">
-                        <span class="text-emerald-600 font-medium">{{ metrics.publishedCount }} live</span>
-                        &nbsp;·&nbsp;
-                        <span>{{ metrics.draftCount }} draft</span>
-                    </p>
-                </CardContent>
-            </Card>
-
-            <!-- Published -->
-            <Card class="border-cyan-200/60 bg-linear-to-br from-white to-cyan-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Published
-                    </CardTitle>
-                    <div class="flex size-8 items-center justify-center rounded-lg" style="background: rgba(64,224,208,0.12)">
-                        <Icon icon="heroicons:globe-alt" class="size-4" style="color:#40E0D0" />
+                        <Icon icon="heroicons:globe-alt" class="size-4 text-primary" />
                     </div>
                 </CardHeader>
                 <CardContent>
                     <p class="text-3xl font-bold text-foreground">{{ metrics.publishedCount }}</p>
                     <p class="text-xs text-muted-foreground mt-1">
-                        <span v-if="metrics.funnelCount > 0">
-                            {{ Math.round((metrics.publishedCount / metrics.funnelCount) * 100) }}% of funnels live
-                        </span>
-                        <span v-else>No funnels yet</span>
+                        <span v-if="metrics.draftCount > 0">{{ metrics.draftCount }} in draft</span>
+                        <span v-else>All funnels are live</span>
                     </p>
                 </CardContent>
             </Card>
@@ -182,13 +162,41 @@ function fmtDate(iso: string): string {
                     <p class="text-xs mt-1">
                         <span
                             class="inline-flex items-center gap-0.5 font-medium"
-                            :class="trend.positive ? 'text-emerald-600' : 'text-rose-500'"
+                            :class="leadTrend.positive ? 'text-emerald-600' : 'text-rose-500'"
                         >
                             <Icon
-                                :icon="trend.positive ? 'heroicons:arrow-trending-up' : 'heroicons:arrow-trending-down'"
+                                :icon="leadTrend.positive ? 'heroicons:arrow-trending-up' : 'heroicons:arrow-trending-down'"
                                 class="size-3"
                             />
-                            {{ trend.value }}%
+                            {{ leadTrend.value }}%
+                        </span>
+                        <span class="text-muted-foreground"> vs last week</span>
+                    </p>
+                </CardContent>
+            </Card>
+
+            <!-- Total views -->
+            <Card class="border-cyan-200/60 bg-linear-to-br from-white to-cyan-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Total Views
+                    </CardTitle>
+                    <div class="flex size-8 items-center justify-center rounded-lg" style="background: rgba(64,224,208,0.12)">
+                        <Icon icon="heroicons:eye" class="size-4" style="color:#40E0D0" />
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <p class="text-3xl font-bold text-foreground">{{ metrics.totalViewCount }}</p>
+                    <p class="text-xs mt-1">
+                        <span
+                            class="inline-flex items-center gap-0.5 font-medium"
+                            :class="viewTrend.positive ? 'text-emerald-600' : 'text-rose-500'"
+                        >
+                            <Icon
+                                :icon="viewTrend.positive ? 'heroicons:arrow-trending-up' : 'heroicons:arrow-trending-down'"
+                                class="size-3"
+                            />
+                            {{ viewTrend.value }}%
                         </span>
                         <span class="text-muted-foreground"> vs last week</span>
                     </p>

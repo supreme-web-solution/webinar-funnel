@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Funnel;
+use App\Models\FunnelPageView;
 use App\Models\Lead;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -28,6 +29,19 @@ class DashboardController extends Controller
 
         $leadCount = Lead::query()
             ->whereHas('funnel', fn ($q) => $q->where('user_id', $userId))
+            ->count();
+
+        $viewsQuery = FunnelPageView::query()
+            ->whereHas('funnel', fn ($q) => $q->where('user_id', $userId));
+
+        $totalViewCount = (clone $viewsQuery)->count();
+
+        $recentViewCount = (clone $viewsQuery)
+            ->where('viewed_at', '>=', now()->subDays(7))
+            ->count();
+
+        $previousWeekViewCount = (clone $viewsQuery)
+            ->whereBetween('viewed_at', [now()->subDays(14), now()->subDays(7)])
             ->count();
 
         // Leads captured in the last 7 days
@@ -63,12 +77,15 @@ class DashboardController extends Controller
 
         return Inertia::render('dashboard/Index', [
             'metrics' => [
-                'funnelCount'       => $funnelCount,
-                'publishedCount'    => $publishedCount,
-                'draftCount'        => $draftCount,
-                'leadCount'         => $leadCount,
-                'recentLeads'       => $recentLeads,
-                'previousWeekLeads' => $previousWeekLeads,
+                'funnelCount'           => $funnelCount,
+                'publishedCount'        => $publishedCount,
+                'draftCount'            => $draftCount,
+                'leadCount'             => $leadCount,
+                'recentLeads'           => $recentLeads,
+                'previousWeekLeads'     => $previousWeekLeads,
+                'totalViewCount'        => $totalViewCount,
+                'recentViewCount'       => $recentViewCount,
+                'previousWeekViewCount' => $previousWeekViewCount,
             ],
             'topFunnels'    => $topFunnels,
             'recentFunnels' => $recentFunnels,

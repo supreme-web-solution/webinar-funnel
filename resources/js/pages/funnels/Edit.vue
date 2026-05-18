@@ -39,6 +39,13 @@ const props = defineProps<{
             webinar_cta_url?: string | null;
             affiliate_request_link?: string | null;
             jv_page?: string | null;
+            vendor_contact?: {
+                heading?: string;
+                body?: string;
+                lines?: string[];
+                emails?: string[];
+                urls?: string[];
+            } | null;
             offers?: Array<{
                 title: string;
                 description?: string | null;
@@ -119,6 +126,7 @@ const props = defineProps<{
             max_keywords_per_funnel: number;
             max_mentions_per_keyword: number;
         };
+        suggested_keywords: string[];
         mentions: {
             data: Array<{
                 id: number;
@@ -587,6 +595,69 @@ const openExternalLink = (url: string): void => {
     window.open(normalized, '_blank', 'noopener,noreferrer');
 };
 
+interface VendorContact {
+    heading: string;
+    body: string;
+    lines: string[];
+    emails: string[];
+    urls: string[];
+}
+
+const vendorContact = computed((): VendorContact | null => {
+    const raw = props.funnel.settings?.vendor_contact;
+
+    if (!raw || typeof raw !== 'object') {
+        return null;
+    }
+
+    const body = String(raw.body ?? '').trim();
+    const lines = Array.isArray(raw.lines)
+        ? raw.lines.map((line) => String(line).trim()).filter(Boolean)
+        : body
+          ? body
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+          : [];
+
+    if (body === '' && lines.length === 0) {
+        return null;
+    }
+
+    const emails = Array.isArray(raw.emails)
+        ? raw.emails.map((email) => String(email).trim()).filter(Boolean)
+        : [];
+    const urls = Array.isArray(raw.urls)
+        ? raw.urls.map((url) => String(url).trim()).filter(Boolean)
+        : [];
+
+    return {
+        heading: String(raw.heading ?? 'Contact the vendor for any assistance'),
+        body,
+        lines,
+        emails,
+        urls,
+    };
+});
+
+function vendorContactLinkLabel(url: string): string {
+    try {
+        const parsed = new URL(url);
+
+        if (parsed.hostname.includes('facebook.com')) {
+            return 'Facebook';
+        }
+
+        if (parsed.hostname.includes('teams.')) {
+            return 'Microsoft Teams';
+        }
+
+        return parsed.hostname.replace(/^www\./, '');
+    } catch {
+        return url;
+    }
+}
+
 const espProviderIcon: Record<string, string> = {
     mailchimp: 'simple-icons:mailchimp',
     getresponse: 'simple-icons:getresponse',
@@ -760,6 +831,18 @@ const trafficMaxMentionsPerKeyword = computed(() => props.traffic.limits.max_men
 const trafficAtKeywordLimit = computed(
     () => props.traffic.keywords.length >= trafficMaxKeywords.value,
 );
+
+const trafficSuggestedKeywords = computed(() => props.traffic.suggested_keywords ?? []);
+
+const trafficRemainingKeywordSlots = computed(() =>
+    Math.max(0, trafficMaxKeywords.value - props.traffic.keywords.length),
+);
+
+function trafficKeywordIsTracked(name: string): boolean {
+    const needle = name.trim().toLowerCase();
+
+    return props.traffic.keywords.some((kw) => kw.name.trim().toLowerCase() === needle);
+}
 
 const trafficKeywordCapTooltip = computed(
     () =>
@@ -940,9 +1023,28 @@ function submitTrafficKeyword(): void {
     trafficKeywordForm.post(`/funnels/${props.funnel.id}/traffic/keywords`, {
         preserveScroll: true,
         onSuccess: () => {
-            closeTrafficKeywordModal();
+            if (trafficAtKeywordLimit.value) {
+                closeTrafficKeywordModal();
+            }
         },
     });
+}
+
+function selectTrafficSuggestedKeyword(keyword: string): void {
+    if (trafficAtKeywordLimit.value || trafficKeywordIsTracked(keyword)) {
+        return;
+    }
+
+    trafficKeywordForm.name = keyword;
+}
+
+function addTrafficSuggestedKeyword(keyword: string): void {
+    if (trafficAtKeywordLimit.value || trafficKeywordIsTracked(keyword) || trafficKeywordForm.processing) {
+        return;
+    }
+
+    trafficKeywordForm.name = keyword;
+    submitTrafficKeyword();
 }
 
 function toggleTrafficKeywordActive(keyword: {
@@ -2048,6 +2150,60 @@ onUnmounted(() => {
                                 </div>
                                 <p class="text-[0.65rem] text-muted-foreground">Partner resources and launch details page.</p>
                             </div>
+                            <div
+                                v-if="vendorContact"
+                                class="space-y-2.5 rounded-lg border border-amber-200/70 bg-amber-50/50 p-3.5 dark:border-amber-900/45 dark:bg-amber-950/20"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <div
+                                        class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200"
+                                    >
+                                        <Icon icon="heroicons:user-circle" class="size-4" />
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-semibold text-foreground">Vendor contact</p>
+                                        <p class="text-[0.65rem] text-muted-foreground">{{ vendorContact.heading }}</p>
+                                    </div>
+                                </div>
+                                <div class="space-y-1 pl-0.5">
+                                    <p
+                                        v-for="(line, lineIndex) in vendorContact.lines"
+                                        :key="lineIndex"
+                                        class="text-sm leading-relaxed text-foreground whitespace-pre-wrap"
+                                    >
+                                        {{ line }}
+                                    </p>
+                                </div>
+                                <div
+                                    v-if="vendorContact.emails.length > 0 || vendorContact.urls.length > 0"
+                                    class="flex flex-wrap gap-1.5 border-t border-amber-200/60 pt-2.5 dark:border-amber-900/40"
+                                >
+                                    <Button
+                                        v-for="email in vendorContact.emails"
+                                        :key="`vendor-email-${email}`"
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        class="h-7 gap-1.5 text-xs border-amber-200/80 bg-white/80 hover:bg-amber-50 dark:border-amber-900/50 dark:bg-background/60"
+                                        @click="openExternalLink(`mailto:${email}`)"
+                                    >
+                                        <Icon icon="heroicons:envelope" class="size-3.5 shrink-0" />
+                                        {{ email }}
+                                    </Button>
+                                    <Button
+                                        v-for="url in vendorContact.urls"
+                                        :key="`vendor-url-${url}`"
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        class="h-7 max-w-full gap-1.5 text-xs border-amber-200/80 bg-white/80 hover:bg-amber-50 dark:border-amber-900/50 dark:bg-background/60"
+                                        @click="openExternalLink(url)"
+                                    >
+                                        <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5 shrink-0" />
+                                        <span class="truncate">{{ vendorContactLinkLabel(url) }}</span>
+                                    </Button>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -2981,6 +3137,51 @@ onUnmounted(() => {
                                 <p v-if="trafficKeywordForm.errors.name" class="text-xs text-destructive">
                                     {{ trafficKeywordForm.errors.name }}
                                 </p>
+                                <div
+                                    v-if="trafficSuggestedKeywords.length > 0"
+                                    class="space-y-2 rounded-lg border border-dashed border-emerald-200/80 bg-emerald-50/50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+                                >
+                                    <div>
+                                        <p class="text-xs font-semibold text-foreground">Suggested keywords</p>
+                                        <p class="text-[0.65rem] text-muted-foreground leading-relaxed mt-0.5">
+                                            High-intent phrases for this offer. Click a phrase to fill the field, or
+                                            <span class="font-medium text-foreground">+</span> to add and start fetching.
+                                            <template v-if="trafficRemainingKeywordSlots > 0">
+                                                {{ trafficRemainingKeywordSlots }} slot{{ trafficRemainingKeywordSlots === 1 ? '' : 's' }} left.
+                                            </template>
+                                        </p>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <div
+                                            v-for="suggestion in trafficSuggestedKeywords"
+                                            :key="suggestion"
+                                            class="inline-flex max-w-full items-stretch overflow-hidden rounded-full border text-xs shadow-sm"
+                                            :class="
+                                                trafficKeywordForm.name.trim().toLowerCase() === suggestion.trim().toLowerCase()
+                                                    ? 'border-primary/50 bg-primary/10'
+                                                    : 'border-border bg-background/90'
+                                            "
+                                        >
+                                            <button
+                                                type="button"
+                                                class="inline-flex min-w-0 items-center px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-muted/60"
+                                                :title="`Use “${suggestion}”`"
+                                                @click="selectTrafficSuggestedKeyword(suggestion)"
+                                            >
+                                                <span class="truncate">{{ suggestion }}</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="inline-flex shrink-0 items-center border-l border-border/80 px-2 text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+                                                :disabled="trafficKeywordForm.processing || trafficAtKeywordLimit"
+                                                :title="`Add “${suggestion}” and fetch`"
+                                                @click="addTrafficSuggestedKeyword(suggestion)"
+                                            >
+                                                <Icon icon="heroicons:plus" class="size-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="space-y-2">
                                 <Label class="text-xs">Platforms</Label>

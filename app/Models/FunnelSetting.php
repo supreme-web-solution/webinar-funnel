@@ -21,6 +21,7 @@ class FunnelSetting extends Model
         'webinar_cta_url',
         'affiliate_request_link',
         'jv_page',
+        'vendor_contact',
         'chat_mode',
         'countdown_seconds',
         'allow_replay',
@@ -62,6 +63,7 @@ class FunnelSetting extends Model
             'traffic_ai_reply_enabled' => 'boolean',
             'traffic_ai_max_replies_per_day' => 'integer',
             'traffic_ai_social_account_ids' => 'array',
+            'vendor_contact' => 'array',
         ];
     }
 
