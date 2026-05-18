@@ -706,6 +706,7 @@ watch([trafficSearch, trafficPlatform, trafficKeywordId], ([s, p, k]) => {
             traffic_search: s || undefined,
             traffic_platform: p || undefined,
             traffic_keyword_id: k || undefined,
+            page: 1,
         }, {
             preserveState: true,
             replace: true,
@@ -713,6 +714,14 @@ watch([trafficSearch, trafficPlatform, trafficKeywordId], ([s, p, k]) => {
         });
     }, 350);
 });
+
+const goToTrafficMentionsPage = (url: string | null): void => {
+    if (!url) {
+        return;
+    }
+
+    router.get(url, {}, { preserveState: true, preserveScroll: true });
+};
 
 function toggleTrafficPlatform(p: string): void {
     const idx = trafficKeywordForm.platforms.indexOf(p);
@@ -2676,7 +2685,7 @@ onUnmounted(() => {
                             </CardContent>
                         </Card>
 
-                        <Card v-if="props.traffic.mentions.data.length === 0" class="border shadow-sm">
+                        <Card v-if="props.traffic.mentions.total === 0" class="border shadow-sm">
                             <CardContent class="py-10 text-center text-sm text-muted-foreground">No traffic mentions found for this funnel.</CardContent>
                         </Card>
 
@@ -2701,6 +2710,33 @@ onUnmounted(() => {
                                     </div>
                                 </CardContent>
                             </Card>
+
+                            <div
+                                v-if="props.traffic.mentions.last_page > 1"
+                                class="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                                <p class="text-xs text-muted-foreground">
+                                    <template v-if="props.traffic.mentions.from && props.traffic.mentions.to">
+                                        {{ props.traffic.mentions.from }}–{{ props.traffic.mentions.to }} of
+                                    </template>
+                                    {{ props.traffic.mentions.total.toLocaleString() }} mentions
+                                    <span class="text-muted-foreground/80">(page {{ props.traffic.mentions.current_page }} / {{ props.traffic.mentions.last_page }})</span>
+                                </p>
+                                <div class="flex flex-wrap items-center gap-1">
+                                    <button
+                                        v-for="link in props.traffic.mentions.links"
+                                        :key="`${link.label}-${link.url ?? 'disabled'}`"
+                                        type="button"
+                                        :disabled="!link.url"
+                                        class="inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                                        :class="link.active
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-border bg-background text-foreground hover:bg-muted'"
+                                        @click="goToTrafficMentionsPage(link.url)"
+                                        v-html="link.label"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
