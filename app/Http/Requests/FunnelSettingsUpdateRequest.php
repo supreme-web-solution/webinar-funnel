@@ -57,6 +57,20 @@ class FunnelSettingsUpdateRequest extends FormRequest
             $normalized['traffic_ai_social_account_ids'] = $accountIds;
         }
 
+        $offers = $this->input('offers');
+        if (is_array($offers)) {
+            foreach ($offers as $index => $offer) {
+                if (! is_array($offer)) {
+                    continue;
+                }
+
+                if (array_key_exists('cta_url', $offer) && $offer['cta_url'] === '') {
+                    $offers[$index]['cta_url'] = null;
+                }
+            }
+            $normalized['offers'] = $offers;
+        }
+
         if ($normalized !== []) {
             $this->merge($normalized);
         }
@@ -110,7 +124,20 @@ class FunnelSettingsUpdateRequest extends FormRequest
             'integration_configs' => ['nullable', 'array'],
             'integration_configs.*' => ['nullable', 'array'],
             'traffic_ai_reply_enabled' => ['nullable', 'boolean'],
-            'traffic_ai_link_override' => ['nullable', 'url', 'max:2048'],
+            'traffic_ai_link_override' => [
+                'nullable',
+                'string',
+                'max:2048',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+
+                    if (! filter_var((string) $value, FILTER_VALIDATE_URL)) {
+                        $fail('The link override must be a valid URL (include https://).');
+                    }
+                },
+            ],
             'traffic_ai_extra_context' => ['nullable', 'string', 'max:5000'],
             'traffic_ai_social_account_ids' => ['nullable', 'array'],
             'traffic_ai_social_account_ids.reddit' => [

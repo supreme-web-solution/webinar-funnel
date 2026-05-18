@@ -113,6 +113,7 @@ const props = defineProps<{
             platforms: string[];
             mentions_count: number;
             mention_cap_reached: boolean;
+            mention_counts_by_platform: Record<string, number>;
         }>;
         limits: {
             max_keywords_per_funnel: number;
@@ -412,25 +413,78 @@ const saveSettings = (): void => {
     });
 };
 
-function saveTrafficAiReplyEnabled(enabled: boolean): void {
-    settingsForm.traffic_ai_reply_enabled = enabled;
+function trafficAiSettingsPayload(): Record<string, unknown> {
+    const linkOverride = settingsForm.traffic_ai_link_override.trim();
+
+    return {
+        chat_mode: settingsForm.chat_mode,
+        allow_replay: settingsForm.allow_replay,
+        traffic_ai_reply_enabled: settingsForm.traffic_ai_reply_enabled,
+        traffic_ai_link_override: linkOverride === '' ? null : linkOverride,
+        traffic_ai_extra_context: settingsForm.traffic_ai_extra_context,
+        traffic_ai_social_account_ids: { ...settingsForm.traffic_ai_social_account_ids },
+    };
+}
+
+function patchTrafficAiSettings(successMessage: string, onErrorRevert?: () => void): void {
     autoAssignTrafficAccounts();
+    trafficAiLinkError.value = null;
     savingSettings.value = true;
-    settingsForm.patch(`/funnels/${props.funnel.id}/settings`, {
+    router.patch(`/funnels/${props.funnel.id}/settings`, trafficAiSettingsPayload(), {
         preserveScroll: true,
         onSuccess: () => {
-            toast.success(enabled ? 'Traffic AI reply enabled' : 'Traffic AI reply disabled');
+            toast.success(successMessage);
         },
         onError: (errors) => {
-            const first = Object.values(errors)[0];
-            toast.error(typeof first === 'string' ? first : 'Could not save auto-reply setting.');
-            settingsForm.traffic_ai_reply_enabled = !enabled;
+            const linkErr = errors.traffic_ai_link_override;
+            const linkMsg = Array.isArray(linkErr) ? linkErr[0] : linkErr;
+            trafficAiLinkError.value = typeof linkMsg === 'string' ? linkMsg : null;
+            const first = linkMsg ?? errors.traffic_ai_reply_enabled ?? Object.values(errors)[0];
+            toast.error(typeof first === 'string' ? first : 'Could not save auto-reply settings.');
+            onErrorRevert?.();
         },
         onFinish: () => {
             savingSettings.value = false;
         },
     });
 }
+
+function saveTrafficAiReplyEnabled(enabled: boolean): void {
+    settingsForm.traffic_ai_reply_enabled = enabled;
+    patchTrafficAiSettings(
+        enabled ? 'Traffic AI reply enabled' : 'Traffic AI reply disabled',
+        () => {
+            settingsForm.traffic_ai_reply_enabled = !enabled;
+        },
+    );
+}
+
+function saveTrafficAiSettings(): void {
+    patchTrafficAiSettings('Auto-reply settings saved');
+}
+
+watch(
+    () => props.funnel.settings,
+    (settings) => {
+        if (!settings || settingsForm.processing || savingSettings.value) {
+            return;
+        }
+
+        settingsForm.traffic_ai_reply_enabled = Boolean(settings.traffic_ai_reply_enabled);
+        settingsForm.traffic_ai_link_override = settings.traffic_ai_link_override ?? '';
+        settingsForm.traffic_ai_extra_context = settings.traffic_ai_extra_context ?? '';
+
+        const map = settings.traffic_ai_social_account_ids as Record<string, number | null> | undefined;
+        if (map) {
+            settingsForm.traffic_ai_social_account_ids = {
+                reddit: map.reddit ?? null,
+                youtube: map.youtube ?? null,
+                twitter: map.twitter ?? null,
+            };
+        }
+    },
+    { deep: true },
+);
 
 /* Auto-save for individual toggles — debounced so rapid toggles batch into one PATCH. */
 let autoSaveTimer: number | undefined;
@@ -734,8 +788,60 @@ function trafficKeywordFilterActive(kw: { id: number }): boolean {
     return String(trafficKeywordId.value) === String(kw.id);
 }
 
-function toggleTrafficKeywordFilter(kw: { id: number }): void {
-    trafficKeywordId.value = trafficKeywordFilterActive(kw) ? '' : kw.id;
+const TRAFFIC_PLATFORM_PICK_ORDER = ['twitter', 'youtube', 'reddit', 'news'] as const;
+
+function firstTrafficPlatformWithMentions(counts: Record<string, number>): string {
+    for (const key of TRAFFIC_PLATFORM_PICK_ORDER) {
+        if ((counts[key] ?? 0) > 0) {
+            return key;
+        }
+    }
+
+    for (const [key, count] of Object.entries(counts)) {
+        if (count > 0) {
+            return key.toLowerCase();
+        }
+    }
+
+    return '';
+}
+
+function pickTrafficPlatformForKeyword(counts: Record<string, number>): string {
+    const current = String(trafficPlatform.value).toLowerCase();
+
+    if (current && (counts[current] ?? 0) > 0) {
+        return current;
+    }
+
+    return firstTrafficPlatformWithMentions(counts);
+}
+
+function syncTrafficPlatformToKeywordStats(): void {
+    if (!trafficKeywordId.value) {
+        return;
+    }
+
+    const counts = props.traffic.stats.platforms ?? {};
+    const next = pickTrafficPlatformForKeyword(counts);
+    const current = String(trafficPlatform.value).toLowerCase();
+
+    if (next !== current) {
+        trafficPlatform.value = next;
+    }
+}
+
+function toggleTrafficKeywordFilter(kw: {
+    id: number;
+    mention_counts_by_platform?: Record<string, number>;
+}): void {
+    if (trafficKeywordFilterActive(kw)) {
+        trafficKeywordId.value = '';
+
+        return;
+    }
+
+    trafficKeywordId.value = kw.id;
+    trafficPlatform.value = pickTrafficPlatformForKeyword(kw.mention_counts_by_platform ?? {});
 }
 
 const trafficActiveKeyword = computed(() => {
@@ -787,6 +893,14 @@ watch([trafficSearch, trafficPlatform, trafficKeywordId], ([s, p, k]) => {
         });
     }, 350);
 });
+
+watch(
+    () => [props.traffic.filters.keyword_id, props.traffic.stats.platforms] as const,
+    () => {
+        syncTrafficPlatformToKeywordStats();
+    },
+    { immediate: true },
+);
 
 const goToTrafficMentionsPage = (url: string | null): void => {
     if (!url) {
@@ -938,6 +1052,7 @@ const trafficReplyDraftText = ref('');
 const trafficReplyDraftWarning = ref<string | null>(null);
 const trafficReplyDraftSource = ref<'openai' | 'fallback' | null>(null);
 const trafficReplyDraftMention = ref<TrafficMentionRow | null>(null);
+const trafficAiLinkError = ref<string | null>(null);
 
 function trafficMentionCanDraftReply(mention: TrafficMentionRow): boolean {
     return String(mention.source_type ?? '').toLowerCase() !== 'news';
@@ -2750,14 +2865,22 @@ onUnmounted(() => {
                                 <div class="flex items-center justify-between gap-3">
                                     <Label class="text-xs">Enable auto-replies for this funnel</Label>
                                     <Switch
-                                        :checked="settingsForm.traffic_ai_reply_enabled"
+                                        :model-value="Boolean(settingsForm.traffic_ai_reply_enabled)"
                                         :disabled="savingSettings || settingsForm.processing"
-                                        @update:checked="saveTrafficAiReplyEnabled($event)"
+                                        @update:model-value="saveTrafficAiReplyEnabled(Boolean($event))"
                                     />
                                 </div>
                                 <div class="space-y-1">
                                     <Label class="text-xs">Link override (optional)</Label>
-                                    <Input v-model="settingsForm.traffic_ai_link_override" type="url" class="h-9 text-xs" placeholder="Else: affiliate → offer → webinar CTA" />
+                                    <Input
+                                        v-model="settingsForm.traffic_ai_link_override"
+                                        type="text"
+                                        class="h-9 text-xs"
+                                        placeholder="https://… (else: affiliate → offer → webinar CTA)"
+                                    />
+                                    <p v-if="trafficAiLinkError" class="text-[0.65rem] text-destructive">
+                                        {{ trafficAiLinkError }}
+                                    </p>
                                 </div>
                                 <div class="space-y-1">
                                     <Label class="text-xs">More context</Label>
@@ -2800,7 +2923,7 @@ onUnmounted(() => {
                                     size="sm"
                                     class="h-9 text-xs bg-primary text-primary-foreground hover:opacity-90"
                                     :disabled="savingSettings || settingsForm.processing"
-                                    @click="autoAssignTrafficAccounts(); saveSettings();"
+                                    @click="saveTrafficAiSettings()"
                                 >
                                     Save auto-reply settings
                                 </Button>

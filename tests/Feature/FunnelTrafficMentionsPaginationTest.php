@@ -243,4 +243,56 @@ class FunnelTrafficMentionsPaginationTest extends TestCase
                 ->where('traffic.stats.platforms.reddit', 1)
                 ->missing('traffic.stats.platforms.Reddit'));
     }
+
+    public function test_keywords_include_mention_counts_by_platform(): void
+    {
+        $user = User::factory()->create();
+        $template = Template::query()->create([
+            'name' => 'T',
+            'slug' => 't-'.uniqid(),
+            'category' => 'business',
+            'conversion_style' => 'standard',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $funnel = Funnel::query()->create([
+            'user_id' => $user->id,
+            'template_id' => $template->id,
+            'name' => 'F',
+            'slug' => 'f-'.uniqid(),
+            'status' => 'draft',
+        ]);
+        FunnelSetting::query()->create([
+            'funnel_id' => $funnel->id,
+            'chat_mode' => 'simulated',
+            'allow_replay' => true,
+        ]);
+
+        $keyword = Keyword::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'name' => 'only-yt',
+            'is_active' => true,
+            'email_notifications' => false,
+            'platforms' => ['youtube'],
+        ]);
+
+        Mention::query()->create([
+            'keyword_id' => $keyword->id,
+            'user_id' => $user->id,
+            'post_id' => 'yt_1',
+            'title' => 'Video',
+            'content' => 'Body',
+            'source' => 'test',
+            'source_type' => 'YouTube',
+            'status' => 'new',
+            'posted_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('funnels.edit', ['funnel' => $funnel]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('traffic.keywords.0.mention_counts_by_platform.youtube', 1));
+    }
 }

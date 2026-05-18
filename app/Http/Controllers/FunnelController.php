@@ -215,13 +215,22 @@ class FunnelController extends Controller
         $mentionCap = KeywordMentionCapEnforcer::maxMentionsPerKeyword();
         $capEnforcer = app(KeywordMentionCapEnforcer::class);
 
+        $mentionCountsByKeywordPlatform = Mention::query()
+            ->where('user_id', $funnel->user_id)
+            ->whereHas('keyword', fn ($q) => $q->where('funnel_id', $funnel->id))
+            ->selectRaw('keyword_id, LOWER(source_type) as platform_key, count(*) as cnt')
+            ->groupBy('keyword_id', 'platform_key')
+            ->get()
+            ->groupBy('keyword_id')
+            ->map(fn ($rows) => $rows->pluck('cnt', 'platform_key')->all());
+
         $keywords = Keyword::query()
             ->where('user_id', $funnel->user_id)
             ->where('funnel_id', $funnel->id)
             ->withCount('mentions')
             ->orderByDesc('created_at')
             ->get()
-            ->map(function (Keyword $keyword) use ($mentionCap, $capEnforcer) {
+            ->map(function (Keyword $keyword) use ($mentionCap, $capEnforcer, $mentionCountsByKeywordPlatform) {
                 $mentionsCount = (int) $keyword->mentions_count;
                 $capReached = $mentionsCount >= $mentionCap;
 
@@ -237,6 +246,7 @@ class FunnelController extends Controller
                     'platforms' => $keyword->platforms ?? [],
                     'mentions_count' => $mentionsCount,
                     'mention_cap_reached' => $capReached,
+                    'mention_counts_by_platform' => $mentionCountsByKeywordPlatform->get($keyword->id, []),
                 ];
             })
             ->values();
@@ -361,7 +371,9 @@ class FunnelController extends Controller
     ): RedirectResponse {
         $this->authorizeFunnel($funnel);
         $validated = $request->validated();
-        $integrationIds = $validated['integration_account_ids'] ?? [];
+        $integrationIds = array_key_exists('integration_account_ids', $validated)
+            ? ($validated['integration_account_ids'] ?? [])
+            : null;
         $incomingIntegrationConfigs = $validated['integration_configs'] ?? [];
         unset($validated['integration_account_ids']);
         unset($validated['integration_configs']);
@@ -404,20 +416,22 @@ class FunnelController extends Controller
                     : [],
             ]);
 
-        $funnel->integrations()->delete();
+        if ($integrationIds !== null) {
+            $funnel->integrations()->delete();
 
-        foreach ($integrationIds as $integrationId) {
-            $providerConfig = $existingConfigs->get((string) $integrationId, []);
+            foreach ($integrationIds as $integrationId) {
+                $providerConfig = $existingConfigs->get((string) $integrationId, []);
 
-            if (isset($incomingIntegrationConfigs[$integrationId]) && is_array($incomingIntegrationConfigs[$integrationId])) {
-                $providerConfig = $incomingIntegrationConfigs[$integrationId];
+                if (isset($incomingIntegrationConfigs[$integrationId]) && is_array($incomingIntegrationConfigs[$integrationId])) {
+                    $providerConfig = $incomingIntegrationConfigs[$integrationId];
+                }
+
+                $funnel->integrations()->create([
+                    'integration_account_id' => $integrationId,
+                    'provider_list_config' => $providerConfig,
+                    'enabled' => true,
+                ]);
             }
-
-            $funnel->integrations()->create([
-                'integration_account_id' => $integrationId,
-                'provider_list_config' => $providerConfig,
-                'enabled' => true,
-            ]);
         }
 
         if ($funnel->status === 'published') {
