@@ -280,7 +280,7 @@ class SocialTrafficController extends Controller
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => "{$label} connected successfully via Zernio!",
+            'message' => "{$label} connected successfully.",
         ]);
 
         return redirect()->to($this->socialTrafficSettingsUrl());
