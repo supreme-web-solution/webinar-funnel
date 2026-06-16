@@ -54,4 +54,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(SocialAccount::class);
     }
+
+    public function promotionPosts(): HasMany
+    {
+        return $this->hasMany(FunnelPromotionPost::class);
+    }
 }

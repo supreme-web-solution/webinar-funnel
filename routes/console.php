@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\FetchMentionsCommand;
+use App\Jobs\DispatchDuePromotionPostsJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -11,3 +12,6 @@ Artisan::command('inspire', function () {
 
 // Fetch mentions from all platforms every 15 minutes
 Schedule::command(FetchMentionsCommand::class)->everyFifteenMinutes();
+
+// Dispatch scheduled promotion posts every minute.
+Schedule::job(new DispatchDuePromotionPostsJob())->everyMinute();

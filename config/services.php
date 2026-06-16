@@ -77,6 +77,14 @@ return [
         'api_key' => env('SCRAPINGBEE_API_KEY'),
     ],
 
+    'did' => [
+        'api_key'               => env('DID_API_KEY'),
+        'enabled'               => env('DID_ENABLED', false),
+        'timeout'               => (int) env('DID_TIMEOUT', 120),
+        'default_voice_id'      => env('DID_DEFAULT_VOICE_ID', 'en-US-JennyNeural'),
+        'default_presenter_url' => env('DID_DEFAULT_PRESENTER_URL', ''),
+    ],
+
     // Zernio – OAuth, inbox (Twitter/X), and reply posting for traffic auto-replies.
     'zernio' => [
         'api_key' => env('ZERNIO_API_KEY'),

@@ -155,6 +155,64 @@ final class ZernioClient
     }
 
     /**
+     * @return array{success: bool, external_id?: string|null, error?: string, rate_limited?: bool}
+     */
+    public function createPost(
+        string $accountId,
+        string $platform,
+        string $text,
+        ?string $mediaUrl = null,
+        ?string $scheduledFor = null,
+    ): array {
+        $endpoint = (string) config('promotion.zernio.default_publish_endpoint', '/v1/posts');
+        $payload = [
+            'accountId' => $accountId,
+            'platform' => $platform,
+            'text' => $text,
+        ];
+
+        if ($mediaUrl !== null && $mediaUrl !== '') {
+            $payload['media'] = [$mediaUrl];
+        }
+        if ($scheduledFor !== null && $scheduledFor !== '') {
+            $payload['scheduled_for'] = $scheduledFor;
+        }
+
+        try {
+            $response = $this->request()->post($endpoint, $payload);
+
+            if ($response->status() === 429) {
+                return ['success' => false, 'error' => 'Zernio rate limited.', 'rate_limited' => true];
+            }
+            if (in_array($response->status(), [401, 403], true)) {
+                return ['success' => false, 'error' => 'Zernio auth error; reconnect your account.'];
+            }
+            if (! $response->successful()) {
+                Log::warning('ZernioClient::createPost failed', [
+                    'status' => $response->status(),
+                    'body' => Str::limit($response->body(), 400, ''),
+                ]);
+
+                return ['success' => false, 'error' => 'Zernio API error ('.$response->status().').'];
+            }
+
+            $data = $response->json('data') ?? $response->json();
+            $externalId = is_array($data)
+                ? ($data['postId'] ?? $data['id'] ?? null)
+                : null;
+
+            return [
+                'success' => true,
+                'external_id' => is_string($externalId) ? $externalId : null,
+            ];
+        } catch (\Throwable $e) {
+            Log::error('ZernioClient::createPost exception', ['error' => $e->getMessage()]);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function listAccountsForProfile(string $profileId): array

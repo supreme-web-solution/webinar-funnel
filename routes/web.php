@@ -14,6 +14,10 @@ use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\MentionController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\FunnelTrafficController;
+use App\Http\Controllers\FunnelPromotionCalendarController;
+use App\Http\Controllers\FunnelPromotionController;
+use App\Http\Controllers\FunnelPromotionTopicController;
+use App\Http\Controllers\PromotionCalendarController;
 use Illuminate\Support\Facades\Auth;
 
 Route::get('/', function () {
@@ -59,6 +63,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('mentions/{mention}/draft-reply', [FunnelTrafficController::class, 'draftMentionReply'])->name('mentions.draft-reply');
         });
 
+        Route::prefix('{funnel}/promotion')->name('funnels.promotion.')->group(function () {
+            Route::get('posts', [FunnelPromotionController::class, 'index'])->name('posts.index');
+            Route::post('posts', [FunnelPromotionController::class, 'store'])->name('posts.store');
+            Route::post('posts/bulk', [FunnelPromotionController::class, 'bulk'])->name('posts.bulk');
+            Route::get('posts/{post}', [FunnelPromotionController::class, 'show'])->name('posts.show');
+            Route::patch('posts/{post}', [FunnelPromotionController::class, 'update'])->name('posts.update');
+            Route::delete('posts/{post}', [FunnelPromotionController::class, 'destroy'])->name('posts.destroy');
+            Route::post('posts/{post}/generate-assets', [FunnelPromotionController::class, 'generateAssets'])->name('posts.generate-assets');
+            Route::patch('posts/{post}/schedule', [FunnelPromotionController::class, 'schedule'])->name('posts.schedule');
+            Route::post('posts/{post}/publish', [FunnelPromotionController::class, 'publish'])->name('posts.publish');
+
+            Route::get('calendar', [FunnelPromotionCalendarController::class, 'index'])->name('calendar.index');
+            Route::patch('calendar/posts/{post}/move', [FunnelPromotionCalendarController::class, 'move'])->name('calendar.move');
+
+            Route::get('topics', [FunnelPromotionTopicController::class, 'index'])->name('topics.index');
+            Route::post('topics/generate', [FunnelPromotionTopicController::class, 'generate'])->name('topics.generate');
+            Route::post('scripts/generate', [FunnelPromotionController::class, 'generateScript'])->name('scripts.generate');
+        });
+
         Route::prefix('{funnel}/ai-sources')->name('funnels.ai.sources.')->group(function () {
             Route::get('/', [FunnelAiSourceController::class, 'index'])->name('index');
             Route::post('/url', [FunnelAiSourceController::class, 'storeUrl'])->name('store-url');
@@ -69,6 +92,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('/{source}', [FunnelAiSourceController::class, 'destroy'])->name('delete');
         });
     });
+
+    // Global promotion calendar (all funnels)
+    Route::get('promotion/calendar', [PromotionCalendarController::class, 'index'])->name('promotion.calendar.index');
+    Route::patch('promotion/calendar/posts/{post}/move', [PromotionCalendarController::class, 'move'])->name('promotion.calendar.move');
 
     Route::get('integrations', [IntegrationController::class, 'index'])->name('integrations.index');
     Route::post('integrations', [IntegrationController::class, 'store'])->name('integrations.store');

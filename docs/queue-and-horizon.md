@@ -10,11 +10,13 @@ Background work in this app uses Laravel queues. In production you should run **
 | `traffic-evaluate` | `EvaluateTrafficAutoReplyJob` | Decide if a mention gets an auto-reply |
 | `traffic-generate` | `GenerateTrafficAutoReplyJob` | OpenAI reply text |
 | `traffic-post` | `PostTrafficAutoReplyJob` | Post reply via Zernio |
+| `promotion-generate` | `GeneratePromotionTextJob`, `GeneratePromotionImageJob`, `GeneratePromotionVideoJob`, `PollPromotionVideoJob` | Generate organic promotion assets/content |
+| `promotion-publish` | `PublishPromotionPostJob`, `DispatchDuePromotionPostsJob` | Publish now + scheduled promotion dispatch |
 | `esp-dispatch` | `DispatchLeadToEspJob` | Send opt-in leads to ESP integrations |
 | `webinar-ai` | `IndexFunnelAiSourceJob`, `DispatchWebinarAiReplyJob`, `GenerateWebinarAiReplyJob` | Webinar AI sources + simulated chat replies |
 
 Priority order for workers (highest first):  
-`traffic-post` → `traffic-generate` → `traffic-evaluate` → `esp-dispatch` → `webinar-ai` → `default`
+`traffic-post` → `traffic-generate` → `traffic-evaluate` → `promotion-publish` → `promotion-generate` → `esp-dispatch` → `webinar-ai` → `default`
 
 ## Scheduler (required in production)
 
@@ -30,14 +32,14 @@ Crontab (every minute):
 * * * * * cd /var/www/dfy-webinar-forge && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-This runs `mentions:fetch` every 15 minutes (`routes/console.php`).
+This runs `mentions:fetch` every 15 minutes and promotion dispatch every minute (`routes/console.php`).
 
 ## Local (Windows / Laragon)
 
 Horizon requires `ext-pcntl` and `ext-posix` (not available on Windows CLI). Use a database or redis queue worker:
 
 ```bash
-php artisan queue:work --queue=traffic-post,traffic-generate,traffic-evaluate,esp-dispatch,webinar-ai,default --tries=3 --sleep=1
+php artisan queue:work --queue=traffic-post,traffic-generate,traffic-evaluate,promotion-publish,promotion-generate,esp-dispatch,webinar-ai,default --tries=3 --sleep=1
 ```
 
 Or use the all-in-one dev script (includes the same queues):
@@ -107,7 +109,7 @@ sudo supervisorctl start dfy-horizon
 If you prefer plain workers:
 
 ```bash
-php artisan queue:work redis --queue=traffic-post,traffic-generate,traffic-evaluate,esp-dispatch,webinar-ai,default --tries=3 --sleep=1 --max-time=3600
+php artisan queue:work redis --queue=traffic-post,traffic-generate,traffic-evaluate,promotion-publish,promotion-generate,esp-dispatch,webinar-ai,default --tries=3 --sleep=1 --max-time=3600
 ```
 
 Run under Supervisor with `autorestart=true` (restart after `--max-time`).

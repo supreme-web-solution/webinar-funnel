@@ -44,6 +44,11 @@ const mainNavItems: NavItem[] = [
         icon: 'heroicons:users',
     },
     {
+        title: 'Promo Calendar',
+        href: '/promotion/calendar',
+        icon: 'heroicons:calendar-days',
+    },
+    {
         title: 'Integrations',
         href: '/integrations',
         icon: 'heroicons:puzzle-piece',

@@ -11,6 +11,8 @@ use App\Models\Funnel;
 use App\Models\FunnelAiSource;
 use App\Models\FunnelAiSourceChunk;
 use App\Models\FunnelPage;
+use App\Models\FunnelPromotionPost;
+use App\Models\FunnelPromotionTopicSuggestion;
 use App\Models\FunnelVideoViewStat;
 use App\Models\IntegrationAccount;
 use App\Models\Keyword;
@@ -172,6 +174,7 @@ class FunnelController extends Controller
         $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
         $conversationSummaries = $this->buildConversationSummaries($funnel, 50);
         $trafficData = $this->buildTrafficData($request, $funnel);
+        $promotionData = $this->buildPromotionData($funnel);
         $videoStats = $this->buildVideoStatsData($funnel);
 
         return Inertia::render('funnels/Edit', [
@@ -179,6 +182,7 @@ class FunnelController extends Controller
             'integrationAccounts' => $integrationAccounts,
             'conversationSummaries' => $conversationSummaries,
             'traffic' => $trafficData,
+            'promotion' => $promotionData,
             'videoStats' => $videoStats,
             'aiSources' => FunnelAiSource::query()
                 ->where('funnel_id', $funnel->id)
@@ -220,6 +224,44 @@ class FunnelController extends Controller
                 ]),
             ],
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildPromotionData(Funnel $funnel): array
+    {
+        $base = FunnelPromotionPost::query()->where('funnel_id', $funnel->id);
+        $suggestions = FunnelPromotionTopicSuggestion::query()
+            ->where('funnel_id', $funnel->id)
+            ->where('status', FunnelPromotionTopicSuggestion::STATUS_SUGGESTED)
+            ->orderByDesc('score')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get(['id', 'topic', 'angle', 'score']);
+
+        $nextScheduled = FunnelPromotionPost::query()
+            ->where('funnel_id', $funnel->id)
+            ->where('status', FunnelPromotionPost::STATUS_SCHEDULED)
+            ->whereNotNull('scheduled_for')
+            ->orderBy('scheduled_for')
+            ->first(['id', 'topic', 'scheduled_for']);
+
+        return [
+            'stats' => [
+                'total' => (clone $base)->count(),
+                'draft' => (clone $base)->where('status', FunnelPromotionPost::STATUS_DRAFT)->count(),
+                'scheduled' => (clone $base)->where('status', FunnelPromotionPost::STATUS_SCHEDULED)->count(),
+                'published' => (clone $base)->where('status', FunnelPromotionPost::STATUS_PUBLISHED)->count(),
+            ],
+            'suggested_topics' => $suggestions,
+            'next_scheduled' => $nextScheduled,
+            'routes' => [
+                'posts' => route('funnels.promotion.posts.index', $funnel),
+                'calendar' => route('funnels.promotion.calendar.index', $funnel),
+                'topics_generate' => route('funnels.promotion.topics.generate', $funnel),
+            ],
+        ];
     }
 
     /**

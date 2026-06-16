@@ -8,7 +8,7 @@ final class ZernioApiException extends \RuntimeException
 {
     public function __construct(
         string $message,
-        public readonly ?string $code = null,
+        public readonly ?string $errorCode = null,
         public readonly ?string $dashboardUrl = null,
         public readonly ?string $documentationUrl = null,
         public readonly int $httpStatus = 0,
@@ -48,6 +48,6 @@ final class ZernioApiException extends \RuntimeException
 
     public function isPaymentRequired(): bool
     {
-        return $this->code === 'PAYMENT_REQUIRED' || $this->httpStatus === 402;
+        return $this->errorCode === 'PAYMENT_REQUIRED' || $this->httpStatus === 402;
     }
 }

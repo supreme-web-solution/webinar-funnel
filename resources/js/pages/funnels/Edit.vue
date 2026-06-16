@@ -178,6 +178,30 @@ const props = defineProps<{
         }>;
         max_replies_per_day_per_account: number;
     };
+    promotion: {
+        stats: {
+            total: number;
+            draft: number;
+            scheduled: number;
+            published: number;
+        };
+        suggested_topics: Array<{
+            id: number;
+            topic: string;
+            angle: string | null;
+            score: number;
+        }>;
+        next_scheduled: {
+            id: number;
+            topic: string | null;
+            scheduled_for: string | null;
+        } | null;
+        routes: {
+            posts: string;
+            calendar: string;
+            topics_generate: string;
+        };
+    };
     videoStats: {
         accessed: number;
         watched_60s: number;
@@ -404,6 +428,35 @@ const savePage = (): void => {
         },
     });
 };
+
+/* ─── Promotion overview state ─────────────────────────────────────────── */
+const promotionTopicContext = ref('');
+const promotionGeneratingTopics = ref(false);
+
+function generatePromotionTopicsFromEdit(): void {
+    if (!props.promotion.routes.topics_generate) {
+        return;
+    }
+
+    promotionGeneratingTopics.value = true;
+    router.post(props.promotion.routes.topics_generate, {
+        count: 12,
+        context: promotionTopicContext.value || undefined,
+    }, {
+        preserveScroll: true,
+        onFinish: () => {
+            promotionGeneratingTopics.value = false;
+        },
+    });
+}
+
+function fmtPromotionDate(value: string | null | undefined): string {
+    if (!value) {
+        return '-';
+    }
+
+    return new Date(value).toLocaleString();
+}
 
 const saveSettings = (): void => {
     savingSettings.value = true;
@@ -1867,6 +1920,10 @@ onUnmounted(() => {
                     <Icon icon="heroicons:link" class="size-3.5" />
                     Share Links
                 </TabsTrigger>
+                <TabsTrigger value="promotion" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
+                    <Icon icon="heroicons:megaphone" class="size-3.5" />
+                    Promotion
+                </TabsTrigger>
                 <TabsTrigger value="chat" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
                     <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-3.5" />
                     Chat
@@ -2921,6 +2978,96 @@ onUnmounted(() => {
                         </CardContent>
                     </Card>
                 </div>
+            </TabsContent>
+
+            <!-- ── Tab: Promotion ── -->
+            <TabsContent value="promotion" class="space-y-4">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h3 class="text-sm font-semibold text-foreground">Funnel Promotion</h3>
+                        <p class="text-xs text-muted-foreground mt-0.5">
+                            Generate and manage organic campaign content for this funnel.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" class="h-8 text-xs gap-1.5" as-child>
+                            <a :href="props.promotion.routes.posts">
+                                <Icon icon="heroicons:queue-list" class="size-3.5" />
+                                Open Posts
+                            </a>
+                        </Button>
+                        <Button size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90" as-child>
+                            <a :href="props.promotion.routes.calendar">
+                                <Icon icon="heroicons:calendar-days" class="size-3.5" />
+                                Open Calendar
+                            </a>
+                        </Button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Total Posts</p><p class="text-2xl font-bold mt-1">{{ props.promotion.stats.total }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Draft</p><p class="text-2xl font-bold mt-1 text-amber-600">{{ props.promotion.stats.draft }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Scheduled</p><p class="text-2xl font-bold mt-1 text-blue-600">{{ props.promotion.stats.scheduled }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Published</p><p class="text-2xl font-bold mt-1 text-emerald-600">{{ props.promotion.stats.published }}</p></CardContent></Card>
+                </div>
+
+                <Card class="border shadow-sm border-dashed border-primary/30">
+                    <CardHeader class="pb-2">
+                        <CardTitle class="text-sm font-semibold">Auto topic suggestions</CardTitle>
+                        <CardDescription class="text-xs">
+                            Generate 10-20 funnel-aware topic ideas your users can reuse instantly for campaigns.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-3">
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                v-model="promotionTopicContext"
+                                class="h-9 text-xs"
+                                placeholder="Optional context for better suggestions..."
+                            />
+                            <Button
+                                size="sm"
+                                class="h-9 text-xs bg-primary text-primary-foreground hover:opacity-90"
+                                :disabled="promotionGeneratingTopics"
+                                @click="generatePromotionTopicsFromEdit"
+                            >
+                                <Icon v-if="promotionGeneratingTopics" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
+                                <span v-else>Generate topics</span>
+                            </Button>
+                        </div>
+
+                        <div v-if="props.promotion.suggested_topics.length === 0" class="rounded-lg border border-dashed py-8 text-center text-xs text-muted-foreground">
+                            No suggested topics yet. Generate suggestions to seed campaigns.
+                        </div>
+                        <div v-else class="flex flex-wrap gap-1.5">
+                            <span
+                                v-for="topic in props.promotion.suggested_topics"
+                                :key="topic.id"
+                                class="inline-flex items-center rounded-full border bg-background px-2.5 py-1 text-xs"
+                            >
+                                {{ topic.topic }}
+                            </span>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card class="border shadow-sm">
+                    <CardHeader class="pb-2">
+                        <CardTitle class="text-sm font-semibold">Next scheduled item</CardTitle>
+                    </CardHeader>
+                    <CardContent class="text-xs text-muted-foreground">
+                        <template v-if="props.promotion.next_scheduled">
+                            <p class="font-medium text-foreground">
+                                {{ props.promotion.next_scheduled.topic || 'Untitled promotion post' }}
+                            </p>
+                            <p class="mt-1">
+                                Scheduled for {{ fmtPromotionDate(props.promotion.next_scheduled.scheduled_for) }}
+                            </p>
+                        </template>
+                        <p v-else>No scheduled promotion posts yet.</p>
+                    </CardContent>
+                </Card>
             </TabsContent>
 
             <!-- ── Tab: Chat Threads ── -->

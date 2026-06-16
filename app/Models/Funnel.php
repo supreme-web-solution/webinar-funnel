@@ -86,4 +86,14 @@ class Funnel extends Model
     {
         return $this->hasMany(FunnelAiSource::class);
     }
+
+    public function promotionPosts(): HasMany
+    {
+        return $this->hasMany(FunnelPromotionPost::class);
+    }
+
+    public function promotionTopicSuggestions(): HasMany
+    {
+        return $this->hasMany(FunnelPromotionTopicSuggestion::class);
+    }
 }
