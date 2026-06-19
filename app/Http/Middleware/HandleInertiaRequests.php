@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'appearanceDarkModeEnabled' => (bool) config('appearance.dark_mode_enabled'),
             'auth' => [
                 'user' => $request->user(),
                 'is_admin' => $currentEmail !== '' && $adminEmails->contains($currentEmail),

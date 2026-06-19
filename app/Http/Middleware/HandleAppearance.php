@@ -16,7 +16,15 @@ class HandleAppearance
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if (! config('appearance.dark_mode_enabled')) {
+            View::share('appearance', 'light');
+            View::share('appearanceDarkModeEnabled', false);
+
+            return $next($request);
+        }
+
         View::share('appearance', $request->cookie('appearance') ?? 'system');
+        View::share('appearanceDarkModeEnabled', true);
 
         return $next($request);
     }

@@ -1,23 +1,37 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"  @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearanceDarkModeEnabled ?? false) && ($appearance ?? 'system') == 'dark'])>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
-            (function() {
-                const appearance = '{{ $appearance ?? "system" }}';
+            window.__appearanceConfig = {
+                darkModeEnabled: @json($appearanceDarkModeEnabled ?? false),
+            };
+        </script>
 
-                if (appearance === 'system') {
-                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        @if ($appearanceDarkModeEnabled ?? false)
+            {{-- Inline script to detect system dark mode preference and apply it immediately --}}
+            <script>
+                (function() {
+                    const appearance = '{{ $appearance ?? "system" }}';
 
-                    if (prefersDark) {
+                    if (appearance === 'system') {
+                        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+                        if (prefersDark) {
+                            document.documentElement.classList.add('dark');
+                        }
+                    } else if (appearance === 'dark') {
                         document.documentElement.classList.add('dark');
                     }
-                }
-            })();
-        </script>
+                })();
+            </script>
+        @else
+            <script>
+                document.documentElement.classList.remove('dark');
+            </script>
+        @endif
 
         {{-- Inline style to set the HTML background color based on our theme in app.css --}}
         <style>

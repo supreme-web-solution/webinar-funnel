@@ -17,9 +17,18 @@ declare module '@inertiajs/core' {
     export interface InertiaConfig {
         sharedPageProps: {
             name: string;
+            appearanceDarkModeEnabled: boolean;
             auth: Auth;
             sidebarOpen: boolean;
             [key: string]: unknown;
+        };
+    }
+}
+
+declare global {
+    interface Window {
+        __appearanceConfig?: {
+            darkModeEnabled?: boolean;
         };
     }
 }
@@ -31,3 +40,5 @@ declare module 'vue' {
         $headManager: ReturnType<typeof createHeadManager>;
     }
 }
+
+export {};

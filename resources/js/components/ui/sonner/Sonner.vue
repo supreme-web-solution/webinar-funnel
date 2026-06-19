@@ -3,12 +3,12 @@ import { useAppearance } from '@/composables/useAppearance';
 import { Toaster as SonnerPrimitive } from 'vue-sonner';
 import 'vue-sonner/style.css';
 
-const { appearance } = useAppearance();
+const { resolvedAppearance } = useAppearance();
 </script>
 
 <template>
     <SonnerPrimitive
-        :theme="appearance"
+        :theme="resolvedAppearance"
         class="toaster group"
         position="bottom-right"
         :style="{

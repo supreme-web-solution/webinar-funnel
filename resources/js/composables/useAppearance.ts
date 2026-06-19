@@ -8,10 +8,33 @@ export type UseAppearanceReturn = {
     appearance: Ref<Appearance>;
     resolvedAppearance: ComputedRef<ResolvedAppearance>;
     updateAppearance: (value: Appearance) => void;
+    darkModeEnabled: ComputedRef<boolean>;
 };
+
+type AppearanceConfig = {
+    darkModeEnabled?: boolean;
+};
+
+function readAppearanceConfig(): AppearanceConfig {
+    if (typeof window === 'undefined') {
+        return {};
+    }
+
+    return (window as Window & { __appearanceConfig?: AppearanceConfig }).__appearanceConfig ?? {};
+}
+
+export function isDarkModeEnabled(): boolean {
+    return readAppearanceConfig().darkModeEnabled === true;
+}
 
 export function updateTheme(value: Appearance): void {
     if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (! isDarkModeEnabled()) {
+        document.documentElement.classList.remove('dark');
+
         return;
     }
 
@@ -65,6 +88,12 @@ const prefersDark = (): boolean => {
 };
 
 const handleSystemThemeChange = () => {
+    if (! isDarkModeEnabled()) {
+        document.documentElement.classList.remove('dark');
+
+        return;
+    }
+
     const currentAppearance = getStoredAppearance();
 
     updateTheme(currentAppearance || 'system');
@@ -75,18 +104,32 @@ export function initializeTheme(): void {
         return;
     }
 
-    // Initialize theme from saved preference or default to system...
+    if (! isDarkModeEnabled()) {
+        document.documentElement.classList.remove('dark');
+        localStorage.removeItem('appearance');
+        setCookie('appearance', 'light');
+
+        return;
+    }
+
     const savedAppearance = getStoredAppearance();
     updateTheme(savedAppearance || 'system');
 
-    // Set up system theme change listener...
     mediaQuery()?.addEventListener('change', handleSystemThemeChange);
 }
 
-const appearance = ref<Appearance>('system');
+const appearance = ref<Appearance>('light');
 
 export function useAppearance(): UseAppearanceReturn {
+    const darkModeEnabled = computed(() => isDarkModeEnabled());
+
     onMounted(() => {
+        if (! isDarkModeEnabled()) {
+            appearance.value = 'light';
+
+            return;
+        }
+
         const savedAppearance = localStorage.getItem(
             'appearance',
         ) as Appearance | null;
@@ -97,6 +140,10 @@ export function useAppearance(): UseAppearanceReturn {
     });
 
     const resolvedAppearance = computed<ResolvedAppearance>(() => {
+        if (! isDarkModeEnabled()) {
+            return 'light';
+        }
+
         if (appearance.value === 'system') {
             return prefersDark() ? 'dark' : 'light';
         }
@@ -105,14 +152,17 @@ export function useAppearance(): UseAppearanceReturn {
     });
 
     function updateAppearance(value: Appearance) {
+        if (! isDarkModeEnabled()) {
+            appearance.value = 'light';
+            updateTheme('light');
+
+            return;
+        }
+
         appearance.value = value;
 
-        // Store in localStorage for client-side persistence...
         localStorage.setItem('appearance', value);
-
-        // Store in cookie for SSR...
         setCookie('appearance', value);
-
         updateTheme(value);
     }
 
@@ -120,5 +170,6 @@ export function useAppearance(): UseAppearanceReturn {
         appearance,
         resolvedAppearance,
         updateAppearance,
+        darkModeEnabled,
     };
 }
