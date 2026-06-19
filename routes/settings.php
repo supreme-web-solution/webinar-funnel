@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\AdAccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\SocialTrafficController;
@@ -26,17 +27,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('settings/social-traffic', [SocialTrafficController::class, 'edit'])->name('settings.social-traffic.edit');
     Route::delete('settings/social-traffic/{socialAccount}', [SocialTrafficController::class, 'disconnect'])->name('settings.social-traffic.disconnect');
 
+    Route::get('settings/ad-accounts', [AdAccountSettingsController::class, 'edit'])->name('settings.ad-accounts.edit');
+    Route::patch('settings/ad-accounts', [AdAccountSettingsController::class, 'update'])->name('settings.ad-accounts.update');
+
 });
 
 // Zernio OAuth (auth only — callback must match browser session after external OAuth).
 Route::middleware(['auth'])->group(function () {
-    Route::get('settings/social-traffic/reddit/redirect', [SocialTrafficController::class, 'redditRedirect'])->name('settings.social-traffic.reddit.redirect');
-    Route::get('settings/social-traffic/youtube/redirect', [SocialTrafficController::class, 'youtubeRedirect'])->name('settings.social-traffic.youtube.redirect');
-    Route::get('settings/social-traffic/x/redirect', [SocialTrafficController::class, 'xRedirect'])->name('settings.social-traffic.x.redirect');
+    $connectPlatforms = ['reddit', 'youtube', 'x', 'facebook', 'instagram', 'tiktok', 'linkedin', 'pinterest'];
+
+    foreach ($connectPlatforms as $slug) {
+        Route::get("settings/social-traffic/{$slug}/redirect", [SocialTrafficController::class, 'platformRedirect'])
+            ->defaults('platform', $slug)
+            ->name("settings.social-traffic.{$slug}.redirect");
+        Route::get("settings/social-traffic/{$slug}/callback", [SocialTrafficController::class, 'zernioCallback']);
+    }
 
     Route::get('settings/social-traffic/zernio/callback', [SocialTrafficController::class, 'zernioCallback'])
         ->name('settings.social-traffic.zernio.callback');
-    Route::get('settings/social-traffic/reddit/callback', [SocialTrafficController::class, 'zernioCallback']);
-    Route::get('settings/social-traffic/youtube/callback', [SocialTrafficController::class, 'zernioCallback']);
-    Route::get('settings/social-traffic/x/callback', [SocialTrafficController::class, 'zernioCallback']);
 });

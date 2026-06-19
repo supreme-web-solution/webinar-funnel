@@ -3,8 +3,10 @@
 namespace App\Http\Requests;
 
 use App\Models\FunnelPromotionPost;
+use App\Services\Promotion\PromotionPlatformCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class FunnelPromotionStoreRequest extends FormRequest
 {
@@ -46,6 +48,10 @@ class FunnelPromotionStoreRequest extends FormRequest
 
     public function rules(): array
     {
+        $catalog = app(PromotionPlatformCatalog::class);
+        $supported = $catalog->supportedPlatforms();
+        $isEmail = $this->input('content_type') === FunnelPromotionPost::TYPE_EMAIL;
+
         return [
             'title' => ['nullable', 'string', 'max:200'],
             'topic' => ['required', 'string', 'max:255'],
@@ -58,8 +64,12 @@ class FunnelPromotionStoreRequest extends FormRequest
                     FunnelPromotionPost::TYPE_EMAIL,
                 ]),
             ],
-            'platforms' => ['required', 'array', 'min:1', 'max:3'],
-            'platforms.*' => ['string', Rule::in(['twitter', 'youtube', 'reddit'])],
+            'platforms' => [
+                Rule::requiredIf(! $isEmail),
+                'array',
+                $isEmail ? 'max:0' : 'min:1',
+            ],
+            'platforms.*' => ['string', Rule::in($supported)],
             'publish_mode' => ['required', Rule::in([FunnelPromotionPost::MODE_APPROVE_FIRST, FunnelPromotionPost::MODE_AUTO_PUBLISH])],
             'cta_url' => ['nullable', 'url', 'max:2048'],
             'cta_label' => ['nullable', 'string', 'max:120'],
@@ -80,5 +90,26 @@ class FunnelPromotionStoreRequest extends FormRequest
             'generation_context.email_type'     => ['nullable', 'string', Rule::in(['promotional', 'follow-up', 'newsletter'])],
             'auto_generate'                     => ['nullable', 'boolean'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($this->input('content_type') === FunnelPromotionPost::TYPE_EMAIL) {
+                return;
+            }
+
+            $connected = app(PromotionPlatformCatalog::class)->connectedPlatformKeys((int) $this->user()->id);
+            foreach ((array) $this->input('platforms', []) as $platform) {
+                if (! is_string($platform) || ! in_array($platform, $connected, true)) {
+                    $validator->errors()->add(
+                        'platforms',
+                        'One or more platforms are not connected. Link them in Settings → Social posting.'
+                    );
+
+                    return;
+                }
+            }
+        });
     }
 }

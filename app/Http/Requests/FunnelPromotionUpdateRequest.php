@@ -3,8 +3,10 @@
 namespace App\Http\Requests;
 
 use App\Models\FunnelPromotionPost;
+use App\Services\Promotion\PromotionPlatformCatalog;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class FunnelPromotionUpdateRequest extends FormRequest
 {
@@ -35,11 +37,13 @@ class FunnelPromotionUpdateRequest extends FormRequest
 
     public function rules(): array
     {
+        $supported = app(PromotionPlatformCatalog::class)->supportedPlatforms();
+
         return [
             'title' => ['sometimes', 'nullable', 'string', 'max:200'],
             'topic' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'platforms' => ['sometimes', 'array', 'min:1', 'max:3'],
-            'platforms.*' => ['string', Rule::in(['twitter', 'youtube', 'reddit'])],
+            'platforms' => ['sometimes', 'array', 'min:1'],
+            'platforms.*' => ['string', Rule::in($supported)],
             'publish_mode' => ['sometimes', Rule::in([FunnelPromotionPost::MODE_APPROVE_FIRST, FunnelPromotionPost::MODE_AUTO_PUBLISH])],
             'status' => [
                 'sometimes',
@@ -65,5 +69,26 @@ class FunnelPromotionUpdateRequest extends FormRequest
             'timezone' => ['sometimes', 'nullable', 'string', 'max:64'],
             'last_error' => ['sometimes', 'nullable', 'string'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if (! $this->has('platforms')) {
+                return;
+            }
+
+            $connected = app(PromotionPlatformCatalog::class)->connectedPlatformKeys((int) $this->user()->id);
+            foreach ((array) $this->input('platforms', []) as $platform) {
+                if (! is_string($platform) || ! in_array($platform, $connected, true)) {
+                    $validator->errors()->add(
+                        'platforms',
+                        'One or more platforms are not connected. Link them in Settings → Social posting.'
+                    );
+
+                    return;
+                }
+            }
+        });
     }
 }

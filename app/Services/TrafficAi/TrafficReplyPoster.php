@@ -24,7 +24,7 @@ final class TrafficReplyPoster
 
         if (! $account->isConnectedForPosting()) {
 
-            return ['success' => false, 'error' => 'Social account not connected via Zernio; reconnect in settings.'];
+            return ['success' => false, 'error' => 'Social account not connected; reconnect in settings.'];
 
         }
 

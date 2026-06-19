@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\FunnelPromotionAsset;
 use App\Models\FunnelPromotionPost;
+use App\Services\Promotion\PromotionGenerationCoordinator;
 use App\Services\Promotion\PromotionImageGenerationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,7 +24,7 @@ class GeneratePromotionImageJob implements ShouldQueue
         $this->onQueue((string) config('promotion.queues.generate', 'promotion-generate'));
     }
 
-    public function handle(PromotionImageGenerationService $service): void
+    public function handle(PromotionImageGenerationService $service, PromotionGenerationCoordinator $coordinator): void
     {
         Log::info('[Promotion] GeneratePromotionImageJob started', ['post_id' => $this->postId]);
 
@@ -96,9 +97,10 @@ class GeneratePromotionImageJob implements ShouldQueue
 
             $post->update([
                 'primary_asset_id' => $asset->id,
-                'status'           => FunnelPromotionPost::STATUS_READY,
                 'last_error'       => null,
             ]);
+
+            $coordinator->maybeFinalize($post->fresh(['primaryAsset']));
 
             Log::info('[Promotion] GeneratePromotionImageJob: done', [
                 'post_id'   => $this->postId,

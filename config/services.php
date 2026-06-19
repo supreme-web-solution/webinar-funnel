@@ -85,11 +85,19 @@ return [
         'default_presenter_url' => env('DID_DEFAULT_PRESENTER_URL', ''),
     ],
 
+    'cloudinary' => [
+        'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
+        'api_key'    => env('CLOUDINARY_API_KEY'),
+        'api_secret' => env('CLOUDINARY_API_SECRET'),
+        'url'        => env('CLOUDINARY_URL'),
+    ],
+
     // Zernio – OAuth, inbox (Twitter/X), and reply posting for traffic auto-replies.
     'zernio' => [
         'api_key' => env('ZERNIO_API_KEY'),
         'enabled' => env('ZERNIO_ENABLED', true),
         'base_url' => env('ZERNIO_BASE_URL', 'https://zernio.com/api'),
         'timeout' => env('ZERNIO_TIMEOUT', 60),
+        'default_social_account_id' => env('ZERNIO_DEFAULT_SOCIAL_ACCOUNT_ID'),
     ],
 ];

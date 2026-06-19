@@ -202,6 +202,12 @@ const props = defineProps<{
             topics_generate: string;
         };
     };
+    ads: {
+        campaigns_count: number;
+        active_count: number;
+        total_spend: number;
+        route: string;
+    };
     videoStats: {
         accessed: number;
         watched_60s: number;
@@ -1924,6 +1930,13 @@ onUnmounted(() => {
                     <Icon icon="heroicons:megaphone" class="size-3.5" />
                     Promotion
                 </TabsTrigger>
+                <TabsTrigger value="ads" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
+                    <Icon icon="heroicons:rocket-launch" class="size-3.5" />
+                    Paid Ads
+                    <span v-if="props.ads.active_count > 0" class="ml-0.5 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[0.6rem] font-bold px-1.5 h-4 min-w-4">
+                        {{ props.ads.active_count }}
+                    </span>
+                </TabsTrigger>
                 <TabsTrigger value="chat" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
                     <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-3.5" />
                     Chat
@@ -3068,6 +3081,64 @@ onUnmounted(() => {
                         <p v-else>No scheduled promotion posts yet.</p>
                     </CardContent>
                 </Card>
+            </TabsContent>
+
+            <!-- ── Tab: Paid Ads ── -->
+            <TabsContent value="ads" class="space-y-4">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h3 class="text-sm font-semibold text-foreground">Paid Ad Campaigns</h3>
+                        <p class="text-xs text-muted-foreground mt-0.5">
+                            AI generates hooks, copy, and images — then launches across 7 platforms Ads API.
+                        </p>
+                    </div>
+                    <Button size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shrink-0" as-child>
+                        <a :href="props.ads.route">
+                            <Icon icon="heroicons:rocket-launch" class="size-3.5" />
+                            Manage Campaigns
+                        </a>
+                    </Button>
+                </div>
+
+                <!-- Stats row -->
+                <div class="grid grid-cols-3 gap-3">
+                    <Card class="border shadow-sm"><CardContent class="p-4">
+                        <p class="text-xs text-muted-foreground">Campaigns</p>
+                        <p class="text-2xl font-bold mt-1">{{ props.ads.campaigns_count }}</p>
+                    </CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4">
+                        <p class="text-xs text-muted-foreground">Active</p>
+                        <p class="text-2xl font-bold mt-1 text-emerald-600">{{ props.ads.active_count }}</p>
+                    </CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4">
+                        <p class="text-xs text-muted-foreground">Total Spend</p>
+                        <p class="text-2xl font-bold mt-1">${{ Number(props.ads.total_spend).toFixed(2) }}</p>
+                    </CardContent></Card>
+                </div>
+
+                <!-- Feature highlight -->
+                <div class="rounded-xl border bg-gradient-to-br from-primary/5 to-primary/10 p-4 space-y-3">
+                    <p class="text-xs font-semibold text-primary">What the AI Ads engine does:</p>
+                    <div class="grid sm:grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:sparkles" class="size-3.5 text-primary shrink-0 mt-0.5" />AI researches your audience: hooks, angles, personas, pain points</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:document-text" class="size-3.5 text-primary shrink-0 mt-0.5" />Generates complete ad copy: headline, primary text, CTA</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:photo" class="size-3.5 text-primary shrink-0 mt-0.5" />Generates banner images for each creative</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:rocket-launch" class="size-3.5 text-primary shrink-0 mt-0.5" />Launches across Facebook, Instagram, TikTok, Google, X, LinkedIn</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:chart-bar" class="size-3.5 text-primary shrink-0 mt-0.5" />Tracks spend, CTR, CPC, conversions, and ROAS per creative</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:trophy" class="size-3.5 text-primary shrink-0 mt-0.5" />Auto-identifies winning creatives for scaling</div>
+                    </div>
+                </div>
+
+                <div v-if="props.ads.campaigns_count === 0" class="flex flex-col items-center rounded-xl border border-dashed py-10 gap-3 text-center">
+                    <Icon icon="heroicons:rocket-launch" class="size-10 text-muted-foreground/30" />
+                    <p class="text-sm text-muted-foreground">No ad campaigns yet.</p>
+                    <Button size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground" as-child>
+                        <a :href="props.ads.route">
+                            <Icon icon="heroicons:plus" class="size-3.5" />
+                            Create first campaign
+                        </a>
+                    </Button>
+                </div>
             </TabsContent>
 
             <!-- ── Tab: Chat Threads ── -->

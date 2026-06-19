@@ -96,4 +96,20 @@ class Funnel extends Model
     {
         return $this->hasMany(FunnelPromotionTopicSuggestion::class);
     }
+
+    public function publicOptinUrl(): ?string
+    {
+        $username = $this->relationLoaded('user')
+            ? $this->user?->username
+            : $this->user()->value('username');
+
+        if (! is_string($username) || $username === '' || ! is_string($this->slug) || $this->slug === '') {
+            return null;
+        }
+
+        return route('public.optin', [
+            'username' => $username,
+            'slug' => $this->slug,
+        ]);
+    }
 }

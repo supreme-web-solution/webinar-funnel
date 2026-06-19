@@ -15,6 +15,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+    promotionPlatformIcon,
+    promotionPlatformLabel,
+} from '@/lib/promotionPlatforms';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type PromotionPost = {
@@ -35,6 +39,14 @@ type PromotionPost = {
     published_at: string | null;
     last_error: string | null;
     generation_context?: Record<string, unknown> | null;
+    metadata?: {
+        publish_result?: {
+            success?: boolean;
+            zernio_post_id?: string | null;
+            published?: Array<{ platform?: string; external_id?: string | null; url?: string | null }>;
+            failures?: Array<{ platform?: string; error?: string }>;
+        };
+    } | null;
     primary_asset?: {
         id: number;
         asset_type: string;
@@ -59,6 +71,8 @@ type TopicSuggestion = { id: number; topic: string; angle: string | null; score:
 type DIDAvatar = { id: string; name: string; thumbnail_url: string; talking_preview_url: string };
 type DIDVoice  = { id: string; name: string; lang: string; style: string; preview_url: string };
 
+type ConnectedPlatform = { platform: string; username: string | null; social_account_id: number };
+
 // ─── Props ──────────────────────────────────────────────────────────────────
 const props = defineProps<{
     funnel: { id: number; name: string; status: string };
@@ -66,7 +80,9 @@ const props = defineProps<{
     stats: { total: number; draft: number; scheduled: number; published: number; failed: number };
     filters: { status?: string; type?: string; platform?: string; search?: string };
     suggestedTopics: TopicSuggestion[];
+    connectedPlatforms?: ConnectedPlatform[];
     availablePlatforms: string[];
+    socialTrafficUrl?: string;
     videoEnabled: boolean;
     availableAvatars: DIDAvatar[];
     availableVoices: DIDVoice[];
@@ -171,7 +187,7 @@ const videoScript = ref('');
 const generatingScript = ref(false);
 
 // Launch step – Platforms + publish
-const selectedPlatforms = ref<string[]>(['twitter']);
+const selectedPlatforms = ref<string[]>([]);
 const publishMode = ref<'approve_first' | 'auto_publish'>('approve_first');
 const campaignContext = ref('');
 const ctaLabelInput = ref('');
@@ -195,6 +211,11 @@ function stepDisplayLabel(step: WizardStep): string {
     return wizardStepLabels[step];
 }
 
+function defaultSelectedPlatforms(): string[] {
+    const keys = connectedPlatformRows.value.map((row) => row.platform);
+    return keys.length > 0 ? [...keys] : [];
+}
+
 function openDialog(): void {
     wizardStep.value = 1;
     videoSubStep.value = 'avatar';
@@ -208,7 +229,7 @@ function openDialog(): void {
     selectedEmailType.value = 'promotional';
     videoScript.value = '';
     generatingScript.value = false;
-    selectedPlatforms.value = ['twitter'];
+    selectedPlatforms.value = defaultSelectedPlatforms();
     publishMode.value = 'approve_first';
     campaignContext.value = '';
     ctaLabelInput.value = '';
@@ -275,12 +296,29 @@ onUnmounted(() => {
     stopVoicePreview();
 });
 
-// ─── Platform meta ───────────────────────────────────────────────────────────
-const PLATFORM_META: Record<string, { label: string; icon: string }> = {
-    twitter: { label: 'X (Twitter)', icon: 'simple-icons:x'       },
-    youtube: { label: 'YouTube',     icon: 'simple-icons:youtube'  },
-    reddit:  { label: 'Reddit',      icon: 'simple-icons:reddit'   },
-};
+const connectedPlatformRows = computed(() => props.connectedPlatforms ?? []);
+const socialTrafficUrl = computed(() => props.socialTrafficUrl ?? '/settings/social-traffic');
+
+const connectedPlatformKeys = computed(() => connectedPlatformRows.value.map((row) => row.platform));
+
+const connectedPlatformMap = computed(() =>
+    Object.fromEntries(connectedPlatformRows.value.map((row) => [row.platform, row])),
+);
+
+function platformsForPost(post: PromotionPost): string[] {
+    const onPost = post.platforms ?? [];
+    return [...new Set([...connectedPlatformKeys.value, ...onPost])];
+}
+
+function canTogglePlatform(platform: string): boolean {
+    return connectedPlatformKeys.value.includes(platform);
+}
+
+function platformButtonLabel(platform: string): string {
+    const username = connectedPlatformMap.value[platform]?.username;
+    const base = promotionPlatformLabel(platform);
+    return username ? `${base} (${username})` : base;
+}
 
 // ─── Wizard navigation ───────────────────────────────────────────────────────
 function canAdvance(): boolean {
@@ -427,6 +465,11 @@ function resolveContentType(): 'text' | 'image' | 'video' | 'email' {
 }
 
 function createPost(): void {
+    if (selectedFormat.value !== 'email' && selectedPlatforms.value.length === 0) {
+        toast.error('Select at least one connected platform.');
+        return;
+    }
+
     createForm.topic = topicInput.value.trim();
     createForm.content_type = resolveContentType();
     createForm.platforms = selectedFormat.value === 'email' ? [] : [...selectedPlatforms.value];
@@ -515,7 +558,20 @@ function runBulkAction(): void {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
     }, {
         preserveScroll: true,
-        onSuccess: () => { selectedIds.value = []; bulkScheduledFor.value = ''; },
+        onSuccess: () => {
+            selectedIds.value = [];
+            bulkScheduledFor.value = '';
+            if (bulkAction.value === 'duplicate') {
+                toast.success('Posts copied — edit and publish when ready.');
+            }
+        },
+    });
+}
+
+function duplicatePost(post: PromotionPost): void {
+    router.post(`/funnels/${props.funnel.id}/promotion/posts/${post.id}/duplicate`, {}, {
+        preserveScroll: true,
+        onSuccess: () => toast.success('Post copied — caption tweaked so you can republish within 24h.'),
     });
 }
 
@@ -537,17 +593,38 @@ function saveEdit(post: PromotionPost): void {
 
 const updatingPlatformsId = ref<number | null>(null);
 
+function formatPublishError(error: string | null | undefined): string {
+    if (!error) return '';
+    const lower = error.toLowerCase();
+    if (error.includes('already scheduled, publishing, or was posted') || lower.includes('duplicate')) {
+        return 'Blocked a duplicate: the same caption and video/image were already posted to this account in the last 24 hours. Edit the caption, regenerate the video, or wait 24 hours. Copying a post now auto-adjusts the caption — try Copy again, or edit this one manually.';
+    }
+    if (lower.includes('access token has expired') || lower.includes('auth_expired') || lower.includes('reconnect your account')) {
+        return 'Your social account session expired. Go to Settings → Social posting, disconnect and reconnect the account, then retry publish.';
+    }
+    if (lower.includes('did not return a platform post id') || lower.includes('did not confirm the post')) {
+        if (lower.includes('instagram')) {
+            return 'Instagram did not confirm the post. Make sure Instagram is connected separately in Settings → Social posting (not just Facebook), the image meets Instagram size limits, and you have not posted the same image and caption in the last 24 hours. Then retry publish.';
+        }
+        return 'The platform did not confirm the post was published. It may still be processing, saved as a draft, or blocked as duplicate content. Wait a minute and use Retry publish, or edit the caption/media first.';
+    }
+    if (lower.includes('tiktok') && (lower.includes('90 characters') || lower.includes('slideshow title'))) {
+        return 'TikTok limits photo slideshow titles to 90 characters. This post should auto-shorten on retry — click Publish again. If it still fails, shorten the post title in Edit.';
+    }
+    if (lower.includes('youtube') && lower.includes('100 characters')) {
+        return 'YouTube limits video titles to 100 characters. This post should auto-shorten on retry — click Publish again. If it still fails, shorten the post title in Edit.';
+    }
+    return error;
+}
+
 function togglePostPlatform(post: PromotionPost, platform: string): void {
     if (post.status === 'publishing' || post.status === 'published') return;
+    if (!canTogglePlatform(platform)) return;
 
     const current = [...(post.platforms ?? [])];
     const idx = current.indexOf(platform);
 
     if (idx === -1) {
-        if (current.length >= 3) {
-            toast.error('Maximum 3 platforms per post.');
-            return;
-        }
         current.push(platform);
     } else {
         if (current.length <= 1) {
@@ -589,10 +666,49 @@ function generate(post: PromotionPost): void {
 }
 
 function publish(post: PromotionPost): void {
-    router.post(`/funnels/${props.funnel.id}/promotion/posts/${post.id}/publish`, { sync: false }, {
+    publishingPostId.value = post.id;
+    router.post(`/funnels/${props.funnel.id}/promotion/posts/${post.id}/publish`, { sync: true }, {
         preserveScroll: true,
-        onSuccess: () => toast.success('Queued for publishing.'),
+        onSuccess: () => toast.success(needsRepublish(post) ? 'Retrying publish…' : 'Queued for publishing.'),
+        onError: (errors) => {
+            const msg = (errors as Record<string, string>).publish;
+            if (msg) toast.error(msg);
+        },
+        onFinish: () => {
+            publishingPostId.value = null;
+        },
     });
+}
+
+const publishingPostId = ref<number | null>(null);
+
+function isPublishingPost(post: PromotionPost): boolean {
+    return publishingPostId.value === post.id || post.status === 'publishing';
+}
+
+function needsRepublish(post: PromotionPost): boolean {
+    if (post.status !== 'published') return false;
+    const rows = post.metadata?.publish_result?.published ?? [];
+    if (rows.length === 0) {
+        return post.metadata?.publish_result?.success === true;
+    }
+    return rows.some((row) => !row.external_id && !row.url);
+}
+
+function platformPublishUrl(post: PromotionPost, platform: string): string | null {
+    const row = (post.metadata?.publish_result?.published ?? []).find((r) => r.platform === platform);
+    return row?.url ?? null;
+}
+
+function canPublishPost(post: PromotionPost): boolean {
+    if (post.status === 'generating' || post.status === 'publishing') return false;
+    if (needsRepublish(post)) return true;
+    if (post.status === 'published') return false;
+    return post.status === 'ready' || post.status === 'scheduled' || post.status === 'failed';
+}
+
+function publishButtonLabel(post: PromotionPost): string {
+    return needsRepublish(post) ? 'Retry publish' : 'Publish';
 }
 
 function destroy(post: PromotionPost): void {
@@ -611,10 +727,16 @@ function schedule(post: PromotionPost, value: string): void {
     }, { preserveScroll: true });
 }
 
+function displayStatus(post: PromotionPost): string {
+    if (post.status === 'published' && post.last_error) return 'partial';
+    return post.status;
+}
+
 // ─── Display helpers ──────────────────────────────────────────────────────────
 function statusMeta(s: string) {
     const map: Record<string, { label: string; dot: string; text: string }> = {
         published:  { label: 'Published',   dot: 'bg-emerald-500',              text: 'text-emerald-600 dark:text-emerald-400' },
+        partial:    { label: 'Partial',     dot: 'bg-amber-500',                text: 'text-amber-600 dark:text-amber-400'     },
         scheduled:  { label: 'Scheduled',   dot: 'bg-blue-500',                 text: 'text-blue-600 dark:text-blue-400'       },
         failed:     { label: 'Failed',      dot: 'bg-rose-500',                 text: 'text-rose-600 dark:text-rose-400'       },
         generating: { label: 'Generating…', dot: 'bg-amber-500 animate-pulse',  text: 'text-amber-600 dark:text-amber-400'     },
@@ -1008,20 +1130,28 @@ const statItems = computed(() => [
                     <!-- Platforms (social posts only) -->
                     <div v-else class="space-y-2">
                         <Label class="text-xs font-semibold">Publish to</Label>
-                        <div class="flex flex-wrap gap-2">
+                        <div
+                            v-if="connectedPlatformKeys.length === 0"
+                            class="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-xs text-muted-foreground"
+                        >
+                            No social accounts connected yet.
+                            <Link :href="socialTrafficUrl" class="font-semibold text-primary hover:underline">Connect platforms in Settings</Link>
+                            to schedule and publish posts.
+                        </div>
+                        <div v-else class="flex flex-wrap gap-2">
                             <button
-                                v-for="platform in availablePlatforms"
-                                :key="platform"
+                                v-for="row in connectedPlatformRows"
+                                :key="row.platform"
                                 type="button"
                                 class="flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-medium transition-all"
-                                :class="selectedPlatforms.includes(platform)
+                                :class="selectedPlatforms.includes(row.platform)
                                     ? 'border-primary/50 bg-primary/10 text-primary'
                                     : 'border-border bg-card text-muted-foreground hover:bg-muted'"
-                                @click="togglePlatform(platform)"
+                                @click="togglePlatform(row.platform)"
                             >
-                                <Icon :icon="PLATFORM_META[platform]?.icon ?? 'heroicons:share'" class="size-3.5" />
-                                {{ PLATFORM_META[platform]?.label ?? platform }}
-                                <span v-if="selectedPlatforms.includes(platform)" class="size-3.5 rounded-full bg-primary flex items-center justify-center">
+                                <Icon :icon="promotionPlatformIcon(row.platform)" class="size-3.5" />
+                                {{ platformButtonLabel(row.platform) }}
+                                <span v-if="selectedPlatforms.includes(row.platform)" class="size-3.5 rounded-full bg-primary flex items-center justify-center">
                                     <Icon icon="heroicons:check" class="size-2 text-white" />
                                 </span>
                             </button>
@@ -1186,6 +1316,31 @@ const statItems = computed(() => [
             </div>
         </div>
 
+        <!-- Connected platforms -->
+        <div
+            v-if="connectedPlatformKeys.length > 0"
+            class="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+        >
+            <span class="font-semibold text-foreground">Connected:</span>
+            <span
+                v-for="row in connectedPlatformRows"
+                :key="row.platform"
+                class="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5"
+            >
+                <Icon :icon="promotionPlatformIcon(row.platform)" class="size-3" />
+                {{ platformButtonLabel(row.platform) }}
+            </span>
+            <Link :href="socialTrafficUrl" class="ml-auto text-primary hover:underline">Manage connections</Link>
+        </div>
+        <div
+            v-else
+            class="rounded-lg border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-xs text-muted-foreground"
+        >
+            Connect Facebook, Instagram, X, and other platforms in
+            <Link :href="socialTrafficUrl" class="font-semibold text-primary hover:underline">Settings → Social posting</Link>
+            to publish and schedule promotion posts.
+        </div>
+
         <!-- ── Filters ─────────────────────────────────────────────────── -->
         <div class="flex flex-wrap items-center gap-2">
             <select v-model="filterStatus" class="h-8 rounded-lg border bg-background px-3 text-xs text-muted-foreground">
@@ -1198,7 +1353,7 @@ const statItems = computed(() => [
             </select>
             <select v-model="filterPlatform" class="h-8 rounded-lg border bg-background px-3 text-xs text-muted-foreground">
                 <option value="">All platforms</option>
-                <option v-for="p in availablePlatforms" :key="p" :value="p" class="capitalize">{{ p }}</option>
+                <option v-for="p in availablePlatforms" :key="p" :value="p">{{ promotionPlatformLabel(p) }}</option>
             </select>
             <div class="relative ml-auto">
                 <Icon icon="heroicons:magnifying-glass" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
@@ -1216,7 +1371,7 @@ const statItems = computed(() => [
                 <select v-model="bulkAction" class="h-7 rounded-md border bg-background px-2.5 text-xs">
                     <option value="publish">Publish now</option>
                     <option value="schedule">Schedule</option>
-                    <option value="duplicate">Duplicate</option>
+                    <option value="duplicate">Copy</option>
                     <option value="delete">Delete</option>
                 </select>
                 <Input v-if="bulkAction === 'schedule'" v-model="bulkScheduledFor" type="datetime-local" class="h-7 text-xs" />
@@ -1287,9 +1442,9 @@ const statItems = computed(() => [
                     </div>
 
                     <!-- Status badge top-right -->
-                    <div class="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.65rem] font-semibold backdrop-blur-sm bg-background/80 shadow-sm" :class="statusMeta(post.status).text">
-                        <span class="size-1.5 rounded-full inline-block shrink-0" :class="statusMeta(post.status).dot" />
-                        {{ statusMeta(post.status).label }}
+                    <div class="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.65rem] font-semibold backdrop-blur-sm bg-background/80 shadow-sm" :class="statusMeta(displayStatus(post)).text">
+                        <span class="size-1.5 rounded-full inline-block shrink-0" :class="statusMeta(displayStatus(post)).dot" />
+                        {{ statusMeta(displayStatus(post)).label }}
                     </div>
 
                     <!-- Checkbox top-left -->
@@ -1311,9 +1466,16 @@ const statItems = computed(() => [
                     </h3>
 
                     <!-- Error notice -->
+                    <div
+                        v-if="needsRepublish(post)"
+                        class="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[0.65rem] text-amber-800 dark:text-amber-300"
+                    >
+                        Marked published here, but the platform did not confirm the post. Use <strong>Retry publish</strong> once caption and image are ready.
+                    </div>
+
                     <p v-if="post.last_error" class="text-xs text-rose-500 flex items-start gap-1">
                         <Icon icon="heroicons:exclamation-triangle" class="size-3.5 shrink-0 mt-0.5" />
-                        <span class="line-clamp-2">{{ post.last_error }}</span>
+                        <span class="line-clamp-3">{{ formatPublishError(post.last_error) }}</span>
                     </p>
 
                     <!-- Text preview — 3 readable lines + Preview button -->
@@ -1339,23 +1501,27 @@ const statItems = computed(() => [
                         <p class="text-[0.65rem] font-semibold text-muted-foreground uppercase tracking-wide">Publish to</p>
                         <div class="flex flex-wrap gap-1.5">
                             <button
-                                v-for="platform in availablePlatforms"
+                                v-for="platform in platformsForPost(post)"
                                 :key="platform"
                                 type="button"
                                 class="flex items-center gap-1.5 rounded-md border px-2 py-1 text-[0.65rem] font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 :class="(post.platforms ?? []).includes(platform)
                                     ? 'border-primary/50 bg-primary/10 text-primary'
-                                    : 'border-border bg-card text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
-                                :disabled="updatingPlatformsId === post.id || post.status === 'publishing' || post.status === 'published'"
-                                :title="(post.platforms ?? []).includes(platform) ? `Remove ${PLATFORM_META[platform]?.label ?? platform}` : `Add ${PLATFORM_META[platform]?.label ?? platform}`"
+                                    : canTogglePlatform(platform)
+                                        ? 'border-border bg-card text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                                        : 'border-border/60 bg-muted/30 text-muted-foreground/70'"
+                                :disabled="!canTogglePlatform(platform) || updatingPlatformsId === post.id || post.status === 'publishing' || post.status === 'published'"
+                                :title="canTogglePlatform(platform)
+                                    ? ((post.platforms ?? []).includes(platform) ? `Remove ${promotionPlatformLabel(platform)}` : `Add ${promotionPlatformLabel(platform)}`)
+                                    : `${promotionPlatformLabel(platform)} (reconnect in Settings to publish here)`"
                                 @click="togglePostPlatform(post, platform)"
                             >
                                 <Icon
-                                    :icon="updatingPlatformsId === post.id ? 'heroicons:arrow-path' : (PLATFORM_META[platform]?.icon ?? 'heroicons:share')"
+                                    :icon="updatingPlatformsId === post.id ? 'heroicons:arrow-path' : promotionPlatformIcon(platform)"
                                     class="size-3.5 shrink-0"
                                     :class="updatingPlatformsId === post.id ? 'animate-spin' : ''"
                                 />
-                                {{ PLATFORM_META[platform]?.label ?? platform }}
+                                {{ promotionPlatformLabel(platform) }}
                             </button>
                         </div>
                     </div>
@@ -1376,6 +1542,15 @@ const statItems = computed(() => [
                         </span>
                         <span v-else-if="post.published_at" class="text-xs text-emerald-600 flex items-center gap-1">
                             <Icon icon="heroicons:check-circle" class="size-3.5" />{{ fmtDate(post.published_at) }}
+                            <a
+                                v-for="platform in (post.platforms ?? [])"
+                                :key="platform"
+                                v-show="platformPublishUrl(post, platform)"
+                                :href="platformPublishUrl(post, platform) ?? '#'"
+                                target="_blank"
+                                rel="noopener"
+                                class="ml-1 underline hover:opacity-80"
+                            >View on {{ promotionPlatformLabel(platform) }}</a>
                         </span>
                     </div>
                 </div>
@@ -1426,14 +1601,29 @@ const statItems = computed(() => [
                         >
                             <Icon icon="heroicons:pencil" class="size-3.5" />
                         </Button>
+                        <!-- Copy -->
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            class="h-8 w-8 p-0"
+                            title="Copy post"
+                            @click="duplicatePost(post)"
+                        >
+                            <Icon icon="heroicons:document-duplicate" class="size-3.5" />
+                        </Button>
                         <!-- Publish -->
                         <Button
                             size="sm"
                             class="h-8 px-3 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                            :disabled="isPublishingPost(post) || !canPublishPost(post)"
                             @click="publish(post)"
                         >
-                            <Icon icon="heroicons:paper-airplane" class="size-3.5 shrink-0" />
-                            Publish
+                            <Icon
+                                :icon="isPublishingPost(post) ? 'heroicons:arrow-path' : 'heroicons:paper-airplane'"
+                                class="size-3.5 shrink-0"
+                                :class="{ 'animate-spin': isPublishingPost(post) }"
+                            />
+                            {{ isPublishingPost(post) ? 'Publishing…' : publishButtonLabel(post) }}
                         </Button>
                         <!-- Delete -->
                         <Button
@@ -1541,9 +1731,9 @@ const statItems = computed(() => [
                                     <Icon
                                         v-for="p in (previewPost.platforms ?? [])"
                                         :key="p"
-                                        :icon="PLATFORM_META[p]?.icon ?? 'heroicons:share'"
+                                        :icon="promotionPlatformIcon(p)"
                                         class="size-4 text-muted-foreground"
-                                        :title="PLATFORM_META[p]?.label ?? p"
+                                        :title="promotionPlatformLabel(p)"
                                     />
                                 </div>
                             </div>
@@ -1620,11 +1810,25 @@ const statItems = computed(() => [
                     </Button>
                     <Button
                         size="sm"
+                        variant="outline"
+                        class="h-8 text-xs gap-1.5"
+                        @click="duplicatePost(previewPost); previewPost = null"
+                    >
+                        <Icon icon="heroicons:document-duplicate" class="size-3.5" />
+                        Copy
+                    </Button>
+                    <Button
+                        size="sm"
                         class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90 ml-auto"
+                        :disabled="isPublishingPost(previewPost) || !canPublishPost(previewPost)"
                         @click="publish(previewPost); previewPost = null"
                     >
-                        <Icon icon="heroicons:paper-airplane" class="size-3.5" />
-                        Publish now
+                        <Icon
+                            :icon="isPublishingPost(previewPost) ? 'heroicons:arrow-path' : 'heroicons:paper-airplane'"
+                            class="size-3.5"
+                            :class="{ 'animate-spin': isPublishingPost(previewPost) }"
+                        />
+                        {{ isPublishingPost(previewPost) ? 'Publishing…' : 'Publish now' }}
                     </Button>
                 </div>
             </template>

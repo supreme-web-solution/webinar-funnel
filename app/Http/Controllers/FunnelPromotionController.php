@@ -17,6 +17,9 @@ use App\Models\FunnelPromotionScheduleEvent;
 use App\Models\FunnelPromotionTopicSuggestion;
 use App\Services\DID\DIDClient;
 use App\Services\Promotion\PromotionCtaResolverService;
+use App\Services\Promotion\PromotionGenerationCoordinator;
+use App\Services\Promotion\PromotionPlatformCatalog;
+use App\Services\Promotion\PromotionPublishGuard;
 use App\Services\Promotion\PromotionTextGenerationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -28,7 +31,7 @@ use Inertia\Response;
 
 class FunnelPromotionController extends Controller
 {
-    public function index(Request $request, Funnel $funnel, DIDClient $did): Response
+    public function index(Request $request, Funnel $funnel, DIDClient $did, PromotionPlatformCatalog $platformCatalog): Response
     {
         $this->authorizeFunnel($funnel);
 
@@ -70,6 +73,17 @@ class FunnelPromotionController extends Controller
             ->limit(20)
             ->get(['id', 'topic', 'angle', 'score']);
 
+        $connectedPlatforms = $platformCatalog->connectedForUser((int) $request->user()->id);
+        $postPlatformKeys = FunnelPromotionPost::query()
+            ->where('funnel_id', $funnel->id)
+            ->where('content_type', '!=', FunnelPromotionPost::TYPE_EMAIL)
+            ->pluck('platforms')
+            ->flatten()
+            ->filter(fn ($p) => is_string($p) && $p !== '')
+            ->unique()
+            ->values()
+            ->all();
+
         return Inertia::render('funnels/promotion/Posts', [
             'funnel' => [
                 'id' => $funnel->id,
@@ -91,10 +105,15 @@ class FunnelPromotionController extends Controller
                 'platform' => $platform,
                 'search' => $search,
             ],
-            'availablePlatforms' => (array) config('promotion.supported_platforms', ['twitter', 'youtube', 'reddit']),
+            'connectedPlatforms' => $connectedPlatforms,
+            'availablePlatforms' => $platformCatalog->platformKeysForSelection(
+                (int) $request->user()->id,
+                is_array($postPlatformKeys) ? $postPlatformKeys : []
+            ),
             'videoEnabled'       => $did->isEnabled(),
             'availableAvatars'   => $did->isEnabled() ? $this->buildAvatarList($did->getPresenters()) : [],
             'availableVoices'    => DIDClient::VOICES,
+            'socialTrafficUrl'   => route('settings.social-traffic.edit'),
             'routes' => [
                 'store' => route('funnels.promotion.posts.store', $funnel),
                 'bulk' => route('funnels.promotion.posts.bulk', $funnel),
@@ -175,22 +194,10 @@ class FunnelPromotionController extends Controller
 
         if ($action === 'duplicate') {
             foreach ($posts as $post) {
-                $copy = $post->replicate([
-                    'status',
-                    'scheduled_for',
-                    'published_at',
-                    'last_error',
-                    'metadata',
-                ]);
-                $copy->status = FunnelPromotionPost::STATUS_DRAFT;
-                $copy->scheduled_for = null;
-                $copy->published_at = null;
-                $copy->last_error = null;
-                $copy->metadata = array_merge((array) $post->metadata, ['duplicated_from' => $post->id]);
-                $copy->save();
+                $this->duplicatePost($post);
             }
 
-            return back()->with('success', 'Selected posts duplicated as drafts.');
+            return back()->with('success', 'Selected posts duplicated — ready to edit and publish.');
         }
 
         if ($action === 'schedule') {
@@ -358,9 +365,27 @@ class FunnelPromotionController extends Controller
         return back()->with('success', 'Post scheduled.');
     }
 
-    public function publish(Request $request, Funnel $funnel, FunnelPromotionPost $post): RedirectResponse
+    public function duplicate(
+        Request $request,
+        Funnel $funnel,
+        FunnelPromotionPost $post,
+    ): RedirectResponse {
+        $this->authorizePost($request, $funnel, $post);
+
+        $this->duplicatePost($post->load(['assets', 'primaryAsset']));
+
+        return back()->with('success', 'Post copied — caption adjusted slightly so you can republish within 24 hours.');
+    }
+
+    public function publish(Request $request, Funnel $funnel, FunnelPromotionPost $post, PromotionPublishGuard $publishGuard): RedirectResponse
     {
         $this->authorizePost($request, $funnel, $post);
+        $post->loadMissing('primaryAsset');
+
+        $errors = $publishGuard->blockingErrors($post);
+        if ($errors !== []) {
+            return back()->withErrors(['publish' => implode(' ', $errors)]);
+        }
 
         $sync = filter_var($request->input('sync', true), FILTER_VALIDATE_BOOLEAN);
         if ($sync) {
@@ -433,5 +458,77 @@ class FunnelPromotionController extends Controller
             (int) $user->id === (int) $post->user_id && (int) $post->funnel_id === (int) $funnel->id,
             403
         );
+    }
+
+    private function duplicatePost(FunnelPromotionPost $post): FunnelPromotionPost
+    {
+        $copy = $post->replicate([
+            'status',
+            'scheduled_for',
+            'published_at',
+            'last_error',
+            'metadata',
+            'primary_asset_id',
+            'uuid',
+        ]);
+        $copy->status = FunnelPromotionPost::STATUS_DRAFT;
+        $copy->scheduled_for = null;
+        $copy->published_at = null;
+        $copy->last_error = null;
+        $copy->metadata = [
+            'duplicated_from' => $post->id,
+            'created_from' => 'duplicate',
+        ];
+        $copy->save();
+
+        $newPrimaryId = null;
+        foreach ($post->assets as $asset) {
+            $assetCopy = $asset->replicate(['uuid', 'promotion_post_id']);
+            $assetCopy->promotion_post_id = $copy->id;
+            $assetCopy->save();
+
+            if ((int) $post->primary_asset_id === (int) $asset->id) {
+                $newPrimaryId = (int) $assetCopy->id;
+            }
+        }
+
+        if ($newPrimaryId !== null) {
+            $copy->update(['primary_asset_id' => $newPrimaryId]);
+        }
+
+        $this->varyDuplicatedContentForRepublish($copy);
+
+        $copy->load('primaryAsset');
+
+        if (app(PromotionGenerationCoordinator::class)->isGenerationComplete($copy)) {
+            $copy->update(['status' => FunnelPromotionPost::STATUS_READY]);
+        }
+
+        return $copy->fresh(['primaryAsset']);
+    }
+
+    /**
+     * Zernio rejects identical caption + media to the same account within 24 hours.
+     * Nudge duplicated posts so they can be published again without waiting.
+     */
+    private function varyDuplicatedContentForRepublish(FunnelPromotionPost $copy): void
+    {
+        $body = trim((string) $copy->text_body);
+        $emailBody = trim((string) $copy->email_body);
+        $stamp = now()->format('M j, Y g:i A');
+
+        if ($body !== '') {
+            $copy->text_body = $body."\n\n— ".$stamp;
+        }
+
+        if ($emailBody !== '') {
+            $copy->email_body = $emailBody."\n\n— ".$stamp;
+        }
+
+        if (is_string($copy->topic) && $copy->topic !== '' && ! str_ends_with($copy->topic, ' (copy)')) {
+            $copy->topic = $copy->topic.' (copy)';
+        }
+
+        $copy->save();
     }
 }

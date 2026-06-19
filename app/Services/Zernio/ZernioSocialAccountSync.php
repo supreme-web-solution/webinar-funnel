@@ -15,6 +15,13 @@ final class ZernioSocialAccountSync
         'x' => 'twitter',
         'reddit' => 'reddit',
         'youtube' => 'youtube',
+        'facebook' => 'facebook',
+        'meta' => 'facebook',
+        'metaads' => 'facebook',
+        'instagram' => 'instagram',
+        'tiktok' => 'tiktok',
+        'linkedin' => 'linkedin',
+        'pinterest' => 'pinterest',
     ];
 
     public function __construct(

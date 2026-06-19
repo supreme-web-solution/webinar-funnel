@@ -4,6 +4,7 @@ namespace App\Services\Promotion;
 
 use App\Models\Funnel;
 use App\Models\FunnelPromotionPost;
+use App\Services\Cloudinary\CloudinaryService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -80,11 +81,28 @@ class PromotionImageGenerationService
             if (is_string($first['b64_json'] ?? null) && $first['b64_json'] !== '') {
                 $binary = base64_decode($first['b64_json'], true);
                 if ($binary !== false) {
-                    $path = 'promotion-assets/'.date('Y/m').'/'.Str::uuid().'.png';
+                    $folder   = 'promotion-assets/' . date('Y/m');
+                    $publicId = Str::uuid()->toString();
+
+                    $cloudinary = app(CloudinaryService::class);
+                    if ($cloudinary->isConfigured()) {
+                        $url = $cloudinary->uploadBinary($binary, $folder, $publicId);
+                        if ($url) {
+                            Log::info('[Promotion] PromotionImageGenerationService: uploaded to Cloudinary', [
+                                'post_id' => $post->id,
+                                'url'     => $url,
+                            ]);
+                            return ['success' => true, 'url' => $url, 'prompt' => $prompt];
+                        }
+                        Log::warning('[Promotion] Cloudinary upload failed — falling back to local storage.', ['post_id' => $post->id]);
+                    }
+
+                    // Fallback: local public disk
+                    $path = "{$folder}/{$publicId}.png";
                     Storage::disk('public')->put($path, $binary);
                     $url = Storage::disk('public')->url($path);
 
-                    Log::info('[Promotion] PromotionImageGenerationService: saved b64 image', [
+                    Log::info('[Promotion] PromotionImageGenerationService: saved b64 image locally', [
                         'post_id' => $post->id,
                         'path'    => $path,
                         'url'     => $url,

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\FunnelPromotionPost;
+use App\Services\Promotion\PromotionGenerationCoordinator;
 use App\Services\Promotion\PromotionTextGenerationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,7 +23,7 @@ class GeneratePromotionTextJob implements ShouldQueue
         $this->onQueue((string) config('promotion.queues.generate', 'promotion-generate'));
     }
 
-    public function handle(PromotionTextGenerationService $service): void
+    public function handle(PromotionTextGenerationService $service, PromotionGenerationCoordinator $coordinator): void
     {
         Log::info('[Promotion] GeneratePromotionTextJob started', ['post_id' => $this->postId]);
 
@@ -58,8 +59,7 @@ class GeneratePromotionTextJob implements ShouldQueue
                 'hashtag_count'    => count($result['hashtags'] ?? []),
             ]);
 
-            // For image posts the image job controls final STATUS_READY.
-            // For all other types this job is the last step — mark ready.
+            // Image posts wait for image + text before STATUS_READY.
             $isImagePost = $post->content_type === FunnelPromotionPost::TYPE_IMAGE;
 
             $post->fill([
@@ -75,6 +75,12 @@ class GeneratePromotionTextJob implements ShouldQueue
             }
 
             $post->save();
+
+            if ($isImagePost) {
+                $coordinator->maybeFinalize($post);
+            } elseif ($post->publish_mode === FunnelPromotionPost::MODE_AUTO_PUBLISH) {
+                $coordinator->maybeFinalize($post);
+            }
 
             Log::info('[Promotion] GeneratePromotionTextJob: post updated', [
                 'post_id' => $this->postId,

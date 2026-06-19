@@ -27,6 +27,10 @@ const sidebarNavItems: NavItem[] = [
         title: 'Social posting',
         href: '/settings/social-traffic',
     },
+    {
+        title: 'Ad accounts',
+        href: '/settings/ad-accounts',
+    },
 ];
 
 const { isCurrentOrParentUrl } = useCurrentUrl();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\SocialAccount;
+use App\Models\User;
 use App\Services\Zernio\ZernioApiException;
 use App\Services\Zernio\ZernioClient;
 use App\Services\Zernio\ZernioProfileManager;
@@ -18,11 +19,22 @@ use Inertia\Response;
 class SocialTrafficController extends Controller
 {
     /** @var array<string, string> Route slug => Zernio connect platform */
-    private const PLATFORM_MAP = [
+    public const PLATFORM_MAP = [
         'reddit' => 'reddit',
         'youtube' => 'youtube',
         'x' => 'twitter',
+        'facebook' => 'facebook',
+        'instagram' => 'instagram',
+        'tiktok' => 'tiktok',
+        'linkedin' => 'linkedin',
+        'pinterest' => 'pinterest',
     ];
+
+    /** @var list<string> */
+    public const TRAFFIC_REPLY_PLATFORMS = ['reddit', 'youtube', 'x'];
+
+    /** @var list<string> */
+    public const POSTING_ADS_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'linkedin', 'pinterest'];
 
     public function edit(Request $request): Response
     {
@@ -45,7 +57,83 @@ class SocialTrafficController extends Controller
             'appUrl' => $appUrl,
             'appUrlMismatch' => $appUrl !== '' && $appUrl !== $requestOrigin,
             'requestOrigin' => $requestOrigin,
+            'trafficPlatforms' => self::TRAFFIC_REPLY_PLATFORMS,
+            'postingPlatforms' => self::POSTING_ADS_PLATFORMS,
+            'facebookAdsDiagnostics' => $this->facebookAdsDiagnostics((int) $request->user()->id),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function facebookAdsDiagnostics(int $userId): ?array
+    {
+        $zernio = app(ZernioClient::class);
+        if (! $zernio->isConfigured()) {
+            return null;
+        }
+
+        $account = SocialAccount::query()
+            ->where('user_id', $userId)
+            ->where('platform', 'facebook')
+            ->whereNotNull('zernio_account_id')
+            ->first();
+
+        if (! $account?->zernio_account_id) {
+            return null;
+        }
+
+        $metaAdsId = null;
+        $user = User::query()->find($userId);
+        if ($user) {
+            try {
+                $profileId = app(ZernioProfileManager::class)->ensureForUser($user);
+                foreach ($zernio->listAccountsForProfile($profileId) as $row) {
+                    if (! is_array($row)) {
+                        continue;
+                    }
+                    if (strtolower(trim((string) ($row['platform'] ?? ''))) === 'metaads') {
+                        $metaAdsId = (string) ($row['_id'] ?? $row['id'] ?? '');
+                        break;
+                    }
+                }
+            } catch (\Throwable) {
+                // optional
+            }
+        }
+
+        $mapped = [];
+        $error = null;
+
+        try {
+            foreach ($zernio->listAdAccounts((string) $account->zernio_account_id, null, 15) as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $id = (string) ($row['id'] ?? $row['ad_account_id'] ?? $row['account_id'] ?? $row['platformAdAccountId'] ?? '');
+                if ($id === '') {
+                    continue;
+                }
+                $name = $row['name'] ?? $row['account_name'] ?? $row['platformAdAccountName'] ?? null;
+                $currency = $row['currency'] ?? $row['currencyCode'] ?? null;
+                $mapped[] = [
+                    'id' => $id,
+                    'name' => is_string($name) && $name !== '' ? $name : null,
+                    'currency' => is_string($currency) && $currency !== '' ? strtoupper($currency) : null,
+                ];
+            }
+        } catch (\Throwable $e) {
+            $error = $e->getMessage();
+        }
+
+        return [
+            'page_name' => $account->platform_username,
+            'zernio_page_account_id' => $account->zernio_account_id,
+            'has_metaads_token' => is_string($metaAdsId) && $metaAdsId !== '',
+            'zernio_metaads_account_id' => $metaAdsId ?: null,
+            'billing_ad_accounts' => $mapped,
+            'list_error' => $error,
+        ];
     }
 
     public function disconnect(Request $request, SocialAccount $socialAccount): RedirectResponse
@@ -235,39 +323,14 @@ class SocialTrafficController extends Controller
         );
     }
 
-    public function redditRedirect(Request $request): RedirectResponse
+    public function platformRedirect(Request $request, string $platform): RedirectResponse
     {
-        return $this->connectRedirect($request, 'reddit');
-    }
-
-    public function redditCallback(Request $request): RedirectResponse
-    {
-        return $this->zernioCallback($request);
-    }
-
-    public function youtubeRedirect(Request $request): RedirectResponse
-    {
-        return $this->connectRedirect($request, 'youtube');
-    }
-
-    public function youtubeCallback(Request $request): RedirectResponse
-    {
-        return $this->zernioCallback($request);
-    }
-
-    public function xRedirect(Request $request): RedirectResponse
-    {
-        return $this->connectRedirect($request, 'x');
-    }
-
-    public function xCallback(Request $request): RedirectResponse
-    {
-        return $this->zernioCallback($request);
+        return $this->connectRedirect($request, $platform);
     }
 
     private function connectionSuccessRedirect(string $localPlatform): RedirectResponse
     {
-        Log::info('SocialTrafficController: account connected via Zernio', [
+        Log::info('SocialTrafficController: account connected', [
             'platform' => $localPlatform,
         ]);
 
@@ -275,6 +338,11 @@ class SocialTrafficController extends Controller
             'twitter' => 'X',
             'reddit' => 'Reddit',
             'youtube' => 'YouTube',
+            'facebook' => 'Facebook',
+            'instagram' => 'Instagram',
+            'tiktok' => 'TikTok',
+            'linkedin' => 'LinkedIn',
+            'pinterest' => 'Pinterest',
             default => ucfirst($localPlatform),
         };
 
@@ -327,6 +395,11 @@ class SocialTrafficController extends Controller
             'reddit' => url('/settings/social-traffic/reddit/callback'),
             'youtube' => url('/settings/social-traffic/youtube/callback'),
             'x' => url('/settings/social-traffic/x/callback'),
+            'facebook' => url('/settings/social-traffic/facebook/callback'),
+            'instagram' => url('/settings/social-traffic/instagram/callback'),
+            'tiktok' => url('/settings/social-traffic/tiktok/callback'),
+            'linkedin' => url('/settings/social-traffic/linkedin/callback'),
+            'pinterest' => url('/settings/social-traffic/pinterest/callback'),
             default => route('settings.social-traffic.zernio.callback'),
         };
     }
@@ -339,6 +412,11 @@ class SocialTrafficController extends Controller
             str_ends_with($path, 'reddit/callback') => 'reddit',
             str_ends_with($path, 'youtube/callback') => 'youtube',
             str_ends_with($path, 'x/callback') => 'x',
+            str_ends_with($path, 'facebook/callback') => 'facebook',
+            str_ends_with($path, 'instagram/callback') => 'instagram',
+            str_ends_with($path, 'tiktok/callback') => 'tiktok',
+            str_ends_with($path, 'linkedin/callback') => 'linkedin',
+            str_ends_with($path, 'pinterest/callback') => 'pinterest',
             default => null,
         };
     }

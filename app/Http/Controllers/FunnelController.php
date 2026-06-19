@@ -11,6 +11,7 @@ use App\Models\Funnel;
 use App\Models\FunnelAiSource;
 use App\Models\FunnelAiSourceChunk;
 use App\Models\FunnelPage;
+use App\Models\FunnelAdCampaign;
 use App\Models\FunnelPromotionPost;
 use App\Models\FunnelPromotionTopicSuggestion;
 use App\Models\FunnelVideoViewStat;
@@ -176,6 +177,7 @@ class FunnelController extends Controller
         $trafficData = $this->buildTrafficData($request, $funnel);
         $promotionData = $this->buildPromotionData($funnel);
         $videoStats = $this->buildVideoStatsData($funnel);
+        $adsData = $this->buildAdsData($funnel);
 
         return Inertia::render('funnels/Edit', [
             'funnel' => $funnel,
@@ -184,6 +186,7 @@ class FunnelController extends Controller
             'traffic' => $trafficData,
             'promotion' => $promotionData,
             'videoStats' => $videoStats,
+            'ads' => $adsData,
             'aiSources' => FunnelAiSource::query()
                 ->where('funnel_id', $funnel->id)
                 ->latest()
@@ -407,6 +410,23 @@ class FunnelController extends Controller
             'watched_50_percent' => (clone $baseQuery)->where('reached_50_percent', true)->count(),
             'watched_to_end' => (clone $baseQuery)->where('reached_100_percent', true)->count(),
             'avg_watch_seconds' => (int) round((float) ((clone $baseQuery)->avg('watched_seconds') ?? 0)),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildAdsData(Funnel $funnel): array
+    {
+        $campaigns = FunnelAdCampaign::query()->where('funnel_id', $funnel->id);
+        $active    = (clone $campaigns)->where('status', FunnelAdCampaign::STATUS_ACTIVE)->get(['performance']);
+        $totalSpend = $active->sum(fn ($c) => (float) ($c->performance['spend'] ?? 0));
+
+        return [
+            'campaigns_count' => (clone $campaigns)->count(),
+            'active_count'    => $active->count(),
+            'total_spend'     => round($totalSpend, 2),
+            'route'           => route('funnels.ads.index', $funnel),
         ];
     }
 

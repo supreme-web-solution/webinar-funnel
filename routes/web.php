@@ -17,6 +17,7 @@ use App\Http\Controllers\FunnelTrafficController;
 use App\Http\Controllers\FunnelPromotionCalendarController;
 use App\Http\Controllers\FunnelPromotionController;
 use App\Http\Controllers\FunnelPromotionTopicController;
+use App\Http\Controllers\FunnelAdCampaignController;
 use App\Http\Controllers\PromotionCalendarController;
 use Illuminate\Support\Facades\Auth;
 
@@ -73,6 +74,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('posts/{post}/generate-assets', [FunnelPromotionController::class, 'generateAssets'])->name('posts.generate-assets');
             Route::patch('posts/{post}/schedule', [FunnelPromotionController::class, 'schedule'])->name('posts.schedule');
             Route::post('posts/{post}/publish', [FunnelPromotionController::class, 'publish'])->name('posts.publish');
+            Route::post('posts/{post}/duplicate', [FunnelPromotionController::class, 'duplicate'])->name('posts.duplicate');
 
             Route::get('calendar', [FunnelPromotionCalendarController::class, 'index'])->name('calendar.index');
             Route::patch('calendar/posts/{post}/move', [FunnelPromotionCalendarController::class, 'move'])->name('calendar.move');
@@ -80,6 +82,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('topics', [FunnelPromotionTopicController::class, 'index'])->name('topics.index');
             Route::post('topics/generate', [FunnelPromotionTopicController::class, 'generate'])->name('topics.generate');
             Route::post('scripts/generate', [FunnelPromotionController::class, 'generateScript'])->name('scripts.generate');
+        });
+
+        Route::prefix('{funnel}/ads')->name('funnels.ads.')->group(function () {
+            Route::get('/', [FunnelAdCampaignController::class, 'index'])->name('index');
+            Route::post('/', [FunnelAdCampaignController::class, 'store'])->name('store');
+            Route::patch('{campaign}', [FunnelAdCampaignController::class, 'update'])->name('update');
+            Route::post('{campaign}/duplicate', [FunnelAdCampaignController::class, 'duplicate'])->name('duplicate');
+            Route::delete('{campaign}', [FunnelAdCampaignController::class, 'destroy'])->name('destroy');
+
+            Route::post('{campaign}/research', [FunnelAdCampaignController::class, 'research'])->name('research');
+            Route::post('{campaign}/creatives/generate', [FunnelAdCampaignController::class, 'generateCreatives'])->name('creatives.generate');
+            Route::post('{campaign}/creatives', [FunnelAdCampaignController::class, 'storeCreative'])->name('creatives.store');
+            Route::patch('{campaign}/creatives/{creative}', [FunnelAdCampaignController::class, 'updateCreative'])->name('creatives.update');
+            Route::delete('{campaign}/creatives/{creative}', [FunnelAdCampaignController::class, 'destroyCreative'])->name('creatives.destroy');
+            Route::post('{campaign}/creatives/{creative}/image', [FunnelAdCampaignController::class, 'generateImage'])->name('creatives.image');
+            Route::post('{campaign}/creatives/{creative}/toggle', [FunnelAdCampaignController::class, 'toggleCreativeStatus'])->name('creatives.toggle');
+
+            Route::post('{campaign}/launch', [FunnelAdCampaignController::class, 'launch'])->name('launch');
+            Route::post('{campaign}/sync', [FunnelAdCampaignController::class, 'syncPerformance'])->name('sync');
         });
 
         Route::prefix('{funnel}/ai-sources')->name('funnels.ai.sources.')->group(function () {

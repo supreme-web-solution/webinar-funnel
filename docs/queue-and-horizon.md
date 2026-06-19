@@ -10,7 +10,7 @@ Background work in this app uses Laravel queues. In production you should run **
 | `traffic-evaluate` | `EvaluateTrafficAutoReplyJob` | Decide if a mention gets an auto-reply |
 | `traffic-generate` | `GenerateTrafficAutoReplyJob` | OpenAI reply text |
 | `traffic-post` | `PostTrafficAutoReplyJob` | Post reply via Zernio |
-| `promotion-generate` | `GeneratePromotionTextJob`, `GeneratePromotionImageJob`, `GeneratePromotionVideoJob`, `PollPromotionVideoJob` | Generate organic promotion assets/content |
+| `promotion-generate` | `GeneratePromotionTextJob`, `GeneratePromotionImageJob`, `GeneratePromotionVideoJob`, `PollPromotionVideoJob`, `LaunchAdCampaignJob`, `SyncAdPerformanceJob` | Generate organic promotion assets/content + paid ad launch/sync |
 | `promotion-publish` | `PublishPromotionPostJob`, `DispatchDuePromotionPostsJob` | Publish now + scheduled promotion dispatch |
 | `esp-dispatch` | `DispatchLeadToEspJob` | Send opt-in leads to ESP integrations |
 | `webinar-ai` | `IndexFunnelAiSourceJob`, `DispatchWebinarAiReplyJob`, `GenerateWebinarAiReplyJob` | Webinar AI sources + simulated chat replies |

@@ -173,12 +173,7 @@ function onDropToDay(date: Date): void {
     }, { preserveScroll: true, onSuccess: () => toast.success('Post moved.') });
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-const PLATFORM_META: Record<string, { label: string; icon: string }> = {
-    twitter: { label: 'X (Twitter)', icon: 'simple-icons:x' },
-    youtube: { label: 'YouTube', icon: 'simple-icons:youtube' },
-    reddit:  { label: 'Reddit', icon: 'simple-icons:reddit' },
-};
+import { promotionPlatformIcon, promotionPlatformLabel } from '@/lib/promotionPlatforms';
 
 function eventChipClass(type: string): string {
     return {
@@ -437,8 +432,8 @@ const isCurrentMonth = computed(() => {
                         <p class="text-[0.65rem] text-muted-foreground font-semibold uppercase tracking-wide">Platforms</p>
                         <div class="flex items-center gap-1.5">
                             <span v-for="p in selectedEvent.platforms" :key="p" class="flex items-center gap-1 text-xs text-muted-foreground">
-                                <Icon :icon="PLATFORM_META[p]?.icon ?? 'heroicons:share'" class="size-3.5" />
-                                {{ PLATFORM_META[p]?.label ?? p }}
+                                <Icon :icon="promotionPlatformIcon(p)" class="size-3.5" />
+                                {{ promotionPlatformLabel(p) }}
                             </span>
                         </div>
                     </div>
