@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Server Error - DFY Webinar Funnels</title>
+    <title>Server Error - WebinarFlow Ai</title>
     <style>
         :root {
             --bg: #f8fafc;
@@ -151,7 +151,7 @@
 <main class="card">
     <div class="brand">
         <span class="dot"></span>
-        DFY Webinar Funnels
+        WebinarFlow Ai
     </div>
 
     <span class="eyebrow">Server Error</span>

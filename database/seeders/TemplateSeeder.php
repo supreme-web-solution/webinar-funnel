@@ -1693,7 +1693,7 @@ CSS;
 
         $html = <<<HTML
 <div class="dfy-page">
-  <div class="dfy-logo">DFY Webinar Funnels</div>
+  <div class="dfy-logo">WebinarFlow Ai</div>
   <section class="dfy-hero">
     <span class="dfy-badge">{$heading}</span>
     <h1 class="dfy-headline">{$intro}</h1>

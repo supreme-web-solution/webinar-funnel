@@ -109,7 +109,7 @@ const PLATFORM_CATALOG: Record<string, Omit<PlatformInfo, 'key' | 'purpose'>> = 
         iconColor: '#1877f2',
         redirectHref: '/settings/social-traffic/facebook/redirect',
         connectLabel: 'Connect Facebook',
-        billingNote: 'You log in with your personal Facebook profile, then pick the Page that will run ads (e.g. Vickenconcept). That is correct. Your Meta billing ad account ID (act_…) is entered separately under Settings → Ad accounts.',
+        billingNote: '',
     },
     instagram: {
         label: 'Instagram',
@@ -215,7 +215,7 @@ function displayPlatformName(platform: string): string {
         <Heading
             variant="small"
             title="Connected social accounts"
-            description="Connect platforms through Zernio. Traffic AI uses Reddit, YouTube, and X for auto-replies. Facebook, Instagram, and others are used for promotion posts and paid ads."
+            description="Traffic AI uses Reddit, YouTube, and X for auto-replies. Facebook, Instagram, and others are used for promotion posts and paid ads."
         />
 
         <Card v-if="appUrlMismatch" class="border-amber-500/40 bg-amber-500/5">
@@ -274,37 +274,8 @@ function displayPlatformName(platform: string): string {
         <div class="space-y-3">
             <div>
                 <h2 class="text-sm font-semibold">Posting &amp; paid ads</h2>
-                <p class="text-xs text-muted-foreground mt-0.5">
-                    Required to run Facebook/Instagram ads and publish promotion posts.
-                    <strong>Connect Facebook here</strong> if your ad campaign shows “No Facebook account connected”.
-                    The Zernio page picker (Vickenconcept vs VixBlock) only chooses which <strong>Page</strong> publishes ads — not the billing ad account.
-                </p>
             </div>
-            <div
-                v-if="facebookAdsDiagnostics && connectedAccount('facebook')"
-                class="rounded-lg border border-blue-500/25 bg-blue-500/5 px-4 py-3 text-xs space-y-2"
-            >
-                <p class="font-semibold text-blue-800 dark:text-blue-300">Facebook ads connection check</p>
-                <ul class="space-y-1 text-muted-foreground list-disc pl-4">
-                    <li>Page connected: <strong class="text-foreground">{{ facebookAdsDiagnostics.page_name ?? 'Facebook page' }}</strong> — this is expected.</li>
-                    <li v-if="facebookAdsDiagnostics.billing_ad_accounts.length">
-                        Billing ad accounts visible to this connection:
-                        <span v-for="(acct, idx) in facebookAdsDiagnostics.billing_ad_accounts" :key="acct.id">
-                            <strong class="text-foreground">{{ acct.name ?? acct.id }}</strong>
-                            <span v-if="acct.currency"> ({{ acct.currency }})</span>{{ idx < facebookAdsDiagnostics.billing_ad_accounts.length - 1 ? ', ' : '' }}
-                        </span>
-                    </li>
-                    <li v-else-if="facebookAdsDiagnostics.list_error" class="text-amber-700 dark:text-amber-400">
-                        Could not list ad accounts: {{ facebookAdsDiagnostics.list_error }}
-                    </li>
-                    <li v-else class="text-amber-700 dark:text-amber-400">
-                        No billing ad accounts returned — the personal profile you used to connect may not have access to your act_… ad account in Business Manager.
-                    </li>
-                </ul>
-                <p class="text-muted-foreground leading-relaxed">
-                    If launch fails with Meta “authenticate in Ads Manager”, that is Meta blocking <strong>API</strong> writes (via Zernio) — not a wrong page pick. Complete verification in Ads Manager as the same personal profile that connected here, then retry.
-                </p>
-            </div>
+           
             <Card
                 v-for="platform in postingPlatforms"
                 :key="platform.key"

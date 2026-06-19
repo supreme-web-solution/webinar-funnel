@@ -93,7 +93,7 @@ const footerNavItems: NavItem[] = [
                             </div>
                             <div class="grid flex-1 text-left leading-tight">
                                 <span class="truncate text-[0.8rem] font-bold tracking-tight text-sidebar-accent-foreground">
-                                    DFY Webinar Funnels
+                                    WebinarFlow Ai
                                 </span>
                                 <span class="truncate text-[0.65rem] text-sidebar-foreground/60">
                                     Funnel Builder

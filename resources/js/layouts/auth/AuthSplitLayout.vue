@@ -35,7 +35,7 @@ const features = [
                     <div class="flex size-9 items-center justify-center rounded-xl border border-emerald-300/35 bg-white/10 shadow-sm">
                         <Icon icon="heroicons:video-camera" class="size-5 text-emerald-600" />
                     </div>
-                    <span class="text-sm font-bold tracking-tight text-white">DFY Webinar Funnels</span>
+                    <span class="text-sm font-bold tracking-tight text-white">WebinarFlow Ai</span>
                 </Link>
 
                 <!-- Hero copy -->
@@ -124,7 +124,7 @@ const features = [
                         <div v-for="i in 4" :key="i" class="size-7 rounded-full border-2 border-white bg-linear-to-br from-emerald-300 to-cyan-300" />
                     </div>
                     <p class="text-xs leading-snug text-slate-300">
-                        <span class="font-semibold text-white">2,400+</span> marketers already using DFY Webinar Funnels
+                        <span class="font-semibold text-white">2,400+</span> marketers already using WebinarFlow Ai
                     </p>
                 </div>
             </div>
@@ -138,7 +138,7 @@ const features = [
                 <div class="flex size-8 items-center justify-center rounded-lg bg-primary/10 border border-primary/25">
                     <Icon icon="heroicons:video-camera" class="size-4 text-primary" />
                 </div>
-                <span class="font-bold text-sm tracking-tight text-foreground">DFY Webinar Funnels</span>
+                <span class="font-bold text-sm tracking-tight text-foreground">WebinarFlow Ai</span>
             </Link>
 
             <div class="w-full max-w-sm">

@@ -14,7 +14,7 @@ return [
     |
     */
 
-    'intro' => 'Welcome! Step-by-step guides for DFY Webinar Funnels will appear here.',
+    'intro' => 'Welcome! Step-by-step guides for WebinarFlow Ai will appear here.',
 
     'sections' => [
         // Example:
