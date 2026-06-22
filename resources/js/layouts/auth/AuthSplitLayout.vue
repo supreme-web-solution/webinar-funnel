@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { home } from '@/routes';
 
 defineProps<{
@@ -8,7 +9,9 @@ defineProps<{
     description?: string;
 }>();
 
-const capabilities = [
+const page = usePage();
+
+const allCapabilities = [
     { icon: 'heroicons:rectangle-stack', label: 'Webinar Funnels', detail: '51+ proven templates' },
     { icon: 'heroicons:chat-bubble-left-right', label: 'AI Webinar Chat', detail: 'Live & simulated' },
     { icon: 'heroicons:megaphone', label: 'Social Promotion', detail: 'Posts, images & video' },
@@ -16,6 +19,14 @@ const capabilities = [
     { icon: 'heroicons:chart-bar', label: 'Paid Ads', detail: 'Meta, Google & more' },
     { icon: 'heroicons:envelope', label: 'ESP Integrations', detail: 'Capture & sync leads' },
 ];
+
+const capabilities = computed(() => {
+    if (page.props.paidAdsEnabled === true) {
+        return allCapabilities;
+    }
+
+    return allCapabilities.filter((item) => item.label !== 'Paid Ads');
+});
 </script>
 
 <template>
@@ -33,10 +44,10 @@ const capabilities = [
                 <Link :href="home()" class="flex w-fit items-center gap-2.5">
                     <img
                         src="/favicon.png"
-                        alt="WebinarFlow Ai"
+                        alt="WebinarCashflow Ai"
                         class="size-9 rounded-xl shadow-sm ring-1 ring-primary/30"
                     />
-                    <span class="text-sm font-bold tracking-tight text-white">WebinarFlow Ai</span>
+                    <span class="text-sm font-bold tracking-tight text-white">WebinarCashflow Ai</span>
                 </Link>
 
                 <div class="my-auto">
@@ -96,7 +107,7 @@ const capabilities = [
                         />
                     </div>
                     <p class="text-xs leading-snug text-slate-300">
-                        <span class="font-semibold text-white">2,400+</span> marketers already using WebinarFlow Ai
+                        <span class="font-semibold text-white">2,400+</span> marketers already using WebinarCashflow Ai
                     </p>
                 </div>
             </div>
@@ -108,10 +119,10 @@ const capabilities = [
             <Link :href="home()" class="mb-8 flex items-center gap-2 lg:hidden">
                 <img
                     src="/favicon.png"
-                    alt="WebinarFlow Ai"
+                    alt="WebinarCashflow Ai"
                     class="size-8 rounded-lg ring-1 ring-primary/25"
                 />
-                <span class="text-sm font-bold tracking-tight text-foreground">WebinarFlow Ai</span>
+                <span class="text-sm font-bold tracking-tight text-foreground">WebinarCashflow Ai</span>
             </Link>
 
             <div class="w-full max-w-sm">

@@ -40,7 +40,7 @@ class FunnelPromotionTopicController extends Controller
         $count = (int) ($validated['count'] ?? config('promotion.default_sequence_size', 12));
         $context = isset($validated['context']) ? (string) $validated['context'] : null;
 
-        $topics = $service->generate($funnel->loadMissing(['settings', 'template', 'keywords']), $count, $context);
+        $topics = $service->generate($funnel->loadMissing(['settings', 'template.versions', 'keywords']), $count, $context);
         $service->persist($funnel, $topics);
 
         return back()->with('success', count($topics).' promotion topic suggestions generated.');

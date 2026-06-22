@@ -194,7 +194,7 @@ class SocialTrafficController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return $this->authError($platform, 'Could not start Zernio connection. '.$e->getMessage());
+            return $this->authError($platform, 'Could not start the connection right now. Please try again later or contact support.');
         }
     }
 
@@ -260,6 +260,16 @@ class SocialTrafficController extends Controller
                 if ($localPlatform !== null) {
                     return $this->connectionSuccessRedirect($localPlatform);
                 }
+            } catch (ZernioApiException $e) {
+                Log::warning('SocialTrafficController: Zernio OAuth exchange blocked', [
+                    'user_id' => $request->user()->id,
+                    'zernio_platform' => $zernioPlatform,
+                    'code' => $e->errorCode,
+                    'status' => $e->httpStatus,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return $this->handleConnectFailure($routeSlug ?? 'social', $e);
             } catch (\Throwable $e) {
                 Log::error('SocialTrafficController: Zernio OAuth exchange failed', [
                     'user_id' => $request->user()->id,
@@ -267,7 +277,7 @@ class SocialTrafficController extends Controller
                     'error' => $e->getMessage(),
                 ]);
 
-                return $this->authError($routeSlug ?? 'social', 'Could not complete connection with Zernio. '.$e->getMessage());
+                return $this->authError($routeSlug ?? 'social', 'Could not complete the connection right now. Please try again later or contact support.');
             }
         }
 
@@ -366,27 +376,26 @@ class SocialTrafficController extends Controller
 
     private function handleConnectFailure(string $platform, ZernioApiException $e): RedirectResponse
     {
+        $userMessage = $e->userMessage();
+
         Log::warning('SocialTrafficController: Zernio connect blocked', [
             'platform' => $platform,
-            'code' => $e->code,
+            'code' => $e->errorCode,
             'status' => $e->httpStatus,
             'message' => $e->getMessage(),
         ]);
 
         Inertia::flash('zernioConnect', [
             'platform' => $platform,
-            'code' => $e->code ?? 'connect_failed',
-            'message' => $e->getMessage(),
-            'dashboard_url' => $e->dashboardUrl ?? 'https://zernio.com/dashboard?tab=billing',
-            'documentation_url' => $e->documentationUrl ?? 'https://docs.zernio.com/billing/payment-method-required',
+            'message' => $userMessage,
         ]);
 
         Inertia::flash('toast', [
             'type' => 'error',
-            'message' => $e->getMessage(),
+            'message' => $userMessage,
         ]);
 
-        return redirect()->to($this->socialTrafficSettingsUrl())->withErrors([$platform => $e->getMessage()]);
+        return redirect()->to($this->socialTrafficSettingsUrl())->withErrors([$platform => $userMessage]);
     }
 
     private function oauthCallbackUrl(string $routeSlug): string

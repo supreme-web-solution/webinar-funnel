@@ -177,7 +177,6 @@ class FunnelController extends Controller
         $trafficData = $this->buildTrafficData($request, $funnel);
         $promotionData = $this->buildPromotionData($funnel);
         $videoStats = $this->buildVideoStatsData($funnel);
-        $adsData = $this->buildAdsData($funnel);
 
         return Inertia::render('funnels/Edit', [
             'funnel' => $funnel,
@@ -186,7 +185,7 @@ class FunnelController extends Controller
             'traffic' => $trafficData,
             'promotion' => $promotionData,
             'videoStats' => $videoStats,
-            'ads' => $adsData,
+            'ads' => config('promotion.ads.enabled') ? $this->buildAdsData($funnel) : null,
             'aiSources' => FunnelAiSource::query()
                 ->where('funnel_id', $funnel->id)
                 ->latest()

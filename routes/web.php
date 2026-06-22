@@ -84,7 +84,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('scripts/generate', [FunnelPromotionController::class, 'generateScript'])->name('scripts.generate');
         });
 
-        Route::prefix('{funnel}/ads')->name('funnels.ads.')->group(function () {
+        Route::prefix('{funnel}/ads')->name('funnels.ads.')->middleware('paid-ads')->group(function () {
             Route::get('/', [FunnelAdCampaignController::class, 'index'])->name('index');
             Route::post('/', [FunnelAdCampaignController::class, 'store'])->name('store');
             Route::patch('{campaign}', [FunnelAdCampaignController::class, 'update'])->name('update');

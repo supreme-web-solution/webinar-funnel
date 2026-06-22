@@ -18,6 +18,7 @@ declare module '@inertiajs/core' {
         sharedPageProps: {
             name: string;
             appearanceDarkModeEnabled: boolean;
+            paidAdsEnabled: boolean;
             auth: Auth;
             sidebarOpen: boolean;
             [key: string]: unknown;

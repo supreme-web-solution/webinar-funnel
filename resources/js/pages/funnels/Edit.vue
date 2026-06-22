@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import grapesjs from 'grapesjs';
 import 'grapesjs/dist/css/grapes.min.css';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -202,12 +202,12 @@ const props = defineProps<{
             topics_generate: string;
         };
     };
-    ads: {
+    ads?: {
         campaigns_count: number;
         active_count: number;
         total_spend: number;
         route: string;
-    };
+    } | null;
     videoStats: {
         accessed: number;
         watched_60s: number;
@@ -216,6 +216,9 @@ const props = defineProps<{
         avg_watch_seconds: number;
     };
 }>();
+
+const page = usePage();
+const paidAdsEnabled = computed(() => page.props.paidAdsEnabled === true);
 
 const optinPage = props.funnel.pages.find((p) => p.page_type === 'optin');
 
@@ -269,6 +272,12 @@ const savingPage    = ref(false);
 const savingSettings = ref(false);
 const publishing    = ref(false);
 const activeTab     = ref('optin');
+
+const funnelTabTriggerClass =
+    'relative flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-2 text-center text-[0.65rem] leading-tight xl:min-h-0 xl:flex-1 xl:flex-row xl:gap-1.5 xl:px-3 xl:py-1.5 xl:text-xs xl:whitespace-nowrap';
+const funnelTabIconClass = 'size-4 shrink-0 xl:size-3.5';
+const funnelTabBadgeClass =
+    'absolute right-1 top-1 flex size-4 items-center justify-center rounded-full text-[0.6rem] font-bold xl:relative xl:right-auto xl:top-auto xl:ml-0.5';
 
 /* Refresh canvas when returning to optin tab (hidden iframe can collapse to 0×0) */
 const refreshEditorCanvas = (): void => {
@@ -1901,55 +1910,58 @@ onUnmounted(() => {
 
         <!-- ── Tabs ── -->
         <Tabs v-model="activeTab" default-value="optin" class="space-y-5">
-            <TabsList class="h-auto gap-0.5 p-1 bg-muted rounded-xl w-full sm:w-auto">
-                <TabsTrigger value="optin" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:cursor-arrow-ripple" class="size-3.5" />
-                    Opt-in Editor
+            <TabsList class="h-auto w-full gap-1 rounded-xl bg-muted p-1 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:inline-flex xl:w-fit xl:flex-nowrap">
+                <TabsTrigger value="optin" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:cursor-arrow-ripple" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Opt-in Editor</span>
                 </TabsTrigger>
-                <TabsTrigger value="webinar" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:video-camera" class="size-3.5" />
-                    Webinar Room
+                <TabsTrigger value="webinar" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:video-camera" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Webinar Room</span>
                 </TabsTrigger>
-                <TabsTrigger value="offer" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:gift" class="size-3.5" />
-                    Offer
+                <TabsTrigger value="offer" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:gift" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Offer</span>
                 </TabsTrigger>
-                <TabsTrigger value="ai-assistant" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:sparkles" class="size-3.5" />
-                    AI Assistant
+                <TabsTrigger value="ai-assistant" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:sparkles" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">AI Assistant</span>
                 </TabsTrigger>
-                <TabsTrigger value="integrations" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:puzzle-piece" class="size-3.5" />
-                    Integrations
+                <TabsTrigger value="integrations" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:puzzle-piece" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Integrations</span>
                 </TabsTrigger>
-                <TabsTrigger value="links" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:link" class="size-3.5" />
-                    Share Links
+                <TabsTrigger value="links" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:link" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Share Links</span>
                 </TabsTrigger>
-                <TabsTrigger value="promotion" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:megaphone" class="size-3.5" />
-                    Promotion
+                <TabsTrigger value="promotion" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:megaphone" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Promotion</span>
                 </TabsTrigger>
-                <TabsTrigger value="ads" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:rocket-launch" class="size-3.5" />
-                    Paid Ads
-                    <span v-if="props.ads.active_count > 0" class="ml-0.5 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[0.6rem] font-bold px-1.5 h-4 min-w-4">
-                        {{ props.ads.active_count }}
+                <TabsTrigger v-if="paidAdsEnabled" value="ads" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:rocket-launch" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Paid Ads</span>
+                    <span
+                        v-if="(props.ads?.active_count ?? 0) > 0"
+                        :class="[funnelTabBadgeClass, 'bg-emerald-500 text-white']"
+                    >
+                        {{ props.ads?.active_count }}
                     </span>
                 </TabsTrigger>
-                <TabsTrigger value="chat" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-3.5" />
-                    Chat
+                <TabsTrigger value="chat" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Chat</span>
                     <span
                         v-if="conversationSummaries.length > 0"
-                        class="ml-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[0.6rem] font-bold text-primary-foreground"
+                        :class="[funnelTabBadgeClass, 'bg-primary text-primary-foreground']"
                     >
                         {{ conversationSummaries.length }}
                     </span>
                 </TabsTrigger>
-                <TabsTrigger value="traffic" class="rounded-lg text-xs px-3 py-1.5 gap-1.5">
-                    <Icon icon="heroicons:megaphone" class="size-3.5" />
-                    Traffic Settings
+                <TabsTrigger value="traffic" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:megaphone" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Traffic Settings</span>
                 </TabsTrigger>
             </TabsList>
 
@@ -3084,7 +3096,7 @@ onUnmounted(() => {
             </TabsContent>
 
             <!-- ── Tab: Paid Ads ── -->
-            <TabsContent value="ads" class="space-y-4">
+            <TabsContent v-if="paidAdsEnabled && props.ads" value="ads" class="space-y-4">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h3 class="text-sm font-semibold text-foreground">Paid Ad Campaigns</h3>

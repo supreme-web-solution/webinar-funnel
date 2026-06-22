@@ -33,16 +33,17 @@ const sidebarNavItems = computed<NavItem[]>(() => {
         });
     }
 
-    items.push(
-        {
-            title: 'Social posting',
-            href: '/settings/social-traffic',
-        },
-        {
+    items.push({
+        title: 'Social posting',
+        href: '/settings/social-traffic',
+    });
+
+    if (page.props.paidAdsEnabled === true) {
+        items.push({
             title: 'Ad accounts',
             href: '/settings/ad-accounts',
-        },
-    );
+        });
+    }
 
     return items;
 });

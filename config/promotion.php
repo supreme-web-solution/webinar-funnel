@@ -32,6 +32,7 @@ return [
     ],
 
     'ads' => [
+        'enabled' => filter_var(env('PAID_ADS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         // Hard safety limit so image generation cannot exceed this per creative generation run.
         'max_generated_creatives' => (int) env('PROMOTION_ADS_MAX_GENERATED_CREATIVES', 5),
         'min_budget_amount' => (float) env('PROMOTION_ADS_MIN_BUDGET_AMOUNT', 2),

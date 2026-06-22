@@ -97,6 +97,29 @@ class FunnelPromotionFlowTest extends TestCase
         $user = User::factory()->create();
         $funnel = $this->makeFunnel($user);
 
+        \App\Models\TemplateVersion::query()->create([
+            'template_id' => $funnel->template_id,
+            'version' => 1,
+            'is_current' => true,
+            'optin_schema' => [
+                'hero' => ['subheadline' => 'Discover how to grow webinar conversions with AI.'],
+                'what_youll_discover' => [
+                    'How to turn social posts into webinar registrations',
+                    'Why most funnels leak leads before the offer',
+                    'The 3-part content sequence that warms cold traffic',
+                    'How to repurpose one webinar into a week of posts',
+                    'What to say when prospects say they need to think about it',
+                    'Proof angles that make your offer feel low-risk',
+                    'How to write hooks that stop the scroll',
+                    'The follow-up message that books more calls',
+                    'Mistakes beginners make with promotion timing',
+                    'How to test angles without burning your audience',
+                ],
+            ],
+            'webinar_schema' => [],
+            'default_settings' => [],
+        ]);
+
         $response = $this->actingAs($user)->post(route('funnels.promotion.topics.generate', $funnel), [
             'count' => 10,
             'context' => 'Focus on social growth and lead quality.',

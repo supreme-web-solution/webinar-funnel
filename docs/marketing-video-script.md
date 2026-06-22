@@ -1,4 +1,4 @@
-# WebinarFlow Ai — Full Demo & Value Script
+# WebinarCashflow Ai — Full Demo & Value Script
 
 **Audience:** Affiliate marketers, side-hustlers, coaches, agency owners who want income without building everything from scratch  
 **Tone:** Confident marketer showing a *business in a box* — not a “tool tour,” a **money system**  
@@ -33,7 +33,7 @@ What if you didn’t have to *become* a funnel expert, a copywriter, a webinar h
 
 What if someone handed you a **complete online business** — pages built, offers chosen, AI trained, traffic system ready — and all you had to do was **pick an offer, publish, and share your link**?
 
-That’s exactly what **WebinarFlow Ai** is.
+That’s exactly what **WebinarCashflow Ai** is.
 
 Not “another page builder.”  
 Not “another chatbot.”
@@ -63,7 +63,7 @@ Here’s what most people struggle with when they try to promote offers online:
 4. **Finding traffic** — posting randomly with no strategy.
 5. **Following up** — leads slip away because nobody answers questions at 11 PM.
 
-**WebinarFlow Ai attacks all five — in one connected system.**
+**WebinarCashflow Ai attacks all five — in one connected system.**
 
 **[SCREEN: Templates grid — scroll through categories]**
 
@@ -459,7 +459,7 @@ If you’ve been stuck because:
 - You didn’t want to go live on camera
 - You didn’t have time to hunt traffic or answer every DM
 
-**WebinarFlow Ai was built for you.**
+**WebinarCashflow Ai was built for you.**
 
 **51 tested offers. Pre-populated funnels. AI in the webinar room. AI in the traffic threads. Leads captured and exportable — even before you connect an email tool.**
 
@@ -482,7 +482,7 @@ This is the closest thing we’ve seen to handing someone a **business in a box*
 Don’t try all 51 at once.  
 **Launch one. Prove it. Scale.**
 
-That’s how real marketers use WebinarFlow Ai — not as a toy, but as an **income system**.
+That’s how real marketers use WebinarCashflow Ai — not as a toy, but as an **income system**.
 
 **[SCREEN: Logo + tagline]**
 
@@ -528,7 +528,7 @@ Your business in a box is waiting. **Go activate your first funnel now.**
 You can split this script into sections on `/tutorial` by adding entries to `config/tutorial.php`:
 
 ```php
-'intro' => 'Step-by-step guides and video walkthroughs for WebinarFlow Ai.',
+'intro' => 'Step-by-step guides and video walkthroughs for WebinarCashflow Ai.',
 
 'sections' => [
     [
@@ -547,4 +547,4 @@ You can split this script into sections on `/tutorial` by adding entries to `con
 
 ---
 
-*Document generated for WebinarFlow Ai marketing and onboarding. Update claims and timings to match live product and compliance requirements.*
+*Document generated for WebinarCashflow Ai marketing and onboarding. Update claims and timings to match live product and compliance requirements.*

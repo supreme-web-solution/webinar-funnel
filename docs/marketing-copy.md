@@ -1,4 +1,4 @@
-# WebinarFlow Ai — Full Marketing Copy Brief
+# WebinarCashflow Ai — Full Marketing Copy Brief
 
 ---
 
@@ -35,7 +35,7 @@ Done-for-you webinar affiliate funnels powered by AI. Pick a proven offer, launc
 
 ## THE BIG PROMISE
 
-Most people never make money online because they get stuck doing the hard things — building funnels, writing copy, creating content, driving traffic, and hosting live calls. WebinarFlow Ai removes every single one of those obstacles.
+Most people never make money online because they get stuck doing the hard things — building funnels, writing copy, creating content, driving traffic, and hosting live calls. WebinarCashflow Ai removes every single one of those obstacles.
 
 We give you 51 battle-tested affiliate webinar funnels that are already built, pre-loaded with proven offers, and ready to go live in minutes. Then our AI takes over — engaging your webinar audience, answering objections, writing social media posts, creating promotional images and videos, scheduling content, monitoring buyer-intent conversations across the web, and even running paid ads — all on autopilot.
 
@@ -64,7 +64,7 @@ This is not a tool. This is a complete online income system you can launch today
 ## PAIN POINTS — EXPANDED
 
 ### ❌ "I don't know how to build a funnel."
-Most funnel builders take weeks to learn and hundreds of dollars to set up. Pages, thank-you pages, webinar rooms, CTA popups, affiliate links — it's overwhelming. With WebinarFlow Ai, every funnel is pre-built and ready. You activate it with one click.
+Most funnel builders take weeks to learn and hundreds of dollars to set up. Pages, thank-you pages, webinar rooms, CTA popups, affiliate links — it's overwhelming. With WebinarCashflow Ai, every funnel is pre-built and ready. You activate it with one click.
 
 ### ❌ "I can't host live webinars every week."
 Live webinars are exhausting. You need to show up, present, handle questions, and close sales in real time — every single week. Our platform runs evergreen, on-demand webinars that work 24/7 without you being present. Your webinar runs while you sleep.
@@ -189,7 +189,7 @@ Every visitor who opts in becomes a lead. Every lead is automatically managed.
 
 ### 7. AI PROMOTION ENGINE — CREATE, SCHEDULE & PUBLISH CONTENT AT SCALE
 
-This is where WebinarFlow Ai goes beyond any other affiliate platform on the market.
+This is where WebinarCashflow Ai goes beyond any other affiliate platform on the market.
 
 Every funnel you publish gets its own dedicated AI content engine. Create weeks of social media content in minutes — posts, images, videos, and emails — all tailored to your specific offer and audience.
 
@@ -254,7 +254,7 @@ Our Traffic AI engine monitors the entire open web, 24/7, searching for people w
 
 **How it works:**
 
-1. **Keyword monitoring** — You enter buyer-intent keywords related to your offer. WebinarFlow Ai tracks those keywords across Reddit, YouTube, X (Twitter), Google News, and niche forums in real time.
+1. **Keyword monitoring** — You enter buyer-intent keywords related to your offer. WebinarCashflow Ai tracks those keywords across Reddit, YouTube, X (Twitter), Google News, and niche forums in real time.
 2. **Mention detection** — Every matching post, thread, comment, or article is surfaced in your Mention Inbox.
 3. **AI-drafted replies** — The AI reads the context of each post and writes a personalised, helpful reply that positions your funnel as the solution. Not spammy. Not generic. Genuinely useful.
 4. **Review & approve or auto-post** — Review AI replies before posting (recommended for high-value placements) or enable auto-posting for full automation.
@@ -275,7 +275,7 @@ Organic replies in relevant discussions convert 5-8x better than cold ads becaus
 
 **Stop guessing with ads. Let AI build your campaigns.**
 
-Running paid advertising is the fastest way to scale an affiliate funnel — but most people waste money on bad creative, wrong audiences, and weak copy. WebinarFlow Ai' Paid Ads Engine solves all three.
+Running paid advertising is the fastest way to scale an affiliate funnel — but most people waste money on bad creative, wrong audiences, and weak copy. WebinarCashflow Ai' Paid Ads Engine solves all three.
 
 #### What the Paid Ads Engine does:
 
@@ -351,7 +351,7 @@ You can't grow what you can't measure. Our dashboard gives you a complete pictur
 
 ## INTEGRATIONS
 
-WebinarFlow Ai works standalone from day one — but connects seamlessly with the tools you already use.
+WebinarCashflow Ai works standalone from day one — but connects seamlessly with the tools you already use.
 
 **Email Marketing Platforms:**
 - Mailchimp
@@ -379,9 +379,9 @@ WebinarFlow Ai works standalone from day one — but connects seamlessly with th
 
 ---
 
-## DIFFERENTIATORS — WHY WebinarFlow Ai WINS
+## DIFFERENTIATORS — WHY WebinarCashflow Ai WINS
 
-| Feature | WebinarFlow Ai | Typical Funnel Builder | Webinar Platform |
+| Feature | WebinarCashflow Ai | Typical Funnel Builder | Webinar Platform |
 |---|---|---|---|
 | Pre-built funnels (51) | ✅ | ❌ | ❌ |
 | Evergreen webinar rooms | ✅ | ❌ | ✅ |
@@ -396,7 +396,7 @@ WebinarFlow Ai works standalone from day one — but connects seamlessly with th
 | Email campaign generation | ✅ | ❌ | ❌ |
 | Everything in one platform | ✅ | ❌ | ❌ |
 
-**The bottom line:** Every other platform makes you assemble a stack of 5-8 different tools, pay for each one, and figure out how to make them work together. WebinarFlow Ai is the complete system — funnels, webinars, leads, content, social media, traffic, ads — all in one place.
+**The bottom line:** Every other platform makes you assemble a stack of 5-8 different tools, pay for each one, and figure out how to make them work together. WebinarCashflow Ai is the complete system — funnels, webinars, leads, content, social media, traffic, ads — all in one place.
 
 ---
 
@@ -517,7 +517,7 @@ Just one platform that does it all — at a fraction of the cost of assembling a
 *(Use these as templates for gathering and displaying testimonials)*
 
 **The "I tried everything" story:**
-"I spent 8 months buying courses, building funnels, and getting nowhere. In 3 weeks on WebinarFlow Ai I have [X] leads and [X] commissions. I wish I'd found this first."
+"I spent 8 months buying courses, building funnels, and getting nowhere. In 3 weeks on WebinarCashflow Ai I have [X] leads and [X] commissions. I wish I'd found this first."
 
 **The "I'm not techy" story:**
 "I don't know how to code, design, or write copy. None of that mattered. I activated a funnel, the AI wrote my posts, and people started opting in on day two."

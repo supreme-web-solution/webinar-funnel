@@ -48,6 +48,24 @@ final class ZernioApiException extends \RuntimeException
 
     public function isPaymentRequired(): bool
     {
-        return $this->errorCode === 'PAYMENT_REQUIRED' || $this->httpStatus === 402;
+        if ($this->errorCode === 'PAYMENT_REQUIRED' || $this->httpStatus === 402) {
+            return true;
+        }
+
+        $message = strtolower($this->getMessage());
+
+        return str_contains($message, 'payment required')
+            || str_contains($message, 'subscription is inactive')
+            || str_contains($message, 'subscription inactive')
+            || str_contains($message, 'payment method');
+    }
+
+    public function userMessage(): string
+    {
+        if ($this->isPaymentRequired()) {
+            return 'Social account connections are not available right now. Please try again later or contact support.';
+        }
+
+        return 'Could not connect this account right now. Please try again later or contact support.';
     }
 }

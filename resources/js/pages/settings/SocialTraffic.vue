@@ -9,10 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 type ZernioConnectFlash = {
     platform: string;
-    code: string;
     message: string;
-    dashboard_url: string;
-    documentation_url?: string;
 };
 
 type SocialRow = {
@@ -240,33 +237,12 @@ function displayPlatformName(platform: string): string {
         </Card>
 
         <Card
-            v-else-if="zernioConnectAlert?.code === 'PAYMENT_REQUIRED'"
+            v-else-if="zernioConnectAlert"
             class="border-amber-500/40 bg-amber-500/5"
         >
-            <CardContent class="space-y-3 p-4 text-sm">
-                <p class="font-medium text-foreground">X (Twitter) needs a payment method on Zernio</p>
+            <CardContent class="space-y-2 p-4 text-sm">
+                <p class="font-medium text-foreground">Can't connect right now</p>
                 <p class="text-muted-foreground">{{ zernioConnectAlert.message }}</p>
-                <p class="text-muted-foreground">
-                    To test auto-replies now, connect <strong>Reddit</strong> or <strong>YouTube</strong> below.
-                    Mention discovery for X still works via Apify without a connected account.
-                </p>
-                <div class="flex flex-wrap gap-2">
-                    <Button as-child size="sm" variant="default">
-                        <a :href="zernioConnectAlert.dashboard_url" target="_blank" rel="noopener noreferrer">
-                            Add payment method in Zernio
-                        </a>
-                    </Button>
-                    <Button
-                        v-if="zernioConnectAlert.documentation_url"
-                        as-child
-                        size="sm"
-                        variant="outline"
-                    >
-                        <a :href="zernioConnectAlert.documentation_url" target="_blank" rel="noopener noreferrer">
-                            Why is this required?
-                        </a>
-                    </Button>
-                </div>
             </CardContent>
         </Card>
 

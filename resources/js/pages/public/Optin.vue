@@ -273,7 +273,7 @@ onMounted(async () => {
             <div class="flex size-8 items-center justify-center rounded-lg" style="background:rgba(64,224,208,0.2)">
                 <Icon icon="heroicons:video-camera" class="size-4" style="color:#40E0D0" />
             </div>
-            <span class="text-sm font-semibold text-white/70">WebinarFlow Ai</span>
+            <span class="text-sm font-semibold text-white/70">WebinarCashflow Ai</span>
         </div>
 
         <!-- Card -->

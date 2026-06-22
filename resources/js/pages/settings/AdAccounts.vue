@@ -71,7 +71,7 @@ function applySuggestion(platform: string, id: string): void {
             <CardHeader class="pb-2">
                 <CardTitle class="text-sm font-semibold">Where these IDs come from</CardTitle>
                 <CardDescription class="text-xs leading-relaxed">
-                    These are <strong>billing accounts</strong> in Meta Ads Manager, TikTok Ads, etc. — not your Zernio connected page.
+                    These are <strong>billing accounts</strong> in Meta Ads Manager, TikTok Ads, etc.
                     Media spend is charged here. Find them in your platform's ad manager (Meta: <code class="text-[0.65rem]">act_…</code>).
                 </CardDescription>
             </CardHeader>

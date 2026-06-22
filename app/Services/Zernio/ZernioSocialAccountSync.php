@@ -49,7 +49,28 @@ final class ZernioSocialAccountSync
             return [];
         }
 
-        $accounts = $this->zernio->listAccountsForProfile($profileId);
+        $accounts = [];
+
+        try {
+            $accounts = $this->zernio->listAccountsForProfile($profileId);
+        } catch (ZernioApiException $e) {
+            Log::warning('ZernioSocialAccountSync: list accounts failed', [
+                'user_id' => $user->id,
+                'status' => $e->httpStatus,
+                'code' => $e->errorCode,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        } catch (\Throwable $e) {
+            Log::warning('ZernioSocialAccountSync: list accounts failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
+
         $synced = [];
 
         foreach ($accounts as $account) {

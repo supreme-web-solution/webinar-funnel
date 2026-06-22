@@ -29,8 +29,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('settings/social-traffic', [SocialTrafficController::class, 'edit'])->name('settings.social-traffic.edit');
     Route::delete('settings/social-traffic/{socialAccount}', [SocialTrafficController::class, 'disconnect'])->name('settings.social-traffic.disconnect');
 
-    Route::get('settings/ad-accounts', [AdAccountSettingsController::class, 'edit'])->name('settings.ad-accounts.edit');
-    Route::patch('settings/ad-accounts', [AdAccountSettingsController::class, 'update'])->name('settings.ad-accounts.update');
+    Route::middleware('paid-ads')->group(function () {
+        Route::get('settings/ad-accounts', [AdAccountSettingsController::class, 'edit'])->name('settings.ad-accounts.edit');
+        Route::patch('settings/ad-accounts', [AdAccountSettingsController::class, 'update'])->name('settings.ad-accounts.update');
+    });
 
 });
 

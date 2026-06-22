@@ -7,7 +7,7 @@
     </div>
     <div class="ml-2 grid flex-1 text-left leading-tight">
         <span class="truncate text-[0.8rem] font-bold tracking-tight text-sidebar-accent-foreground">
-            WebinarFlow Ai
+            WebinarCashflow Ai
         </span>
         <span class="text-[0.65rem] text-sidebar-foreground/50 truncate">Webinar Platform</span>
     </div>
