@@ -20,6 +20,7 @@ use App\Models\Keyword;
 use App\Models\Mention;
 use App\Models\SocialAccount;
 use App\Models\Template;
+use App\Services\Funnel\FunnelPaidTrafficAssetsService;
 use App\Services\Funnels\PageSanitizer;
 use App\Services\Funnels\PublicFunnelResolver;
 use App\Services\Mentions\KeywordMentionCapEnforcer;
@@ -177,6 +178,7 @@ class FunnelController extends Controller
         $trafficData = $this->buildTrafficData($request, $funnel);
         $promotionData = $this->buildPromotionData($funnel);
         $videoStats = $this->buildVideoStatsData($funnel);
+        $paidTrafficAssets = app(FunnelPaidTrafficAssetsService::class)->resolveForFunnel($funnel);
 
         return Inertia::render('funnels/Edit', [
             'funnel' => $funnel,
@@ -186,6 +188,7 @@ class FunnelController extends Controller
             'promotion' => $promotionData,
             'videoStats' => $videoStats,
             'ads' => config('promotion.ads.enabled') ? $this->buildAdsData($funnel) : null,
+            'paidTrafficAssets' => $paidTrafficAssets,
             'aiSources' => FunnelAiSource::query()
                 ->where('funnel_id', $funnel->id)
                 ->latest()

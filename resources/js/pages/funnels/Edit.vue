@@ -208,6 +208,12 @@ const props = defineProps<{
         total_spend: number;
         route: string;
     } | null;
+    paidTrafficAssets?: {
+        template_index: number;
+        folder_name: string;
+        drive_url: string | null;
+        poster_url: string | null;
+    } | null;
     videoStats: {
         accessed: number;
         watched_60s: number;
@@ -219,6 +225,7 @@ const props = defineProps<{
 
 const page = usePage();
 const paidAdsEnabled = computed(() => page.props.paidAdsEnabled === true);
+const hasPaidTrafficAssets = computed(() => props.paidTrafficAssets !== null && props.paidTrafficAssets !== undefined);
 
 const optinPage = props.funnel.pages.find((p) => p.page_type === 'optin');
 
@@ -1939,6 +1946,10 @@ onUnmounted(() => {
                     <Icon icon="heroicons:megaphone" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Promotion</span>
                 </TabsTrigger>
+                <TabsTrigger v-if="hasPaidTrafficAssets" value="paid-traffic-assets" :class="funnelTabTriggerClass">
+                    <Icon icon="heroicons:rectangle-stack" :class="funnelTabIconClass" />
+                    <span class="max-w-full truncate">Marketing Assets</span>
+                </TabsTrigger>
                 <TabsTrigger v-if="paidAdsEnabled" value="ads" :class="funnelTabTriggerClass">
                     <Icon icon="heroicons:rocket-launch" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Paid Ads</span>
@@ -3093,6 +3104,63 @@ onUnmounted(() => {
                         <p v-else>No scheduled promotion posts yet.</p>
                     </CardContent>
                 </Card>
+            </TabsContent>
+
+            <!-- ── Tab: Paid Traffic Assets ── -->
+            <TabsContent v-if="hasPaidTrafficAssets && props.paidTrafficAssets" value="paid-traffic-assets" class="space-y-4">
+                <div class="overflow-hidden rounded-xl border bg-gradient-to-br from-amber-500/10 via-primary/5 to-emerald-500/10 p-5">
+                    <div class="flex items-center gap-2 mb-2">
+                        <Icon icon="heroicons:rocket-launch" class="size-5 text-primary" />
+                        <h3 class="text-sm font-semibold text-foreground">Paid Traffic Assets</h3>
+                    </div>
+                    <p class="text-sm text-muted-foreground max-w-2xl">
+                        Anyone who wants to scale up their income can simply use these ready-made assets to run paid ads for
+                        <span class="font-medium text-foreground">{{ funnel.name }}</span>.
+                    </p>
+                </div>
+
+                <p class="text-xs text-muted-foreground">
+                    Click the preview below to open your Google Drive folder and download all ad creatives for this offer.
+                </p>
+
+                <a
+                    v-if="props.paidTrafficAssets.drive_url"
+                    :href="props.paidTrafficAssets.drive_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="group relative mx-auto block max-w-2xl overflow-hidden rounded-2xl border bg-black shadow-lg transition hover:border-primary/50"
+                >
+                    <div class="relative aspect-video w-full">
+                        <img
+                            v-if="props.paidTrafficAssets.poster_url"
+                            :src="props.paidTrafficAssets.poster_url"
+                            alt="Paid traffic ad preview"
+                            class="h-full w-full object-cover opacity-80 transition group-hover:opacity-60"
+                        />
+                        <div
+                            v-else
+                            class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950"
+                        >
+                            <Icon icon="heroicons:film" class="size-16 text-white/30" />
+                        </div>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/30 transition group-hover:bg-black/45">
+                            <div class="flex size-16 items-center justify-center rounded-full bg-white/95 text-primary shadow-xl transition group-hover:scale-105">
+                                <Icon icon="heroicons:play-solid" class="size-8 ml-1" />
+                            </div>
+                            <p class="text-sm font-semibold text-white drop-shadow">Download paid traffic assets</p>
+                            <p class="text-xs text-white/80">Open Google Drive folder</p>
+                        </div>
+                    </div>
+                </a>
+
+                <div v-if="props.paidTrafficAssets.drive_url" class="flex justify-center">
+                    <Button as-child size="sm" variant="outline" class="h-9 gap-1.5 text-xs">
+                        <a :href="props.paidTrafficAssets.drive_url" target="_blank" rel="noopener noreferrer">
+                            <Icon icon="heroicons:folder-open" class="size-4" />
+                            Open Google Drive to download
+                        </a>
+                    </Button>
+                </div>
             </TabsContent>
 
             <!-- ── Tab: Paid Ads ── -->

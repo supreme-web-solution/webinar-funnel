@@ -17,6 +17,7 @@ class Template extends Model
         'category',
         'conversion_style',
         'thumbnail_url',
+        'paid_traffic_drive_url',
         'default_palette',
         'suggested_keywords',
         'vendor_contact',
