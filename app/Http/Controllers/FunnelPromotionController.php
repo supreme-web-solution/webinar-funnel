@@ -90,6 +90,7 @@ class FunnelPromotionController extends Controller
                 'name' => $funnel->name,
                 'status' => $funnel->status,
             ],
+            'defaultCta' => app(PromotionCtaResolverService::class)->resolve($funnel->loadMissing('user')),
             'posts' => $posts,
             'stats' => [
                 'total' => (clone $statsBase)->count(),

@@ -87,6 +87,7 @@ const props = defineProps<{
     availableAvatars: DIDAvatar[];
     availableVoices: DIDVoice[];
     routes: { store: string; bulk: string; calendar: string; topicsGenerate: string; scriptGenerate: string };
+    defaultCta?: { url: string | null; label: string | null };
 }>();
 
 // ─── Background job polling ──────────────────────────────────────────────────
@@ -1204,11 +1205,22 @@ const statItems = computed(() => [
                             <div class="grid gap-2 sm:grid-cols-2">
                                 <div class="space-y-1">
                                     <Label class="text-xs">CTA label override</Label>
-                                    <Input v-model="ctaLabelInput" class="h-9 text-sm" placeholder="Watch free webinar" />
+                                    <Input
+                                        v-model="ctaLabelInput"
+                                        class="h-9 text-sm"
+                                        :placeholder="props.defaultCta?.label ?? 'Watch free webinar'"
+                                    />
                                 </div>
                                 <div class="space-y-1">
                                     <Label class="text-xs">CTA URL override</Label>
-                                    <Input v-model="ctaUrlInput" class="h-9 text-sm" placeholder="https://…" />
+                                    <Input
+                                        v-model="ctaUrlInput"
+                                        class="h-9 text-sm"
+                                        :placeholder="props.defaultCta?.url ?? 'https://…'"
+                                    />
+                                    <p v-if="props.defaultCta?.url && !ctaUrlInput" class="text-[0.65rem] text-muted-foreground">
+                                        Default: your funnel opt-in page ({{ props.defaultCta.url }})
+                                    </p>
                                 </div>
                             </div>
                         </div>

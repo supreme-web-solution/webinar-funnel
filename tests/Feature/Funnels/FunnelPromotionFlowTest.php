@@ -48,7 +48,7 @@ class FunnelPromotionFlowTest extends TestCase
 
     public function test_user_can_create_and_schedule_promotion_post(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['username' => 'promo-user']);
         $funnel = $this->makeFunnel($user);
 
         foreach (['twitter', 'youtube'] as $platform) {
@@ -73,6 +73,10 @@ class FunnelPromotionFlowTest extends TestCase
         $response->assertRedirect();
         $post = FunnelPromotionPost::query()->where('funnel_id', $funnel->id)->first();
         $this->assertNotNull($post);
+        $this->assertSame(route('public.optin', [
+            'username' => 'promo-user',
+            'slug' => $funnel->slug,
+        ]), $post->cta_url);
 
         $scheduleAt = now()->addDay()->startOfHour();
         $scheduleResponse = $this->actingAs($user)->patch(
