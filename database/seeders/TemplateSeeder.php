@@ -114,9 +114,9 @@ class TemplateSeeder extends Seeder
                         'allow_replay' => true,
                         'redirect_enabled' => false,
                         'redirect_url' => '',
-                        'webinar_ai_enabled' => false,
+                        'webinar_ai_enabled' => true,
                         'webinar_ai_auto_reply_enabled' => true,
-                        'webinar_ai_assistant_name' => '',
+                        'webinar_ai_assistant_name' => 'Webinar Assistant',
                         'branding' => ['primary' => '#40E0D0', 'secondary' => '#FFAD00'],
                         'chat_seed_messages' => [
                             ['author' => 'Moderator', 'message' => 'Welcome! Let us know where you are joining from 👋'],

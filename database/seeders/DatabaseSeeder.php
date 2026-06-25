@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             TemplateSeeder::class,
             TemplatePaidTrafficDriveLinksSeeder::class,
+            TemplateAiKnowledgeSeeder::class,
         ]);
     }
 }

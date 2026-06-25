@@ -21,6 +21,7 @@ use App\Models\Mention;
 use App\Models\SocialAccount;
 use App\Models\Template;
 use App\Services\Funnel\FunnelPaidTrafficAssetsService;
+use App\Services\Funnels\FunnelAiKnowledgeProvisioner;
 use App\Services\Funnels\PageSanitizer;
 use App\Services\Funnels\PublicFunnelResolver;
 use App\Services\Mentions\KeywordMentionCapEnforcer;
@@ -120,6 +121,14 @@ class FunnelController extends Controller
             $defaultSettings['vendor_contact'] = $template->vendor_contact;
         }
 
+        $aiProvisioner = app(FunnelAiKnowledgeProvisioner::class);
+        $defaultSettings = $aiProvisioner->applyTemplateKnowledge(
+            new Funnel(['template_id' => $template->id]),
+            $template,
+            $defaultSettings,
+            $isScratch,
+        );
+
         $funnel = Funnel::query()->create([
             'user_id' => $request->user()->id,
             'template_id' => $template->id,
@@ -143,7 +152,14 @@ class FunnelController extends Controller
             'version' => 1,
         ]);
 
+        $pendingAiKnowledge = $defaultSettings['_pending_ai_knowledge'] ?? null;
+        unset($defaultSettings['_pending_ai_knowledge']);
+
         $funnel->settings()->create($defaultSettings);
+
+        if (is_array($pendingAiKnowledge)) {
+            $aiProvisioner->provisionSources($funnel, ['_pending_ai_knowledge' => $pendingAiKnowledge]);
+        }
 
         ChatRoom::query()->create([
             'funnel_id' => $funnel->id,
