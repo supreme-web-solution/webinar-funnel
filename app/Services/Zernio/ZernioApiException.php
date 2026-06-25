@@ -46,6 +46,18 @@ final class ZernioApiException extends \RuntimeException
         );
     }
 
+    public function isStaleProfileError(): bool
+    {
+        if ($this->httpStatus !== 404) {
+            return false;
+        }
+
+        $message = strtolower($this->getMessage());
+
+        return str_contains($message, 'profile not found')
+            || str_contains($message, 'access denied');
+    }
+
     public function isPaymentRequired(): bool
     {
         if ($this->errorCode === 'PAYMENT_REQUIRED' || $this->httpStatus === 402) {

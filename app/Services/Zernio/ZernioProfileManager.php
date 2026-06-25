@@ -43,6 +43,58 @@ final class ZernioProfileManager
     }
 
     /**
+     * Clear a stale profile id and create a fresh Zernio profile for the user.
+     */
+    public function recreateForUser(User $user): string
+    {
+        $staleId = $user->zernio_profile_id;
+
+        $user->forceFill(['zernio_profile_id' => null])->save();
+
+        $freshUser = $user->fresh() ?? $user;
+        $profileId = $this->ensureForUser($freshUser);
+
+        Log::info('ZernioProfileManager: recreated profile', [
+            'user_id' => $user->id,
+            'stale_profile_id' => $staleId,
+            'zernio_profile_id' => $profileId,
+        ]);
+
+        return $profileId;
+    }
+
+    /**
+     * Run a Zernio API call with the user's profile id, recreating the profile once on stale 404.
+     *
+     * @template T
+     *
+     * @param  callable(string): T  $callback
+     * @return T
+     */
+    public function withProfile(User $user, callable $callback): mixed
+    {
+        $profileId = $this->ensureForUser($user);
+
+        try {
+            return $callback($profileId);
+        } catch (ZernioApiException $e) {
+            if (! $e->isStaleProfileError()) {
+                throw $e;
+            }
+
+            Log::warning('ZernioProfileManager: stale profile detected, recreating', [
+                'user_id' => $user->id,
+                'stale_profile_id' => $profileId,
+                'error' => $e->getMessage(),
+            ]);
+
+            $profileId = $this->recreateForUser($user);
+
+            return $callback($profileId);
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $response
      */
     private function extractProfileId(array $response): ?string

@@ -87,8 +87,12 @@ class SocialTrafficController extends Controller
         $user = User::query()->find($userId);
         if ($user) {
             try {
-                $profileId = app(ZernioProfileManager::class)->ensureForUser($user);
-                foreach ($zernio->listAccountsForProfile($profileId) as $row) {
+                $accounts = app(ZernioProfileManager::class)->withProfile(
+                    $user,
+                    fn (string $profileId): array => $zernio->listAccountsForProfile($profileId),
+                );
+
+                foreach ($accounts as $row) {
                     if (! is_array($row)) {
                         continue;
                     }
@@ -174,9 +178,11 @@ class SocialTrafficController extends Controller
         }
 
         try {
-            $profileId = app(ZernioProfileManager::class)->ensureForUser($request->user());
             $redirectUrl = $this->oauthCallbackUrl($platform);
-            $connect = $zernio->getConnectUrl($zernioPlatform, $profileId, $redirectUrl);
+            $connect = app(ZernioProfileManager::class)->withProfile(
+                $request->user(),
+                fn (string $profileId): array => $zernio->getConnectUrl($zernioPlatform, $profileId, $redirectUrl),
+            );
 
             Log::info('SocialTrafficController: starting Zernio OAuth', [
                 'platform' => $platform,
@@ -237,8 +243,15 @@ class SocialTrafficController extends Controller
 
         if (is_string($code) && $code !== '' && is_string($state) && $state !== '' && is_string($zernioPlatform)) {
             try {
-                $profileId = app(ZernioProfileManager::class)->ensureForUser($request->user());
-                $result = app(ZernioClient::class)->completeOAuthConnection($zernioPlatform, $code, $state, $profileId);
+                $result = app(ZernioProfileManager::class)->withProfile(
+                    $request->user(),
+                    fn (string $profileId): array => app(ZernioClient::class)->completeOAuthConnection(
+                        $zernioPlatform,
+                        $code,
+                        $state,
+                        $profileId,
+                    ),
+                );
 
                 Log::info('SocialTrafficController: Zernio OAuth exchange completed', [
                     'user_id' => $request->user()->id,

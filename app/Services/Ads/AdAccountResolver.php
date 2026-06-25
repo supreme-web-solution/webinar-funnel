@@ -178,8 +178,10 @@ final class AdAccountResolver
         }
 
         try {
-            $profileId = $this->profiles->ensureForUser($user);
-            $accounts  = $this->zernio->listAccountsForProfile($profileId);
+            $accounts = $this->profiles->withProfile(
+                $user,
+                fn (string $profileId): array => $this->zernio->listAccountsForProfile($profileId),
+            );
         } catch (\Throwable) {
             return null;
         }
@@ -224,8 +226,10 @@ final class AdAccountResolver
         }
 
         try {
-            $profileId = $this->profiles->ensureForUser($user);
-            $accounts = $this->zernio->listAccountsForProfile($profileId);
+            $accounts = $this->profiles->withProfile(
+                $user,
+                fn (string $profileId): array => $this->zernio->listAccountsForProfile($profileId),
+            );
         } catch (\Throwable) {
             return null;
         }

@@ -38,21 +38,13 @@ final class ZernioSocialAccountSync
             return [];
         }
 
-        try {
-            $profileId = $this->profiles->ensureForUser($user);
-        } catch (\Throwable $e) {
-            Log::warning('ZernioSocialAccountSync: no profile', [
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            return [];
-        }
-
         $accounts = [];
 
         try {
-            $accounts = $this->zernio->listAccountsForProfile($profileId);
+            $accounts = $this->profiles->withProfile(
+                $user,
+                fn (string $profileId): array => $this->zernio->listAccountsForProfile($profileId),
+            );
         } catch (ZernioApiException $e) {
             Log::warning('ZernioSocialAccountSync: list accounts failed', [
                 'user_id' => $user->id,
