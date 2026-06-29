@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Page Not Found - WebinarCashflow Ai</title>
+    <title>Page Not Found - AffiliMachine Ai</title>
     <style>
         :root {
             --bg: #f8fafc;
@@ -155,7 +155,7 @@
 <main class="card">
     <div class="brand">
         <span class="dot"></span>
-        WebinarCashflow Ai
+        AffiliMachine Ai
     </div>
 
     <span class="eyebrow">Page Not Found</span>

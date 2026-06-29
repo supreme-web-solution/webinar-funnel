@@ -14,7 +14,7 @@ return [
     |
     */
 
-    'intro' => 'Welcome! Step-by-step guides for WebinarCashflow Ai will appear here.',
+    'intro' => 'Welcome! Step-by-step guides for AffiliMachine Ai will appear here.',
 
     'sections' => [
         // Example:

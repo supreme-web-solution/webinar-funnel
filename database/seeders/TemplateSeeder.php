@@ -1693,7 +1693,7 @@ CSS;
 
         $html = <<<HTML
 <div class="dfy-page">
-  <div class="dfy-logo">WebinarCashflow Ai</div>
+  <div class="dfy-logo">AffiliMachine Ai</div>
   <section class="dfy-hero">
     <span class="dfy-badge">{$heading}</span>
     <h1 class="dfy-headline">{$intro}</h1>

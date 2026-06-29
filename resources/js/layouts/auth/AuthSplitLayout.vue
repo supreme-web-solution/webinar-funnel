@@ -44,10 +44,10 @@ const capabilities = computed(() => {
                 <Link :href="home()" class="flex w-fit items-center gap-2.5">
                     <img
                         src="/favicon.png"
-                        alt="WebinarCashflow Ai"
+                        alt="AffiliMachine Ai"
                         class="size-9 rounded-xl shadow-sm ring-1 ring-primary/30"
                     />
-                    <span class="text-sm font-bold tracking-tight text-white">WebinarCashflow Ai</span>
+                    <span class="text-sm font-bold tracking-tight text-white">AffiliMachine Ai</span>
                 </Link>
 
                 <div class="my-auto">
@@ -107,7 +107,7 @@ const capabilities = computed(() => {
                         />
                     </div>
                     <p class="text-xs leading-snug text-slate-300">
-                        <span class="font-semibold text-white">2,400+</span> marketers already using WebinarCashflow Ai
+                        <span class="font-semibold text-white">2,400+</span> marketers already using AffiliMachine Ai
                     </p>
                 </div>
             </div>
@@ -119,10 +119,10 @@ const capabilities = computed(() => {
             <Link :href="home()" class="mb-8 flex items-center gap-2 lg:hidden">
                 <img
                     src="/favicon.png"
-                    alt="WebinarCashflow Ai"
+                    alt="AffiliMachine Ai"
                     class="size-8 rounded-lg ring-1 ring-primary/25"
                 />
-                <span class="text-sm font-bold tracking-tight text-foreground">WebinarCashflow Ai</span>
+                <span class="text-sm font-bold tracking-tight text-foreground">AffiliMachine Ai</span>
             </Link>
 
             <div class="w-full max-w-sm">
