@@ -49,4 +49,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/social-traffic/zernio/callback', [SocialTrafficController::class, 'zernioCallback'])
         ->name('settings.social-traffic.zernio.callback');
+
+    Route::post('settings/social-traffic/zernio/link-profile', [SocialTrafficController::class, 'linkZernioProfile'])
+        ->name('settings.social-traffic.zernio.link-profile');
 });

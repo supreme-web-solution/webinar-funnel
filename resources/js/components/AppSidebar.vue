@@ -96,7 +96,7 @@ const footerNavItems: NavItem[] = [
                                     AffiliMachine Ai
                                 </span>
                                 <span class="truncate text-[0.65rem] text-sidebar-foreground/60">
-                                    Funnel Builder
+                                    Affiliate Business Builder
                                 </span>
                             </div>
                         </Link>

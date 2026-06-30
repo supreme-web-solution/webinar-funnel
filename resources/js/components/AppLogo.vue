@@ -9,6 +9,6 @@
         <span class="truncate text-[0.8rem] font-bold tracking-tight text-sidebar-accent-foreground">
             AffiliMachine Ai
         </span>
-        <span class="text-[0.65rem] text-sidebar-foreground/50 truncate">Webinar Platform</span>
+        <span class="text-[0.65rem] text-sidebar-foreground/50 truncate">Affiliate Business Builder</span>
     </div>
 </template>

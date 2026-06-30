@@ -12,12 +12,12 @@ defineProps<{
 const page = usePage();
 
 const allCapabilities = [
-    { icon: 'heroicons:rectangle-stack', label: 'Webinar Funnels', detail: '51+ proven templates' },
-    { icon: 'heroicons:chat-bubble-left-right', label: 'AI Webinar Chat', detail: 'Live & simulated' },
+    { icon: 'heroicons:cursor-arrow-rays', label: 'Traffic Engine', detail: 'AI-driven traffic 24/7' },
+    { icon: 'heroicons:users', label: 'Lead Generation', detail: 'Capture & nurture leads' },
+    { icon: 'heroicons:video-camera', label: 'Webinar Sales Machine', detail: 'Automated evergreen sales' },
+    { icon: 'heroicons:rectangle-stack', label: 'Affiliate Funnels', detail: '51+ proven templates' },
     { icon: 'heroicons:megaphone', label: 'Social Promotion', detail: 'Posts, images & video' },
-    { icon: 'heroicons:cursor-arrow-rays', label: 'Traffic AI', detail: 'Auto-reply & mentions' },
     { icon: 'heroicons:chart-bar', label: 'Paid Ads', detail: 'Meta, Google & more' },
-    { icon: 'heroicons:envelope', label: 'ESP Integrations', detail: 'Capture & sync leads' },
 ];
 
 const capabilities = computed(() => {
@@ -54,22 +54,23 @@ const capabilities = computed(() => {
                     <div class="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/35 bg-primary/10 px-3 py-1 shadow-sm">
                         <span class="size-1.5 animate-pulse rounded-full bg-primary" />
                         <span class="text-[0.7rem] font-semibold tracking-widest text-primary uppercase">
-                            All-in-one Webinar Platform
+                            All-in-one Affiliate Business Builder
                         </span>
                     </div>
 
                     <h1 class="mb-3 text-4xl leading-tight font-extrabold text-white">
-                        Your complete webinar
-                        <span class="text-primary">flow</span>
+                        The world's first AI that builds your entire affiliate
+                        <span class="text-primary">business</span>
                     </h1>
                     <p class="mb-8 max-w-md text-sm leading-relaxed text-slate-300">
-                        Launch funnels, run evergreen webinars, promote on social, drive traffic with AI,
-                        and manage paid ads — all from one dashboard.
+                        Automatically creates your Traffic Engine, Lead Generation System &amp; Automated
+                        Webinar Sales Machine — all working together as ONE complete affiliate business
+                        that generates commissions for you around the clock.
                     </p>
 
                     <div class="rounded-2xl border border-primary/20 bg-white/75 p-5 shadow-sm backdrop-blur-sm">
                         <p class="mb-4 text-[10px] font-semibold tracking-widest text-primary uppercase">
-                            Everything in one platform
+                            Three engines. One business.
                         </p>
                         <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
                             <div
@@ -88,11 +89,11 @@ const capabilities = computed(() => {
                         <div class="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3">
                             <p class="text-[10px] font-semibold tracking-wide text-primary uppercase">How it works</p>
                             <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-700">
-                                <span class="font-medium">Pick a funnel</span>
+                                <span class="font-medium">Activate your business</span>
                                 <Icon icon="heroicons:arrow-right" class="size-3.5 text-primary" />
-                                <span class="font-medium">Publish pages</span>
+                                <span class="font-medium">AI builds traffic &amp; leads</span>
                                 <Icon icon="heroicons:arrow-right" class="size-3.5 text-primary" />
-                                <span class="font-medium">Let AI promote & convert</span>
+                                <span class="font-medium">Earn commissions 24/7</span>
                             </div>
                         </div>
                     </div>

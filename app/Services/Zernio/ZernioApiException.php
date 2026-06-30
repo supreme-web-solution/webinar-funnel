@@ -72,10 +72,30 @@ final class ZernioApiException extends \RuntimeException
             || str_contains($message, 'payment method');
     }
 
+    public function isDuplicateProfileError(): bool
+    {
+        if ($this->httpStatus !== 400) {
+            return false;
+        }
+
+        $message = strtolower($this->getMessage());
+
+        return str_contains($message, 'profile with this name already exists');
+    }
+
+    public function duplicateProfileUserMessage(): string
+    {
+        return 'This Zernio account already has a profile for you—usually because another app uses the same API key. Link this app to that profile to connect social accounts here. If you use multiple apps, refresh social settings in each app after linking so connection status stays in sync.';
+    }
+
     public function userMessage(): string
     {
         if ($this->isPaymentRequired()) {
             return 'Social account connections are not available right now. Please try again later or contact support.';
+        }
+
+        if ($this->isDuplicateProfileError()) {
+            return $this->duplicateProfileUserMessage();
         }
 
         return 'Could not connect this account right now. Please try again later or contact support.';

@@ -1,15 +1,25 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 type ZernioConnectFlash = {
     platform: string;
     message: string;
+    type?: 'duplicate_profile' | 'error';
+    linkProfileUrl?: string;
 };
 
 type SocialRow = {
@@ -23,6 +33,7 @@ type SocialRow = {
 const props = defineProps<{
     socialAccounts: SocialRow[];
     zernioConfigured: boolean;
+    zernioConnectPrompt?: ZernioConnectFlash | null;
     oauthCallbackUrl?: string;
     appUrlMismatch?: boolean;
     appUrl?: string;
@@ -43,8 +54,42 @@ const page = usePage();
 
 const zernioConnectAlert = computed(() => {
     const flash = page.props.flash as { zernioConnect?: ZernioConnectFlash } | undefined;
-    return flash?.zernioConnect ?? null;
+    return flash?.zernioConnect ?? props.zernioConnectPrompt ?? null;
 });
+
+const duplicateProfileModalOpen = ref(false);
+const linkingProfile = ref(false);
+
+watch(
+    zernioConnectAlert,
+    (flash) => {
+        duplicateProfileModalOpen.value = flash?.type === 'duplicate_profile';
+    },
+    { immediate: true },
+);
+
+function linkExistingZernioProfile() {
+    const flash = zernioConnectAlert.value;
+    if (!flash?.linkProfileUrl) {
+        return;
+    }
+
+    linkingProfile.value = true;
+
+    const payload =
+        flash.platform && flash.platform !== 'social' ? { platform: flash.platform } : {};
+
+    router.post(flash.linkProfileUrl, payload, {
+        preserveScroll: true,
+        onFinish: () => {
+            linkingProfile.value = false;
+        },
+    });
+}
+
+function cancelDuplicateProfileModal() {
+    duplicateProfileModalOpen.value = false;
+}
 
 function platformErrorKey(platformKey: string): string {
     return platformKey === 'twitter' ? 'x' : platformKey;
@@ -237,7 +282,7 @@ function displayPlatformName(platform: string): string {
         </Card>
 
         <Card
-            v-else-if="zernioConnectAlert"
+            v-else-if="zernioConnectAlert && zernioConnectAlert.type !== 'duplicate_profile'"
             class="border-amber-500/40 bg-amber-500/5"
         >
             <CardContent class="space-y-2 p-4 text-sm">
@@ -245,6 +290,29 @@ function displayPlatformName(platform: string): string {
                 <p class="text-muted-foreground">{{ zernioConnectAlert.message }}</p>
             </CardContent>
         </Card>
+
+        <Dialog :open="duplicateProfileModalOpen" @update:open="duplicateProfileModalOpen = $event">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Link your Zernio profile</DialogTitle>
+                    <DialogDescription class="text-left space-y-2 pt-1">
+                        <span>{{ zernioConnectAlert?.message }}</span>
+                        <span class="block text-muted-foreground">
+                            Continuing links this app to the profile already on your Zernio account. Social
+                            accounts you connect here are shared across apps that use the same API key.
+                        </span>
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter class="gap-2 sm:gap-0">
+                    <Button variant="outline" :disabled="linkingProfile" @click="cancelDuplicateProfileModal">
+                        Cancel
+                    </Button>
+                    <Button :disabled="linkingProfile" @click="linkExistingZernioProfile">
+                        {{ linkingProfile ? 'Linking…' : 'Continue' }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         <!-- Posting & paid ads (connect Facebook here for ads) -->
         <div class="space-y-3">

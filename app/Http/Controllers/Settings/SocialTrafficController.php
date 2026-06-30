@@ -38,8 +38,16 @@ class SocialTrafficController extends Controller
 
     public function edit(Request $request): Response
     {
+        $zernioConnectPrompt = null;
+
         if (app(ZernioClient::class)->isConfigured()) {
-            app(ZernioSocialAccountSync::class)->syncForUser($request->user());
+            try {
+                app(ZernioSocialAccountSync::class)->syncForUser($request->user());
+            } catch (ZernioApiException $e) {
+                if ($e->isDuplicateProfileError()) {
+                    $zernioConnectPrompt = $this->duplicateProfilePayload($e, 'social');
+                }
+            }
         }
 
         $accounts = SocialAccount::query()
@@ -53,6 +61,7 @@ class SocialTrafficController extends Controller
         return Inertia::render('settings/SocialTraffic', [
             'socialAccounts' => $accounts,
             'zernioConfigured' => app(ZernioClient::class)->isConfigured(),
+            'zernioConnectPrompt' => $zernioConnectPrompt,
             'oauthCallbackUrl' => $this->oauthCallbackUrl('reddit'),
             'appUrl' => $appUrl,
             'appUrlMismatch' => $appUrl !== '' && $appUrl !== $requestOrigin,
@@ -351,6 +360,41 @@ class SocialTrafficController extends Controller
         return $this->connectRedirect($request, $platform);
     }
 
+    public function linkZernioProfile(Request $request): RedirectResponse|\Symfony\Component\HttpFoundation\Response
+    {
+        $user = $request->user();
+        $platform = $request->input('platform');
+        $routeSlug = is_string($platform) && $platform !== '' ? $platform : null;
+
+        try {
+            app(ZernioProfileManager::class)->adoptExistingProfileForUser($user);
+            app(ZernioSocialAccountSync::class)->syncForUser($user);
+        } catch (ZernioApiException $e) {
+            return $this->handleConnectFailure($routeSlug ?? 'social', $e);
+        } catch (\Throwable $e) {
+            Log::error('SocialTrafficController: link Zernio profile failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->authError(
+                $routeSlug ?? 'social',
+                'Could not link your Zernio profile right now. Please try again later or contact support.',
+            );
+        }
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => 'Linked your Zernio profile. Social accounts synced.',
+        ]);
+
+        if ($routeSlug !== null && array_key_exists($routeSlug, self::PLATFORM_MAP)) {
+            return $this->connectRedirect($request, $routeSlug);
+        }
+
+        return redirect()->to($this->socialTrafficSettingsUrl());
+    }
+
     private function connectionSuccessRedirect(string $localPlatform): RedirectResponse
     {
         Log::info('SocialTrafficController: account connected', [
@@ -398,8 +442,15 @@ class SocialTrafficController extends Controller
             'message' => $e->getMessage(),
         ]);
 
+        if ($e->isDuplicateProfileError()) {
+            $this->flashDuplicateProfile($e, $platform);
+
+            return redirect()->to($this->socialTrafficSettingsUrl());
+        }
+
         Inertia::flash('zernioConnect', [
             'platform' => $platform,
+            'type' => 'error',
             'message' => $userMessage,
         ]);
 
@@ -409,6 +460,24 @@ class SocialTrafficController extends Controller
         ]);
 
         return redirect()->to($this->socialTrafficSettingsUrl())->withErrors([$platform => $userMessage]);
+    }
+
+    private function flashDuplicateProfile(ZernioApiException $e, string $platform): void
+    {
+        Inertia::flash('zernioConnect', $this->duplicateProfilePayload($e, $platform));
+    }
+
+    /**
+     * @return array{platform: string, type: string, message: string, linkProfileUrl: string}
+     */
+    private function duplicateProfilePayload(ZernioApiException $e, string $platform): array
+    {
+        return [
+            'platform' => $platform,
+            'type' => 'duplicate_profile',
+            'message' => $e->duplicateProfileUserMessage(),
+            'linkProfileUrl' => route('settings.social-traffic.zernio.link-profile'),
+        ];
     }
 
     private function oauthCallbackUrl(string $routeSlug): string

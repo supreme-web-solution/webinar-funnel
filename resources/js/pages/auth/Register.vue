@@ -13,7 +13,7 @@ import { store } from '@/routes/register';
 defineOptions({
     layout: {
         title: 'Create an account',
-        description: 'Enter your details below to create your account',
+        description: 'Start building your affiliate business in minutes',
     },
 });
 </script>

@@ -46,6 +46,10 @@ final class ZernioSocialAccountSync
                 fn (string $profileId): array => $this->zernio->listAccountsForProfile($profileId),
             );
         } catch (ZernioApiException $e) {
+            if ($e->isDuplicateProfileError()) {
+                throw $e;
+            }
+
             Log::warning('ZernioSocialAccountSync: list accounts failed', [
                 'user_id' => $user->id,
                 'status' => $e->httpStatus,
