@@ -15,6 +15,7 @@ interface UserRow {
     email: string;
     email_verified_at: string | null;
     created_at: string;
+    role?: string | null;
 }
 
 interface PaginationLink {
@@ -44,6 +45,9 @@ const props = defineProps<{
         verified: number;
     };
     adminEmails: string[];
+    rolesEnabled?: boolean;
+    assignableRoles?: string[];
+    defaultRole?: string;
 }>();
 
 const search = ref(props.filters.search ?? '');
@@ -66,12 +70,14 @@ const createForm = useForm({
     email: '',
     password: '',
     password_confirmation: '',
+    role: props.defaultRole ?? 'FE',
 });
 
 const editForm = useForm({
     name: '',
     username: '',
     email: '',
+    role: props.defaultRole ?? 'FE',
 });
 
 function fmtDate(dt: string): string {
@@ -86,9 +92,15 @@ function isProtectedAdmin(user: UserRow): boolean {
     return props.adminEmails.includes((user.email ?? '').toLowerCase());
 }
 
+function roleLabel(role: string | null | undefined): string {
+    if (!role) return 'FE (default)';
+    return role;
+}
+
 function openCreate(): void {
     showCreate.value = true;
     createForm.reset();
+    createForm.role = props.defaultRole ?? 'FE';
     createForm.clearErrors();
 }
 
@@ -110,6 +122,7 @@ function openEdit(user: UserRow): void {
     editForm.name = user.name;
     editForm.username = user.username;
     editForm.email = user.email;
+    editForm.role = user.role ?? props.defaultRole ?? 'FE';
     editForm.clearErrors();
 }
 
@@ -221,6 +234,7 @@ function deleteUser(user: UserRow): void {
                                 <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Name</th>
                                 <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Username</th>
                                 <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Email</th>
+                                <th v-if="rolesEnabled" class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Role</th>
                                 <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Status</th>
                                 <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Joined</th>
                                 <th class="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Actions</th>
@@ -231,6 +245,11 @@ function deleteUser(user: UserRow): void {
                                 <td class="px-4 py-3 font-medium text-foreground">{{ user.name }}</td>
                                 <td class="px-4 py-3 text-muted-foreground">@{{ user.username }}</td>
                                 <td class="px-4 py-3 text-foreground">{{ user.email }}</td>
+                                <td v-if="rolesEnabled" class="px-4 py-3">
+                                    <Badge class="border border-violet-200 bg-violet-50 px-1.5 py-0 text-[0.65rem] text-violet-700">
+                                        {{ roleLabel(user.role) }}
+                                    </Badge>
+                                </td>
                                 <td class="px-4 py-3">
                                     <Badge
                                         class="border px-1.5 py-0 text-[0.65rem]"
@@ -327,6 +346,18 @@ function deleteUser(user: UserRow): void {
                             <label class="text-xs font-medium text-muted-foreground">Confirm Password</label>
                             <Input v-model="createForm.password_confirmation" type="password" required />
                         </div>
+                        <div v-if="rolesEnabled && (assignableRoles?.length ?? 0) > 0" class="space-y-1">
+                            <label class="text-xs font-medium text-muted-foreground">Role</label>
+                            <select
+                                v-model="createForm.role"
+                                class="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            >
+                                <option v-for="role in assignableRoles" :key="role" :value="role">
+                                    {{ role }}
+                                </option>
+                            </select>
+                            <p v-if="createForm.errors.role" class="text-xs text-destructive">{{ createForm.errors.role }}</p>
+                        </div>
 
                         <div class="flex items-center justify-end gap-2 pt-2">
                             <Button type="button" variant="outline" size="sm" @click="closeCreate">Cancel</Button>
@@ -361,6 +392,18 @@ function deleteUser(user: UserRow): void {
                             <label class="text-xs font-medium text-muted-foreground">Email</label>
                             <Input v-model="editForm.email" type="email" required />
                             <p v-if="editForm.errors.email" class="text-xs text-destructive">{{ editForm.errors.email }}</p>
+                        </div>
+                        <div v-if="rolesEnabled && (assignableRoles?.length ?? 0) > 0" class="space-y-1">
+                            <label class="text-xs font-medium text-muted-foreground">Role</label>
+                            <select
+                                v-model="editForm.role"
+                                class="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            >
+                                <option v-for="role in assignableRoles" :key="role" :value="role">
+                                    {{ role }}
+                                </option>
+                            </select>
+                            <p v-if="editForm.errors.role" class="text-xs text-destructive">{{ editForm.errors.role }}</p>
                         </div>
 
                         <div class="flex items-center justify-end gap-2 pt-2">

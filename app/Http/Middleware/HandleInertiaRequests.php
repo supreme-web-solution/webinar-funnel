@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Auth\UserRoleAssigner;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -40,6 +41,10 @@ class HandleInertiaRequests extends Middleware
             ->filter()
             ->values();
         $currentEmail = strtolower((string) optional($request->user())->email);
+        $user = $request->user();
+        $permissions = $user !== null
+            ? app(UserRoleAssigner::class)->permissionsFor($user)
+            : [];
 
         return [
             ...parent::share($request),
@@ -47,8 +52,11 @@ class HandleInertiaRequests extends Middleware
             'appearanceDarkModeEnabled' => (bool) config('appearance.dark_mode_enabled'),
             'paidAdsEnabled' => (bool) config('promotion.ads.enabled'),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
                 'is_admin' => $currentEmail !== '' && $adminEmails->contains($currentEmail),
+                'permissions' => $permissions,
+                'can_view_app_features' => in_array('view_app_features', $permissions, true),
+                'can_view_bundle_features' => in_array('view_extra_features', $permissions, true),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

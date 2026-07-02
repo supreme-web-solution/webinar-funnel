@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Fortify\Features;
 use Tests\TestCase;
@@ -35,5 +36,21 @@ class RegistrationTest extends TestCase
 
         $this->assertAuthenticated();
         $response->assertRedirect(route('dashboard', absolute: false));
+    }
+
+    public function test_registration_assigns_fe_role_when_roles_are_available(): void
+    {
+        $this->seed(RolesAndPermissionsSeeder::class);
+
+        $this->post(route('register.store'), [
+            'name' => 'Registered User',
+            'email' => 'registered@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $this->assertTrue(
+            auth()->user()?->hasRole('FE') ?? false
+        );
     }
 }

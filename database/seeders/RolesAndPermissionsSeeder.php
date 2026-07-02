@@ -25,6 +25,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view_app_features',
         ]);
 
+        // Bundle includes everything in FE today, plus future bundle-only menus via view_extra_features.
         Role::query()->where('name', 'Bundle')->first()?->syncPermissions([
             'view_app_features',
             'view_extra_features',

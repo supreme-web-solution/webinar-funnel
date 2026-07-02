@@ -17,7 +17,8 @@ import {
 } from '@/components/ui/sidebar';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
+/** Core app navigation — included in FE and Bundle. */
+const appNavItems: NavItem[] = [
     {
         title: 'Tutorial',
         href: '/tutorial',
@@ -55,9 +56,26 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
-const page = usePage<{ auth?: { is_admin?: boolean } }>();
+/** Bundle-only navigation — add new items here when they ship. */
+const bundleNavItems: NavItem[] = [];
+
+const page = usePage<{
+    auth?: {
+        is_admin?: boolean;
+        can_view_app_features?: boolean;
+        can_view_bundle_features?: boolean;
+    };
+}>();
+
 const navItems = computed<NavItem[]>(() => {
-    const items = [...mainNavItems];
+    const canViewApp = page.props.auth?.can_view_app_features ?? true;
+    const canViewBundle = page.props.auth?.can_view_bundle_features ?? false;
+
+    const items: NavItem[] = canViewApp ? [...appNavItems] : [];
+
+    if (canViewBundle) {
+        items.push(...bundleNavItems);
+    }
 
     if (page.props.auth?.is_admin) {
         items.push({

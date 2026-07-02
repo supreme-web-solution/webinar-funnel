@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\WelcomeMail;
 use App\Models\Product;
 use App\Models\User;
 use Database\Seeders\ProductTableSeeder;
@@ -46,6 +47,14 @@ class JvzooWebhookTest extends TestCase
 
         $this->assertNotNull($user);
         $this->assertTrue($user->hasRole('FE'));
+        $this->assertTrue($user->can('view_app_features'));
+        $this->assertFalse($user->can('view_extra_features'));
+
+        Mail::assertSent(WelcomeMail::class, function (WelcomeMail $mail): bool {
+            return $mail->hasTo('buyer@example.com')
+                && $mail->user->email === 'buyer@example.com'
+                && strlen($mail->password) >= 8;
+        });
     }
 
     public function test_bundle_product_assigns_bundle_role(): void
