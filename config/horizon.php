@@ -209,7 +209,7 @@ return [
             'queue' => ['traffic-post', 'traffic-generate', 'traffic-evaluate', 'promotion-publish', 'promotion-generate'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
-            'maxProcesses' => 8,
+            'maxProcesses' => 6,
             'maxTime' => 0,
             'maxJobs' => 0,
             'memory' => 256,
@@ -222,7 +222,7 @@ return [
             'queue' => ['esp-dispatch', 'webinar-ai', 'default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
-            'maxProcesses' => 4,
+            'maxProcesses' => 3,
             'maxTime' => 0,
             'maxJobs' => 0,
             'memory' => 256,
@@ -235,14 +235,14 @@ return [
     'environments' => [
         'production' => [
             'supervisor-traffic' => [
-                'maxProcesses' => (int) env('HORIZON_TRAFFIC_MAX_PROCESSES', 16),
-                'balanceMaxShift' => 2,
-                'balanceCooldown' => 3,
+                'maxProcesses' => (int) env('HORIZON_TRAFFIC_MAX_PROCESSES', 8),
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 5,
             ],
             'supervisor-general' => [
-                'maxProcesses' => (int) env('HORIZON_GENERAL_MAX_PROCESSES', 8),
+                'maxProcesses' => (int) env('HORIZON_GENERAL_MAX_PROCESSES', 4),
                 'balanceMaxShift' => 1,
-                'balanceCooldown' => 3,
+                'balanceCooldown' => 5,
             ],
         ],
 
