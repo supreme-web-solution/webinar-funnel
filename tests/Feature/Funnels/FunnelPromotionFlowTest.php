@@ -564,4 +564,137 @@ class FunnelPromotionFlowTest extends TestCase
             'status' => FunnelPromotionPost::STATUS_PUBLISHED,
         ]);
     }
+
+    public function test_publish_truncates_twitter_content_to_platform_limit(): void
+    {
+        config([
+            'services.zernio.base_url' => 'https://zernio.test/api',
+            'services.zernio.api_key' => 'test_key',
+            'promotion.zernio.default_publish_endpoint' => '/v1/posts',
+        ]);
+
+        Http::fake([
+            'https://zernio.test/api/v1/posts' => function ($request) {
+                $payload = $request->data();
+                $content = (string) ($payload['content'] ?? '');
+                $this->assertLessThanOrEqual(280, mb_strlen($content));
+                $this->assertStringEndsWith('…', $content);
+
+                return Http::response([
+                    'post' => [
+                        '_id' => 'post_tw',
+                        'platforms' => [[
+                            'platform' => 'twitter',
+                            'platformPostId' => 'tw_456',
+                            'platformPostUrl' => 'https://twitter.com/example/status/tw_456',
+                            'status' => 'published',
+                        ]],
+                    ],
+                ], 201);
+            },
+        ]);
+
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'platform' => 'twitter',
+            'platform_username' => 'acct',
+            'zernio_account_id' => 'acct_tw',
+            'daily_post_limit' => 50,
+            'posts_today' => 0,
+        ]);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'Launch announcement',
+            'content_type' => FunnelPromotionPost::TYPE_TEXT,
+            'platforms' => ['twitter'],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_READY,
+            'text_body' => str_repeat('This promotion post is far too long for X and must be shortened before publishing. ', 40),
+            'cta_url' => 'https://example.com/offer',
+            'cta_label' => 'Join now',
+            'timezone' => 'UTC',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('funnels.promotion.posts.publish', [$funnel, $post]), [
+            'sync' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('funnel_promotion_posts', [
+            'id' => $post->id,
+            'status' => FunnelPromotionPost::STATUS_PUBLISHED,
+        ]);
+    }
+
+    public function test_publish_truncates_reddit_title_and_moves_body_to_description(): void
+    {
+        config([
+            'services.zernio.base_url' => 'https://zernio.test/api',
+            'services.zernio.api_key' => 'test_key',
+            'promotion.zernio.default_publish_endpoint' => '/v1/posts',
+        ]);
+
+        Http::fake([
+            'https://zernio.test/api/v1/posts' => function ($request) {
+                $payload = $request->data();
+                $this->assertLessThanOrEqual(300, mb_strlen((string) ($payload['content'] ?? '')));
+                $this->assertSame(
+                    'How to improve webinar conversions',
+                    $payload['content']
+                );
+                $description = (string) ($payload['platforms'][0]['platformSpecificData']['description'] ?? '');
+                $this->assertLessThanOrEqual(4000, mb_strlen($description));
+                $this->assertStringContainsString('objection handling', $description);
+
+                return Http::response([
+                    'post' => [
+                        '_id' => 'post_rd',
+                        'platforms' => [[
+                            'platform' => 'reddit',
+                            'platformPostId' => 'rd_123',
+                            'platformPostUrl' => 'https://reddit.com/r/test/comments/rd_123',
+                            'status' => 'published',
+                        ]],
+                    ],
+                ], 201);
+            },
+        ]);
+
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'platform' => 'reddit',
+            'platform_username' => 'acct',
+            'zernio_account_id' => 'acct_rd',
+            'daily_post_limit' => 50,
+            'posts_today' => 0,
+        ]);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'How to improve webinar conversions',
+            'content_type' => FunnelPromotionPost::TYPE_TEXT,
+            'platforms' => ['reddit'],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_READY,
+            'text_body' => str_repeat('Hook, value, objection handling, and a clear CTA for Reddit readers. ', 50),
+            'timezone' => 'UTC',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('funnels.promotion.posts.publish', [$funnel, $post]), [
+            'sync' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('funnel_promotion_posts', [
+            'id' => $post->id,
+            'status' => FunnelPromotionPost::STATUS_PUBLISHED,
+        ]);
+    }
 }

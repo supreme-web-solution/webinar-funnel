@@ -38,7 +38,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 // Zernio OAuth (auth only — callback must match browser session after external OAuth).
 Route::middleware(['auth'])->group(function () {
-    $connectPlatforms = ['reddit', 'youtube', 'x', 'facebook', 'instagram', 'tiktok', 'linkedin', 'pinterest'];
+    $connectPlatforms = ['reddit', 'youtube', 'x', 'facebook', 'instagram', 'tiktok', 'linkedin'];
 
     foreach ($connectPlatforms as $slug) {
         Route::get("settings/social-traffic/{$slug}/redirect", [SocialTrafficController::class, 'platformRedirect'])

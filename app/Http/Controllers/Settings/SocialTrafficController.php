@@ -27,14 +27,13 @@ class SocialTrafficController extends Controller
         'instagram' => 'instagram',
         'tiktok' => 'tiktok',
         'linkedin' => 'linkedin',
-        'pinterest' => 'pinterest',
     ];
 
     /** @var list<string> */
     public const TRAFFIC_REPLY_PLATFORMS = ['reddit', 'youtube', 'x'];
 
     /** @var list<string> */
-    public const POSTING_ADS_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'linkedin', 'pinterest'];
+    public const POSTING_ADS_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'linkedin'];
 
     public function edit(Request $request): Response
     {
@@ -409,7 +408,6 @@ class SocialTrafficController extends Controller
             'instagram' => 'Instagram',
             'tiktok' => 'TikTok',
             'linkedin' => 'LinkedIn',
-            'pinterest' => 'Pinterest',
             default => ucfirst($localPlatform),
         };
 
@@ -490,7 +488,6 @@ class SocialTrafficController extends Controller
             'instagram' => url('/settings/social-traffic/instagram/callback'),
             'tiktok' => url('/settings/social-traffic/tiktok/callback'),
             'linkedin' => url('/settings/social-traffic/linkedin/callback'),
-            'pinterest' => url('/settings/social-traffic/pinterest/callback'),
             default => route('settings.social-traffic.zernio.callback'),
         };
     }

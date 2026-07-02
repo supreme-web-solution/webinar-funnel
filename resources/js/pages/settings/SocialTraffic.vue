@@ -175,18 +175,10 @@ const PLATFORM_CATALOG: Record<string, Omit<PlatformInfo, 'key' | 'purpose'>> = 
         connectLabel: 'Connect LinkedIn',
         billingNote: 'You may need to pick a LinkedIn organization after OAuth.',
     },
-    pinterest: {
-        label: 'Pinterest',
-        icon: 'simple-icons:pinterest',
-        iconColor: '#e60023',
-        redirectHref: '/settings/social-traffic/pinterest/redirect',
-        connectLabel: 'Connect Pinterest',
-        billingNote: 'You may need to pick a board after OAuth.',
-    },
 };
 
 const trafficPlatformKeys = computed(() => props.trafficPlatforms ?? ['reddit', 'youtube', 'x']);
-const postingPlatformKeys = computed(() => props.postingPlatforms ?? ['facebook', 'instagram', 'tiktok', 'linkedin', 'pinterest']);
+const postingPlatformKeys = computed(() => props.postingPlatforms ?? ['facebook', 'instagram', 'tiktok', 'linkedin']);
 
 function buildPlatforms(keys: string[], purpose: PlatformInfo['purpose']): PlatformInfo[] {
     return keys.map((key) => {

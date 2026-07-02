@@ -13,11 +13,16 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call([
+            RolesAndPermissionsSeeder::class,
+            ProductTableSeeder::class,
+        ]);
+
         User::factory()->create([
             'name' => 'Test User',
             'username' => 'testuser',
             'email' => 'test@example.com',
-        ]);
+        ])->assignRole('Bundle');
 
         $this->call([
             TemplateSeeder::class,

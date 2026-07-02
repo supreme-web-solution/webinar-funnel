@@ -25,14 +25,16 @@ class IntegrationAccountStoreRequest extends FormRequest
                 'mailchimp', 'getresponse', 'convertkit', 'activecampaign',
                 'sendinblue', 'brevo', 'generic_webhook',
             ])],
-            'name'        => ['required', 'string', 'max:120'],
+            'name' => ['required', 'string', 'max:120'],
             'credentials' => ['required', 'array'],
 
-            // ── Mailchimp ────────────────────────────────────────────────────
-            'credentials.api_key'   => [
-                Rule::requiredIf(in_array($provider, ['mailchimp', 'getresponse', 'sendinblue', 'brevo'])),
+            // ── Shared API key (ESP providers + optional webhook auth token) ─
+            'credentials.api_key' => [
+                Rule::requiredIf(in_array($provider, ['mailchimp', 'getresponse', 'sendinblue', 'brevo', 'activecampaign'], true)),
                 'nullable', 'string', 'max:500',
             ],
+
+            // ── Mailchimp ────────────────────────────────────────────────────
             'credentials.audience_id' => [
                 Rule::requiredIf($provider === 'mailchimp'),
                 'nullable', 'string', 'max:200',
@@ -60,7 +62,7 @@ class IntegrationAccountStoreRequest extends FormRequest
                 'nullable', 'url', 'max:500',
             ],
             'credentials.list_id' => [
-                Rule::requiredIf(in_array($provider, ['activecampaign', 'sendinblue', 'brevo'])),
+                Rule::requiredIf(in_array($provider, ['activecampaign', 'sendinblue', 'brevo'], true)),
                 'nullable', 'string', 'max:200',
             ],
 

@@ -5,6 +5,13 @@ import { computed, ref } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -42,6 +49,7 @@ const PROVIDERS = [
         id: 'mailchimp',
         label: 'Mailchimp',
         icon: 'simple-icons:mailchimp',
+        logo: 'https://cdn.simpleicons.org/mailchimp/FFE01B',
         color: '#FFE01B',
         bg: '#1d1d1d',
         desc: 'World\'s largest email platform',
@@ -54,6 +62,7 @@ const PROVIDERS = [
         id: 'getresponse',
         label: 'GetResponse',
         icon: 'simple-icons:getresponse',
+        logo: '/images/integrations/getresponse.svg',
         color: '#00BAFF',
         bg: '#003865',
         desc: 'Email marketing & automation',
@@ -65,7 +74,8 @@ const PROVIDERS = [
     {
         id: 'convertkit',
         label: 'ConvertKit',
-        icon: 'simple-icons:convertkit',
+        icon: 'simple-icons:kit',
+        logo: 'https://cdn.simpleicons.org/kit/FB6970',
         color: '#FB6970',
         bg: '#1a1a1a',
         desc: 'Creator-focused email platform',
@@ -78,6 +88,7 @@ const PROVIDERS = [
         id: 'activecampaign',
         label: 'ActiveCampaign',
         icon: 'simple-icons:activecampaign',
+        logo: '/images/integrations/activecampaign.svg',
         color: '#356AE6',
         bg: '#0b2149',
         desc: 'CRM & email automation',
@@ -90,7 +101,8 @@ const PROVIDERS = [
     {
         id: 'sendinblue',
         label: 'Brevo (Sendinblue)',
-        icon: 'simple-icons:sendinblue',
+        icon: 'simple-icons:brevo',
+        logo: 'https://cdn.simpleicons.org/brevo/0092FF',
         color: '#0092FF',
         bg: '#001c37',
         desc: 'All-in-one marketing platform',
@@ -108,7 +120,7 @@ const PROVIDERS = [
         desc: 'POST leads to any URL',
         fields: [
             { key: 'webhook_url', label: 'Webhook URL', type: 'url',      hint: 'URL that receives a JSON POST on each opt-in' },
-            { key: 'api_key',     label: 'Auth Token',  type: 'password', hint: 'Optional — sent as Authorization: Bearer header' },
+            { key: 'api_key',     label: 'Auth Token',  type: 'password', hint: 'Optional — sent as Authorization: Bearer header', optional: true },
         ],
     },
 ] as const;
@@ -158,12 +170,34 @@ function cancelForm(): void {
     form.reset();
 }
 
+function onConnectDialogChange(open: boolean): void {
+    if (!open) {
+        cancelForm();
+    } else {
+        showForm.value = true;
+    }
+}
+
+function providerLogo(provider: { logo?: string; label: string }): string | null {
+    return provider.logo ?? null;
+}
+
 function submit(): void {
-    form.post('/integrations', {
+    const payload = {
+        ...form.data(),
+        credentials: Object.fromEntries(
+            Object.entries(form.credentials).filter(([, value]) => String(value ?? '').trim() !== ''),
+        ),
+    };
+
+    form.transform(() => payload).post('/integrations', {
         onSuccess: () => {
             showForm.value = false;
             selectedId.value = null;
             form.reset();
+        },
+        onFinish: () => {
+            form.transform((data) => data);
         },
     });
 }
@@ -208,6 +242,7 @@ function providerMeta(id: string) {
         icon: 'heroicons:envelope',
         color: '#40E0D0',
         bg: '#111',
+        logo: undefined,
     };
 }
 
@@ -281,140 +316,155 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                 </Card>
             </div>
 
-            <!-- ── Add integration panel ── -->
-            <Card v-if="showForm" class="border-2 border-primary/30 shadow-md">
-                <CardHeader class="pb-4">
-                    <div class="flex items-center justify-between">
+            <!-- ── Connect integration modal ── -->
+            <Dialog :open="showForm" @update:open="onConnectDialogChange">
+                <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto gap-0 p-0">
+                    <div class="border-b px-5 py-4">
+                        <DialogHeader>
+                            <DialogTitle class="text-base">Connect a new integration</DialogTitle>
+                            <DialogDescription class="text-xs">
+                                Select a provider, then enter your credentials
+                            </DialogDescription>
+                        </DialogHeader>
+                    </div>
+
+                    <div class="space-y-5 px-5 py-4">
+                        <!-- Step 1: Provider grid -->
                         <div>
-                            <CardTitle class="text-base font-semibold">Connect a new integration</CardTitle>
-                            <CardDescription class="text-xs">Select a provider, then enter your credentials</CardDescription>
-                        </div>
-                        <Button variant="ghost" size="sm" class="h-7 w-7 p-0" @click="cancelForm">
-                            <Icon icon="heroicons:x-mark" class="size-4" />
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent class="space-y-5">
-
-                    <!-- Step 1: Provider grid -->
-                    <div>
-                        <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                            1 — Choose provider
-                        </p>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-                            <button
-                                v-for="p in PROVIDERS"
-                                :key="p.id"
-                                type="button"
-                                class="group relative flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all hover:border-primary/60 hover:shadow-sm"
-                                :class="selectedId === p.id
-                                    ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
-                                    : 'border-border bg-card'"
-                                @click="selectProvider(p.id as ProviderId)"
-                            >
-                                <div
-                                    class="flex size-9 items-center justify-center rounded-lg"
-                                    :style="{ background: p.bg }"
-                                >
-                                    <Icon :icon="p.icon" class="size-5" :style="{ color: p.color }" />
-                                </div>
-                                <span class="text-[0.7rem] font-medium leading-tight text-foreground">{{ p.label }}</span>
-                                <div
-                                    v-if="selectedId === p.id"
-                                    class="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary"
-                                >
-                                    <Icon icon="heroicons:check" class="size-2.5 text-white" />
-                                </div>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Step 2: Credential form (only when provider selected) -->
-                    <Transition
-                        enter-active-class="transition-all duration-200 ease-out"
-                        enter-from-class="opacity-0 -translate-y-2"
-                        leave-active-class="transition-all duration-150 ease-in"
-                        leave-to-class="opacity-0 -translate-y-2"
-                    >
-                        <form v-if="selectedProvider" class="space-y-4 pt-2" @submit.prevent="submit">
-                            <div class="flex items-center gap-2 pb-2 border-b">
-                                <div
-                                    class="flex size-8 items-center justify-center rounded-lg"
-                                    :style="{ background: selectedProvider.bg }"
-                                >
-                                    <Icon :icon="selectedProvider.icon" class="size-4.5" :style="{ color: selectedProvider.color }" />
-                                </div>
-                                <div>
-                                    <p class="text-sm font-semibold">{{ selectedProvider.label }}</p>
-                                    <p class="text-xs text-muted-foreground">{{ selectedProvider.desc }}</p>
-                                </div>
-                            </div>
-
-                            <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                2 — Enter credentials
+                            <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                                1 — Choose provider
                             </p>
-
-                            <!-- Account nickname -->
-                            <div class="space-y-1">
-                                <Label class="text-xs">Account nickname <span class="text-destructive">*</span></Label>
-                                <Input
-                                    v-model="form.name"
-                                    type="text"
-                                    placeholder="e.g. My Mailchimp Account"
-                                    class="h-9 text-sm"
-                                    required
-                                />
-                                <p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p>
-                            </div>
-
-                            <!-- Dynamic credential fields -->
-                            <div
-                                v-for="field in selectedProvider.fields"
-                                :key="field.key"
-                                class="space-y-1"
-                            >
-                                <Label class="text-xs">
-                                    {{ field.label }} <span class="text-destructive">*</span>
-                                </Label>
-                                <Input
-                                    v-model="form.credentials[field.key]"
-                                    :type="field.type"
-                                    :placeholder="field.label"
-                                    class="h-9 text-sm font-mono"
-                                    required
-                                />
-                                <p class="text-[0.68rem] text-muted-foreground">{{ field.hint }}</p>
-                                <p
-                                    v-if="(form.errors as Record<string, string>)[`credentials.${field.key}`]"
-                                    class="text-xs text-destructive"
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                <button
+                                    v-for="p in PROVIDERS"
+                                    :key="p.id"
+                                    type="button"
+                                    class="group relative flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all hover:border-primary/60 hover:shadow-sm"
+                                    :class="selectedId === p.id
+                                        ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
+                                        : 'border-border bg-card'"
+                                    @click="selectProvider(p.id as ProviderId)"
                                 >
-                                    {{ (form.errors as Record<string, string>)[`credentials.${field.key}`] }}
+                                    <div
+                                        class="flex size-9 items-center justify-center rounded-lg"
+                                        :style="{ background: p.bg }"
+                                    >
+                                        <img
+                                            v-if="providerLogo(p)"
+                                            :src="providerLogo(p)!"
+                                            :alt="p.label"
+                                            class="size-5 object-contain"
+                                        />
+                                        <Icon v-else :icon="p.icon" class="size-5" :style="{ color: p.color }" />
+                                    </div>
+                                    <span class="text-[0.7rem] font-medium leading-tight text-foreground">{{ p.label }}</span>
+                                    <div
+                                        v-if="selectedId === p.id"
+                                        class="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary"
+                                    >
+                                        <Icon icon="heroicons:check" class="size-2.5 text-white" />
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Credential form -->
+                        <Transition
+                            enter-active-class="transition-all duration-200 ease-out"
+                            enter-from-class="opacity-0 -translate-y-2"
+                            leave-active-class="transition-all duration-150 ease-in"
+                            leave-to-class="opacity-0 -translate-y-2"
+                        >
+                            <form v-if="selectedProvider" class="space-y-4 pt-2 border-t" @submit.prevent="submit">
+                                <div class="flex items-center gap-2 pb-2">
+                                    <div
+                                        class="flex size-8 items-center justify-center rounded-lg"
+                                        :style="{ background: selectedProvider.bg }"
+                                    >
+                                        <img
+                                            v-if="providerLogo(selectedProvider)"
+                                            :src="providerLogo(selectedProvider)!"
+                                            :alt="selectedProvider.label"
+                                            class="size-4.5 object-contain"
+                                        />
+                                        <Icon
+                                            v-else
+                                            :icon="selectedProvider.icon"
+                                            class="size-4.5"
+                                            :style="{ color: selectedProvider.color }"
+                                        />
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-semibold">{{ selectedProvider.label }}</p>
+                                        <p class="text-xs text-muted-foreground">{{ selectedProvider.desc }}</p>
+                                    </div>
+                                </div>
+
+                                <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    2 — Enter credentials
                                 </p>
-                            </div>
 
-                            <div class="flex items-center gap-2 pt-1">
-                                <Button
-                                    type="submit"
-                                    size="sm"
-                                    class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
-                                    :disabled="form.processing"
-                                >
-                                    <Icon
-                                        v-if="form.processing"
-                                        icon="heroicons:arrow-path"
-                                        class="size-3.5 animate-spin"
+                                <div class="space-y-1">
+                                    <Label class="text-xs">Account nickname <span class="text-destructive">*</span></Label>
+                                    <Input
+                                        v-model="form.name"
+                                        type="text"
+                                        placeholder="e.g. My Mailchimp Account"
+                                        class="h-9 text-sm"
+                                        required
                                     />
-                                    <Icon v-else icon="heroicons:check-circle" class="size-3.5" />
-                                    {{ form.processing ? 'Saving…' : 'Save Integration' }}
-                                </Button>
-                                <Button type="button" variant="outline" size="sm" @click="cancelForm">
-                                    Cancel
-                                </Button>
-                            </div>
-                        </form>
-                    </Transition>
-                </CardContent>
-            </Card>
+                                    <p v-if="form.errors.name" class="text-xs text-destructive">{{ form.errors.name }}</p>
+                                </div>
+
+                                <div
+                                    v-for="field in selectedProvider.fields"
+                                    :key="field.key"
+                                    class="space-y-1"
+                                >
+                                    <Label class="text-xs">
+                                        {{ field.label }}
+                                        <span v-if="!('optional' in field && field.optional)" class="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        v-model="form.credentials[field.key]"
+                                        :type="field.type"
+                                        :placeholder="field.label"
+                                        class="h-9 text-sm font-mono"
+                                        :required="!('optional' in field && field.optional)"
+                                    />
+                                    <p class="text-[0.68rem] text-muted-foreground">{{ field.hint }}</p>
+                                    <p
+                                        v-if="(form.errors as Record<string, string>)[`credentials.${field.key}`]"
+                                        class="text-xs text-destructive"
+                                    >
+                                        {{ (form.errors as Record<string, string>)[`credentials.${field.key}`] }}
+                                    </p>
+                                </div>
+
+                                <div class="flex items-center gap-2 pt-1 pb-1">
+                                    <Button
+                                        type="submit"
+                                        size="sm"
+                                        class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                                        :disabled="form.processing"
+                                    >
+                                        <Icon
+                                            v-if="form.processing"
+                                            icon="heroicons:arrow-path"
+                                            class="size-3.5 animate-spin"
+                                        />
+                                        <Icon v-else icon="heroicons:check-circle" class="size-3.5" />
+                                        {{ form.processing ? 'Saving…' : 'Save Integration' }}
+                                    </Button>
+                                    <Button type="button" variant="outline" size="sm" @click="cancelForm">
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </form>
+                        </Transition>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <!-- ── Connected integrations ── -->
             <div>
@@ -459,7 +509,14 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                                 :style="{ background: providerMeta(account.provider).bg }"
                             >
                                 <div class="flex size-9 items-center justify-center rounded-lg bg-black/20 shrink-0">
+                                    <img
+                                        v-if="providerLogo(providerMeta(account.provider))"
+                                        :src="providerLogo(providerMeta(account.provider))!"
+                                        :alt="providerMeta(account.provider).label"
+                                        class="size-5 object-contain"
+                                    />
                                     <Icon
+                                        v-else
                                         :icon="providerMeta(account.provider).icon"
                                         class="size-5"
                                         :style="{ color: providerMeta(account.provider).color }"
@@ -544,7 +601,7 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                     <CardTitle class="text-sm font-semibold">Dispatch Monitor</CardTitle>
                     <CardDescription class="text-xs">Track queued, successful, and failed ESP deliveries in real time.</CardDescription>
                 </CardHeader>
-                <CardContent class="space-y-3">
+                <!-- <CardContent class="space-y-3">
                     <div class="rounded-lg border bg-muted/20 p-3 text-xs">
                         <p class="font-semibold text-foreground">Queue worker reminder</p>
                         <p class="mt-1 text-muted-foreground">
@@ -595,7 +652,7 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                             <p v-if="log.error_message" class="mt-2 text-xs text-destructive">{{ log.error_message }}</p>
                         </div>
                     </div>
-                </CardContent>
+                </CardContent> -->
             </Card>
 
             <Card class="border shadow-sm">
@@ -614,7 +671,13 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                                 class="flex size-7 items-center justify-center rounded-md shrink-0"
                                 :style="{ background: p.bg }"
                             >
-                                <Icon :icon="p.icon" class="size-3.5" :style="{ color: p.color }" />
+                                <img
+                                    v-if="providerLogo(p)"
+                                    :src="providerLogo(p)!"
+                                    :alt="p.label"
+                                    class="size-3.5 object-contain"
+                                />
+                                <Icon v-else :icon="p.icon" class="size-3.5" :style="{ color: p.color }" />
                             </div>
                             <span class="text-xs font-medium truncate text-foreground">{{ p.label }}</span>
                         </div>

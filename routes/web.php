@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\JVZooWebhookController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 use App\Http\Controllers\DashboardController;
@@ -20,6 +21,8 @@ use App\Http\Controllers\FunnelPromotionTopicController;
 use App\Http\Controllers\FunnelAdCampaignController;
 use App\Http\Controllers\PromotionCalendarController;
 use Illuminate\Support\Facades\Auth;
+
+Route::post('/ipn/jvzoo', [JVZooWebhookController::class, 'handle'])->name('ipn.jvzoo');
 
 Route::get('/', function () {
     return Auth::check()
@@ -114,17 +117,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
     });
 
-    // Global promotion calendar (all funnels)
     Route::get('promotion/calendar', [PromotionCalendarController::class, 'index'])->name('promotion.calendar.index');
     Route::patch('promotion/calendar/posts/{post}/move', [PromotionCalendarController::class, 'move'])->name('promotion.calendar.move');
 
-    Route::get('integrations', [IntegrationController::class, 'index'])->name('integrations.index');
-    Route::post('integrations', [IntegrationController::class, 'store'])->name('integrations.store');
-    Route::delete('integrations/{integration}', [IntegrationController::class, 'destroy'])->name('integrations.destroy');
-    Route::post('integrations/{integration}/test', [IntegrationController::class, 'test'])->name('integrations.test');
-    Route::get('leads', [LeadController::class, 'index'])->name('leads.index');
-
-    // Brand Mentions
     Route::prefix('mentions')->name('mentions.')->group(function () {
         Route::get('/', [MentionController::class, 'index'])->name('index');
         Route::post('keywords', [MentionController::class, 'storeKeyword'])->name('keywords.store');
@@ -132,6 +127,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('keywords/{keyword}', [MentionController::class, 'destroyKeyword'])->name('keywords.destroy');
         Route::post('keywords/{keyword}/fetch', [MentionController::class, 'fetchNow'])->name('keywords.fetch');
     });
+
+    Route::get('integrations', [IntegrationController::class, 'index'])->name('integrations.index');
+    Route::post('integrations', [IntegrationController::class, 'store'])->name('integrations.store');
+    Route::delete('integrations/{integration}', [IntegrationController::class, 'destroy'])->name('integrations.destroy');
+    Route::post('integrations/{integration}/test', [IntegrationController::class, 'test'])->name('integrations.test');
+    Route::get('leads', [LeadController::class, 'index'])->name('leads.index');
+
     Route::get('users', [UserManagementController::class, 'index'])->name('users.index');
     Route::post('users', [UserManagementController::class, 'store'])->name('users.store');
     Route::patch('users/{user}', [UserManagementController::class, 'update'])->name('users.update');

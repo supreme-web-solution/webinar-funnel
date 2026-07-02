@@ -14,7 +14,6 @@ return [
         'instagram',
         'tiktok',
         'linkedin',
-        'pinterest',
         'twitter',
         'youtube',
         'reddit',
@@ -73,5 +72,8 @@ return [
         'tiktok_video' => 2200,
         'tiktok_photo_description' => 4000,
         'youtube_title' => 100,
+        'twitter' => 280,
+        'reddit_title' => 300,
+        'reddit_body' => 4000,
     ],
 ];

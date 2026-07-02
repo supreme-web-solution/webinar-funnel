@@ -232,6 +232,7 @@ const optinPage = props.funnel.pages.find((p) => p.page_type === 'optin');
 /* ─── Editor refs ──────────────────────────────────────────────────────── */
 const editorContainer = ref<HTMLElement | null>(null);
 const blocksContainer = ref<HTMLElement | null>(null);
+const traitsContainer = ref<HTMLElement | null>(null);
 const stylesContainer = ref<HTMLElement | null>(null);
 const gjsEditor        = ref<any>(null);
 const showStyles       = ref(true);
@@ -1378,10 +1379,44 @@ function trunc(text: string | null, len = 200): string {
     return text.length > len ? `${text.slice(0, len)}…` : text;
 }
 
+/** Converts common YouTube/Vimeo URLs into an embeddable iframe src. */
+function toVideoEmbedUrl(raw: string): string {
+    const url = raw.trim();
+    if (!url) {
+        return '';
+    }
+
+    if (url.includes('youtube.com/embed/') || url.includes('youtube-nocookie.com/embed/')) {
+        const id = url.match(/embed\/([a-zA-Z0-9_-]+)/)?.[1];
+        return id ? `https://www.youtube.com/embed/${id}` : url;
+    }
+
+    if (url.includes('player.vimeo.com/video/')) {
+        return url;
+    }
+
+    const youtuBe = url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+    if (youtuBe) {
+        return `https://www.youtube.com/embed/${youtuBe[1]}`;
+    }
+
+    const ytWatch = url.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+    if (url.includes('youtube.com') && ytWatch) {
+        return `https://www.youtube.com/embed/${ytWatch[1]}`;
+    }
+
+    const vimeo = url.match(/vimeo\.com\/(\d+)/);
+    if (vimeo) {
+        return `https://player.vimeo.com/video/${vimeo[1]}`;
+    }
+
+    return url;
+}
+
 onMounted(() => {
     window.addEventListener('keydown', onGlobalKeydown);
 
-    if (!editorContainer.value || !blocksContainer.value || !stylesContainer.value) {
+    if (!editorContainer.value || !blocksContainer.value || !traitsContainer.value || !stylesContainer.value) {
         return;
     }
 
@@ -1412,7 +1447,7 @@ onMounted(() => {
 .dfy-form{background:rgba(255,255,255,.05);border:1px solid rgba(64,224,208,.2);border-radius:16px;padding:28px}
 .dfy-input{display:block;width:100%;padding:13px 16px;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(255,255,255,.07);color:#fff;font-size:15px;outline:none;margin-bottom:12px}
 .dfy-input::placeholder{color:rgba(255,255,255,.35)}
-.dfy-btn{width:100%;padding:15px;background:linear-gradient(135deg,#40E0D0,#2dc4b5);color:#060d1a;font-size:16px;font-weight:800;border:none;border-radius:8px;cursor:pointer}`;
+.dfy-btn{width:100%;padding:15px;background-color:#40E0D0;color:#060d1a;font-size:16px;font-weight:800;border:none;border-radius:8px;cursor:pointer}`;
 
     /* ── Inline SVG icons for blocks ─────────────────────────────────────── */
     const svg = (path: string) =>
@@ -1430,6 +1465,11 @@ onMounted(() => {
 
         /* Disable ALL default panels — we build our own toolbar in Vue */
         panels: { defaults: [] },
+
+        /* Render Spectrum popover on body so it is not clipped by the styles sidebar scroll area */
+        colorPicker: {
+            appendTo: 'body',
+        },
 
         deviceManager: {
             devices: [
@@ -1449,6 +1489,11 @@ onMounted(() => {
         /* Put the block picker in our custom left sidebar */
         blockManager: {
             appendTo: blocksContainer.value,
+        },
+
+        /* Put element settings (link, video URL, etc.) above the style editor */
+        traitManager: {
+            appendTo: traitsContainer.value,
         },
 
         /* Put the style editor in our custom right sidebar */
@@ -1499,7 +1544,8 @@ onMounted(() => {
                 {
                     name: 'Background', open: false,
                     properties: [
-                        { label: 'Color',    property: 'background-color', type: 'color' },
+                        /* Use full `background` shorthand so solid colors replace gradients */
+                        { label: 'Color', property: 'background', type: 'color' },
                     ],
                 },
                 {
@@ -1558,7 +1604,7 @@ onMounted(() => {
         {
             id: 'button', label: 'Button', category: 'Content',
             media: svg('<rect x="2" y="7" width="20" height="10" rx="3"/><path d="M9 12h6"/>'),
-            content: '<a href="#" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#40E0D0,#2dc4b5);color:#060d1a;font-size:15px;font-weight:700;border-radius:8px;text-decoration:none;">Register Now →</a>',
+            content: '<a href="#" style="display:inline-block;padding:14px 32px;background-color:#40E0D0;color:#060d1a;font-size:15px;font-weight:700;border-radius:8px;text-decoration:none;">Register Now →</a>',
         },
         {
             id: 'badge', label: 'Badge', category: 'Content',
@@ -1590,7 +1636,7 @@ onMounted(() => {
         {
             id: 'video', label: 'Video', category: 'Media',
             media: svg('<rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10 9 16 12 10 15 10 9"/>'),
-            content: '<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;background:#000;"><iframe style="position:absolute;top:0;left:0;width:100%;height:100%;" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allowfullscreen></iframe></div>',
+            content: '<div data-gjs-type="dfy-video" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;background:#000;"><iframe style="position:absolute;top:0;left:0;width:100%;height:100%;" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>',
         },
         {
             id: 'cols-2', label: '2 Columns', category: 'Layout',
@@ -1621,6 +1667,71 @@ onMounted(() => {
 
     BLOCKS.forEach((b) => {
         editor.BlockManager.add(b.id, { label: b.label, category: b.category, media: b.media, content: b.content });
+    });
+
+    /* ── Custom video block: editable URL via Traits panel ──────────────── */
+    const domc = editor.DomComponents;
+
+    domc.addType('dfy-video', {
+        isComponent: (el: HTMLElement) => {
+            if (el.tagName !== 'DIV') {
+                return false;
+            }
+
+            const iframe = el.querySelector(':scope > iframe');
+            if (!iframe) {
+                return false;
+            }
+
+            return { type: 'dfy-video' };
+        },
+        model: {
+            defaults: {
+                name: 'Video',
+                tagName: 'div',
+                droppable: false,
+                traits: [
+                    {
+                        type: 'text',
+                        label: 'Video URL',
+                        name: 'videoUrl',
+                        placeholder: 'YouTube or Vimeo URL',
+                        changeProp: true,
+                    },
+                ],
+                videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+                style: {
+                    position: 'relative',
+                    'padding-bottom': '56.25%',
+                    height: '0',
+                    overflow: 'hidden',
+                    'border-radius': '10px',
+                    background: '#000',
+                },
+            },
+            init(this: any) {
+                const iframe = this.get('components')?.at?.(0);
+                const src = iframe?.getAttributes?.()?.src;
+
+                if (src && !this.get('videoUrl')) {
+                    this.set('videoUrl', src, { silent: true });
+                }
+
+                this.on('change:videoUrl', () => this.syncVideoIframe());
+                this.syncVideoIframe();
+            },
+            syncVideoIframe(this: any) {
+                const iframe = this.get('components')?.at?.(0);
+                if (!iframe) {
+                    return;
+                }
+
+                const embedUrl = toVideoEmbedUrl(String(this.get('videoUrl') ?? ''));
+                if (embedUrl) {
+                    iframe.addAttributes({ src: embedUrl });
+                }
+            },
+        },
     });
 
     /* ── Lock the opt-in form ─────────────────────────────────────────────── */
@@ -1744,8 +1855,85 @@ onMounted(() => {
   color: #111827 !important;
   font-size: 12px !important;
 }
+.gjs-field input,
+.gjs-field select,
+.gjs-field textarea {
+  color: #111827 !important;
+  background: transparent !important;
+}
+.gjs-sm-field,
+.gjs-sm-field.gjs-sm-integer,
+.gjs-sm-field.gjs-sm-composite,
+.gjs-sm-composite .gjs-field {
+  background: #fff !important;
+  background-color: #fff !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 6px !important;
+}
+.gjs-sm-field input,
+.gjs-sm-field.gjs-sm-integer input,
+.gjs-sm-composite .gjs-field input,
+.gjs-input-holder input {
+  color: #111827 !important;
+  background: transparent !important;
+}
+.gjs-field-units,
+.gjs-field-units .gjs-input-unit,
+.gjs-field-arrows .gjs-field-arrow-u,
+.gjs-field-arrows .gjs-field-arrow-d {
+  color: #6b7280 !important;
+}
 .gjs-field:focus-within { border-color: #40E0D0 !important; box-shadow: 0 0 0 2px rgba(64,224,208,.15) !important; }
 .gjs-sm-label { font-size: 11px !important; color: #6b7280 !important; font-weight: 500 !important; margin-bottom: 3px !important; }
+
+/* Color fields (text color, background, border color, etc.) */
+.gjs-sm-field.gjs-sm-color,
+.gjs-field.gjs-field-color {
+  position: relative !important;
+  min-height: 28px !important;
+}
+.gjs-sm-field.gjs-sm-color input,
+.gjs-field.gjs-field-color input {
+  padding-right: 28px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.gjs-sm-colorp-c,
+.gjs-field-colorp {
+  z-index: 12 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+.gjs-sm-color-picker,
+.gjs-field-colorp-c,
+.gjs-field-color-picker {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+.gjs-sm-colorp-c {
+  width: 22px !important;
+  min-width: 22px !important;
+}
+/* Spectrum color picker popover — must sit above the editor chrome */
+.sp-container {
+  z-index: 99999 !important;
+}
+
+/* Traits panel (link URL, video URL, etc.) */
+.gjs-trt-trait {
+  padding: 8px 10px !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+.gjs-trt-trait .gjs-label {
+  font-size: 11px !important;
+  color: #6b7280 !important;
+  font-weight: 500 !important;
+  margin-bottom: 4px !important;
+}
+.gjs-trt-trait .gjs-field {
+  width: 100% !important;
+}
 
 /* Select element highlight */
 .gjs-selected { outline: 2px solid #40E0D0 !important; }
@@ -2108,6 +2296,8 @@ onUnmounted(() => {
                                         <Icon icon="heroicons:x-mark" class="size-3" />
                                     </button>
                                 </div>
+                                <!-- GrapesJS TraitManager: link URL, video URL, image src, etc. -->
+                                <div ref="traitsContainer" class="shrink-0 border-b" />
                                 <!-- GrapesJS StyleManager appended here -->
                                 <div ref="stylesContainer" class="flex-1 overflow-y-auto" />
                             </div>

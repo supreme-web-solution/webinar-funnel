@@ -30,14 +30,14 @@ class GenericWebhookEspAdapter implements EspProviderAdapter
             ->connectTimeout(5)
             ->withoutRedirecting()
             ->post($url, [
-                'lead'   => $payload,
+                'lead' => $payload,
                 'config' => $config,
             ]);
 
         return [
-            'ok'      => $response->successful(),
+            'ok' => $response->successful(),
             'message' => $response->successful() ? 'Delivered to webhook.' : "Webhook returned HTTP {$response->status()}.",
-            'status'  => $response->status(),
+            'status' => $response->status(),
         ];
     }
 
@@ -54,13 +54,20 @@ class GenericWebhookEspAdapter implements EspProviderAdapter
         }
 
         // Send a test ping payload
-        $response = Http::timeout(8)
+        $headers = ['Accept' => 'application/json', 'Content-Type' => 'application/json'];
+
+        if (! empty($credentials['api_key'])) {
+            $headers['Authorization'] = 'Bearer '.$credentials['api_key'];
+        }
+
+        $response = Http::withHeaders($headers)
+            ->timeout(8)
             ->connectTimeout(5)
             ->withoutRedirecting()
             ->post($url, ['test' => true, 'source' => 'dfy-webinar-forge']);
 
         return [
-            'ok'      => $response->status() < 500,
+            'ok' => $response->status() < 500,
             'message' => $response->status() < 500
                 ? "Webhook reachable (HTTP {$response->status()})."
                 : "Webhook returned HTTP {$response->status()}.",

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 class PromotionPublisherService
 {
     /** @var list<string> */
-    private const MEDIA_REQUIRED_PLATFORMS = ['instagram', 'pinterest', 'tiktok'];
+    private const MEDIA_REQUIRED_PLATFORMS = ['instagram', 'tiktok'];
 
     public function __construct(
         private readonly ZernioClient $zernioClient,
@@ -195,6 +195,14 @@ class PromotionPublisherService
             return $this->adaptYouTubeContent($fullCaption, $post);
         }
 
+        if ($platform === 'twitter') {
+            return $this->adaptTwitterContent($fullCaption);
+        }
+
+        if ($platform === 'reddit') {
+            return $this->adaptRedditContent($fullCaption, $post);
+        }
+
         return ['content' => $fullCaption, 'platformSpecificData' => []];
     }
 
@@ -223,6 +231,36 @@ class PromotionPublisherService
         return [
             'content' => $this->truncateText($fullCaption, $videoLimit),
             'platformSpecificData' => [],
+        ];
+    }
+
+    /**
+     * @return array{content: string, platformSpecificData: array<string, mixed>}
+     */
+    private function adaptTwitterContent(string $fullCaption): array
+    {
+        $limit = (int) config('promotion.platform_content_limits.twitter', 280);
+
+        return [
+            'content' => $this->truncateForTwitter($fullCaption, $limit),
+            'platformSpecificData' => [],
+        ];
+    }
+
+    /**
+     * @return array{content: string, platformSpecificData: array<string, mixed>}
+     */
+    private function adaptRedditContent(string $fullCaption, FunnelPromotionPost $post): array
+    {
+        $titleLimit = (int) config('promotion.platform_content_limits.reddit_title', 300);
+        $bodyLimit = (int) config('promotion.platform_content_limits.reddit_body', 4000);
+        $shortTitle = $this->truncateText($this->shortTitleSource($post, $fullCaption), $titleLimit);
+
+        return [
+            'content' => $shortTitle,
+            'platformSpecificData' => [
+                'description' => $this->truncateText($fullCaption, $bodyLimit),
+            ],
         ];
     }
 
@@ -284,6 +322,52 @@ class PromotionPublisherService
         }
 
         return rtrim($cut, " \t\n\r\0\x0B.,;:!?").'…';
+    }
+
+    private function truncateForTwitter(string $text, int $maxLength): string
+    {
+        $text = trim($text);
+        if ($maxLength <= 0 || $this->twitterEffectiveLength($text) <= $maxLength) {
+            return $text;
+        }
+
+        $low = 1;
+        $high = mb_strlen($text);
+        $best = '';
+
+        while ($low <= $high) {
+            $mid = intdiv($low + $high, 2);
+            $candidate = $this->truncateText($text, $mid);
+            if ($this->twitterEffectiveLength($candidate) <= $maxLength) {
+                $best = $candidate;
+                $low = $mid + 1;
+            } else {
+                $high = $mid - 1;
+            }
+        }
+
+        if ($best !== '') {
+            return $best;
+        }
+
+        return $this->truncateText($text, min($maxLength, mb_strlen($text)));
+    }
+
+    private function twitterEffectiveLength(string $text): int
+    {
+        $length = 0;
+        $offset = 0;
+
+        while (preg_match('#https?://[^\s]+#i', $text, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $match = $matches[0];
+            $length += mb_strlen(mb_substr($text, $offset, $match[1] - $offset));
+            $length += 23;
+            $offset = $match[1] + strlen($match[0]);
+        }
+
+        $length += mb_strlen(mb_substr($text, $offset));
+
+        return $length;
     }
 
     /**

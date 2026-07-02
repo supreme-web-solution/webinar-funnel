@@ -28,6 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'paid-ads' => EnsurePaidAdsEnabled::class,
         ]);
+
+        $middleware->validateCsrfTokens(except: [
+            'ipn/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
