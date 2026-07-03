@@ -168,9 +168,6 @@ class UserManagementController extends Controller
      */
     private function adminEmails()
     {
-        return collect(explode(',', (string) env('ADMIN_EMAILS', '')))
-            ->map(fn ($item) => strtolower(trim($item)))
-            ->filter()
-            ->values();
+        return collect(config('admin.emails', []));
     }
 }

@@ -36,10 +36,7 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        $adminEmails = collect(explode(',', (string) env('ADMIN_EMAILS', '')))
-            ->map(fn ($item) => strtolower(trim($item)))
-            ->filter()
-            ->values();
+        $adminEmails = collect(config('admin.emails', []));
         $currentEmail = strtolower((string) optional($request->user())->email);
         $user = $request->user();
         $permissions = $user !== null

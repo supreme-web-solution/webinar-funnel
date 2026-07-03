@@ -14,15 +14,25 @@ return [
     |
     */
 
-    'intro' => 'Welcome! Step-by-step guides for AffiliMachine Ai will appear here.',
+    'intro' => 'Watch these step-by-step guides to get the most out of AffiliMachine Ai.',
 
     'sections' => [
-        // Example:
-        // [
-        //     'title' => 'Create your first funnel',
-        //     'body' => "Go to My Funnels → Create...\n\nPublish when ready.",
-        //     'video_url' => 'https://www.youtube.com/watch?v=example',
-        // ],
+        [
+            'title' => 'Desktop & Settings',
+            'video_url' => 'https://youtu.be/CtonhLehd20',
+        ],
+        [
+            'title' => 'Templates, Funnel & Webinar Intro',
+            'video_url' => 'https://youtu.be/ylLN6q-zpNY',
+        ],
+        [
+            'title' => 'Integration, Promotion & Ads',
+            'video_url' => 'https://youtu.be/Do50lfQzryI',
+        ],
+        [
+            'title' => 'Webinar Room & Chat',
+            'video_url' => 'https://youtu.be/Fuc9hDYyZio',
+        ],
     ],
 
 ];

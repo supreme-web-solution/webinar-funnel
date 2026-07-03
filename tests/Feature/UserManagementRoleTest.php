@@ -16,9 +16,7 @@ class UserManagementRoleTest extends TestCase
         parent::setUp();
 
         $this->seed(RolesAndPermissionsSeeder::class);
-        putenv('ADMIN_EMAILS=admin@example.com');
-        $_ENV['ADMIN_EMAILS'] = 'admin@example.com';
-        $_SERVER['ADMIN_EMAILS'] = 'admin@example.com';
+        config(['admin.emails' => ['admin@example.com']]);
     }
 
     public function test_admin_can_assign_bundle_role_when_updating_user(): void
