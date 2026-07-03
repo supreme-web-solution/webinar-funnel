@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import PasswordInput from '@/components/PasswordInput.vue';
 
 interface UserRow {
     id: number;
@@ -343,12 +344,12 @@ function deleteUser(user: UserRow): void {
                         </div>
                         <div class="space-y-1">
                             <label class="text-xs font-medium text-muted-foreground">Password</label>
-                            <Input v-model="createForm.password" type="password" required />
+                            <PasswordInput v-model="createForm.password" required />
                             <p v-if="createForm.errors.password" class="text-xs text-destructive">{{ createForm.errors.password }}</p>
                         </div>
                         <div class="space-y-1">
                             <label class="text-xs font-medium text-muted-foreground">Confirm Password</label>
-                            <Input v-model="createForm.password_confirmation" type="password" required />
+                            <PasswordInput v-model="createForm.password_confirmation" required />
                         </div>
                         <div v-if="rolesEnabled && (assignableRoles?.length ?? 0) > 0" class="space-y-1">
                             <label class="text-xs font-medium text-muted-foreground">Role</label>
@@ -402,12 +403,12 @@ function deleteUser(user: UserRow): void {
                             <p class="text-xs text-muted-foreground">Leave blank to keep the current password.</p>
                             <div class="space-y-1">
                                 <label class="text-xs font-medium text-muted-foreground">New password</label>
-                                <Input v-model="editForm.password" type="password" autocomplete="new-password" />
+                                <PasswordInput v-model="editForm.password" autocomplete="new-password" />
                                 <p v-if="editForm.errors.password" class="text-xs text-destructive">{{ editForm.errors.password }}</p>
                             </div>
                             <div class="space-y-1">
                                 <label class="text-xs font-medium text-muted-foreground">Confirm new password</label>
-                                <Input v-model="editForm.password_confirmation" type="password" autocomplete="new-password" />
+                                <PasswordInput v-model="editForm.password_confirmation" autocomplete="new-password" />
                             </div>
                         </div>
                         <div v-if="rolesEnabled && (assignableRoles?.length ?? 0) > 0" class="space-y-1">

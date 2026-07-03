@@ -9,7 +9,9 @@ use App\Services\Jvzoo\JvzooIpnVerifier;
 use App\Services\Jvzoo\JvzooUserProvisioner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 class JVZooWebhookController extends Controller
 {
@@ -52,18 +54,42 @@ class JVZooWebhookController extends Controller
         $result = $this->provisioner->provision($email, $roleName);
 
         if ($result['created'] && is_string($result['password'])) {
-            Mail::to($email)->send(new WelcomeMail($result['user'], $result['password']));
+            $emailSent = $this->sendWelcomeEmails($result['user'], $result['password'], $email);
+
+            return response()->json([
+                'message' => $emailSent
+                    ? 'User created successfully!'
+                    : 'User created successfully, but the welcome email could not be sent.',
+                'email_sent' => $emailSent,
+            ]);
+        }
+
+        return response()->json(['message' => 'User role updated successfully!']);
+    }
+
+    private function sendWelcomeEmails(User $user, string $password, string $buyerEmail): bool
+    {
+        try {
+            Mail::to($buyerEmail)->send(new WelcomeMail($user, $password));
 
             $notifyEmail = config('jvzoo.welcome_notify_email');
 
             if (is_string($notifyEmail) && $notifyEmail !== '') {
-                Mail::to($notifyEmail)->send(new WelcomeMail($result['user'], $result['password']));
+                Mail::to($notifyEmail)->send(new WelcomeMail($user, $password));
             }
 
-            return response()->json(['message' => 'User created successfully!']);
-        }
+            return true;
+        } catch (Throwable $exception) {
+            Log::error('JVZoo welcome email failed to send.', [
+                'buyer_email' => $buyerEmail,
+                'user_id' => $user->id,
+                'exception' => $exception->getMessage(),
+            ]);
 
-        return response()->json(['message' => 'User role updated successfully!']);
+            report($exception);
+
+            return false;
+        }
     }
 
     private function handleRefund(string $email): JsonResponse

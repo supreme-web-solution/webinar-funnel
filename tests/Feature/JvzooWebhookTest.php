@@ -41,7 +41,10 @@ class JvzooWebhookTest extends TestCase
         $response = $this->post('/ipn/jvzoo', $payload);
 
         $response->assertOk()
-            ->assertJson(['message' => 'User created successfully!']);
+            ->assertJson([
+                'message' => 'User created successfully!',
+                'email_sent' => true,
+            ]);
 
         $user = User::query()->where('email', 'buyer@example.com')->first();
 
@@ -121,6 +124,28 @@ class JvzooWebhookTest extends TestCase
             ->assertJson(['message' => 'User created successfully!']);
 
         $this->assertNotNull(User::query()->where('email', 'json-buyer@example.com')->first());
+    }
+
+    public function test_sale_still_succeeds_when_welcome_email_fails(): void
+    {
+        Mail::shouldReceive('to')
+            ->once()
+            ->andThrow(new \RuntimeException('Resend API error'));
+
+        $payload = $this->signedPayload([
+            'ctransaction' => 'SALE',
+            'ccustemail' => 'mail-fail@example.com',
+            'ctransreceipt' => 'TX-MAIL-FAIL',
+            'cproditem' => '444707',
+        ]);
+
+        $this->post('/ipn/jvzoo', $payload)
+            ->assertOk()
+            ->assertJson([
+                'email_sent' => false,
+            ]);
+
+        $this->assertNotNull(User::query()->where('email', 'mail-fail@example.com')->first());
     }
 
     public function test_invalid_signature_is_rejected(): void
