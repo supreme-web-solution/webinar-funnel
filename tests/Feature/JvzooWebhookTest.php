@@ -105,6 +105,24 @@ class JvzooWebhookTest extends TestCase
         $this->assertSame(0, $user->roles()->count());
     }
 
+    public function test_sale_accepts_json_payload(): void
+    {
+        Mail::fake();
+
+        $payload = $this->signedPayload([
+            'ctransaction' => 'SALE',
+            'ccustemail' => 'json-buyer@example.com',
+            'ctransreceipt' => 'TX-JSON-1',
+            'cproditem' => '444707',
+        ]);
+
+        $this->postJson('/ipn/jvzoo', $payload)
+            ->assertOk()
+            ->assertJson(['message' => 'User created successfully!']);
+
+        $this->assertNotNull(User::query()->where('email', 'json-buyer@example.com')->first());
+    }
+
     public function test_invalid_signature_is_rejected(): void
     {
         $response = $this->post('/ipn/jvzoo', [

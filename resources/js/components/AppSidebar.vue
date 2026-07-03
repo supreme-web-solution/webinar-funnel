@@ -54,6 +54,11 @@ const appNavItems: NavItem[] = [
         href: '/integrations',
         icon: 'heroicons:puzzle-piece',
     },
+    {
+        title: '1-on-1 Coaching',
+        href: '/integrations/coaching',
+        icon: 'heroicons:user-group',
+    },
 ];
 
 /** Bundle-only navigation — add new items here when they ship. */

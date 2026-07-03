@@ -8,6 +8,7 @@ use App\Http\Controllers\TutorialController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\FunnelController;
 use App\Http\Controllers\FunnelAiSourceController;
+use App\Http\Controllers\IntegrationCoachingController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\PublicFunnelController;
@@ -129,6 +130,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::get('integrations', [IntegrationController::class, 'index'])->name('integrations.index');
+    Route::get('integrations/coaching', IntegrationCoachingController::class)->name('integrations.coaching');
     Route::post('integrations', [IntegrationController::class, 'store'])->name('integrations.store');
     Route::delete('integrations/{integration}', [IntegrationController::class, 'destroy'])->name('integrations.destroy');
     Route::post('integrations/{integration}/test', [IntegrationController::class, 'test'])->name('integrations.test');

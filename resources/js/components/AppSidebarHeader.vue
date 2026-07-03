@@ -40,6 +40,13 @@ withDefaults(
                 <Icon icon="heroicons:plus" class="size-3.5" />
                 New Funnel
             </Link>
+            <Link
+                href="/integrations/coaching"
+                class="hidden md:flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100 transition-colors"
+            >
+                <Icon icon="heroicons:user-group" class="size-3.5" />
+                1-on-1 Coaching
+            </Link>
             <a
                 href="#"
                 class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

@@ -14,22 +14,14 @@ class JvzooIpnVerifier
             return false;
         }
 
-        $ipnFields = [];
-
-        foreach ($request->post() as $key => $value) {
-            if ($key === 'cverify') {
-                continue;
-            }
-
-            $ipnFields[] = $key;
-        }
-
+        $payload = $request->except('cverify');
+        $ipnFields = array_keys($payload);
         sort($ipnFields);
 
         $pop = '';
 
         foreach ($ipnFields as $field) {
-            $pop .= $request->post($field).'|';
+            $pop .= (string) $payload[$field].'|';
         }
 
         $pop .= $secretKey;
@@ -41,6 +33,6 @@ class JvzooIpnVerifier
         $calcedVerify = sha1($pop);
         $calcedVerify = strtoupper(substr($calcedVerify, 0, 8));
 
-        return hash_equals($calcedVerify, (string) $request->post('cverify'));
+        return hash_equals($calcedVerify, (string) $request->input('cverify'));
     }
 }
