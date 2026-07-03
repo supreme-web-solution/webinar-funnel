@@ -89,20 +89,29 @@ class UserManagementController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:80', 'alpha_dash', 'unique:users,username,'.$user->id],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$user->id],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'role' => $this->roleRules(),
         ]);
 
-        $user->update([
+        $updates = [
             'name' => $validated['name'],
             'username' => $validated['username'],
             'email' => $validated['email'],
-        ]);
+        ];
+
+        if (! empty($validated['password'])) {
+            $updates['password'] = Hash::make($validated['password']);
+        }
+
+        $user->update($updates);
 
         if ($this->roles->rolesEnabled() && array_key_exists('role', $validated)) {
             $this->roles->syncRole($user, $validated['role'] ?? UserRoleAssigner::DEFAULT_ROLE);
         }
 
-        return back()->with('success', 'User updated.');
+        return back()->with('success', ! empty($validated['password'])
+            ? 'User updated and password changed.'
+            : 'User updated.');
     }
 
     public function destroy(Request $request, User $user): RedirectResponse

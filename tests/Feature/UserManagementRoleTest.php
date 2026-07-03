@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class UserManagementRoleTest extends TestCase
@@ -38,6 +39,32 @@ class UserManagementRoleTest extends TestCase
 
         $this->assertTrue($user->hasRole('Bundle'));
         $this->assertTrue($user->can('view_extra_features'));
+    }
+
+    public function test_admin_can_change_user_password_when_updating(): void
+    {
+        $admin = User::factory()->create(['email' => 'admin@example.com', 'username' => 'admin_user3']);
+        $user = User::factory()->create([
+            'email' => 'reset@example.com',
+            'username' => 'reset_user',
+            'password' => 'old-password',
+        ]);
+        $user->assignRole('FE');
+
+        $this->actingAs($admin)
+            ->patch(route('users.update', $user), [
+                'name' => $user->name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'password' => 'new-password-99',
+                'password_confirmation' => 'new-password-99',
+                'role' => 'FE',
+            ])
+            ->assertRedirect();
+
+        $user->refresh();
+
+        $this->assertTrue(Hash::check('new-password-99', $user->password));
     }
 
     public function test_admin_created_user_gets_default_fe_role(): void

@@ -77,6 +77,8 @@ const editForm = useForm({
     name: '',
     username: '',
     email: '',
+    password: '',
+    password_confirmation: '',
     role: props.defaultRole ?? 'FE',
 });
 
@@ -122,6 +124,8 @@ function openEdit(user: UserRow): void {
     editForm.name = user.name;
     editForm.username = user.username;
     editForm.email = user.email;
+    editForm.password = '';
+    editForm.password_confirmation = '';
     editForm.role = user.role ?? props.defaultRole ?? 'FE';
     editForm.clearErrors();
 }
@@ -392,6 +396,19 @@ function deleteUser(user: UserRow): void {
                             <label class="text-xs font-medium text-muted-foreground">Email</label>
                             <Input v-model="editForm.email" type="email" required />
                             <p v-if="editForm.errors.email" class="text-xs text-destructive">{{ editForm.errors.email }}</p>
+                        </div>
+                        <div class="rounded-lg border border-border/80 bg-muted/20 p-3 space-y-3">
+                            <p class="text-xs font-medium text-foreground">Change password</p>
+                            <p class="text-xs text-muted-foreground">Leave blank to keep the current password.</p>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-muted-foreground">New password</label>
+                                <Input v-model="editForm.password" type="password" autocomplete="new-password" />
+                                <p v-if="editForm.errors.password" class="text-xs text-destructive">{{ editForm.errors.password }}</p>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-muted-foreground">Confirm new password</label>
+                                <Input v-model="editForm.password_confirmation" type="password" autocomplete="new-password" />
+                            </div>
                         </div>
                         <div v-if="rolesEnabled && (assignableRoles?.length ?? 0) > 0" class="space-y-1">
                             <label class="text-xs font-medium text-muted-foreground">Role</label>
