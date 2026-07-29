@@ -104,7 +104,7 @@ return [
         'redis:traffic-evaluate' => 60,
         'redis:promotion-generate' => 120,
         'redis:promotion-publish' => 120,
-        'redis:webinar-ai' => 90,
+        'redis:webinar-ai' => 180,
     ],
 
     /*
@@ -203,55 +203,86 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Supervisor layout (by resource profile, not by feature)
+    |--------------------------------------------------------------------------
+    |
+    | supervisor-fast  — customer-facing / quick I/O (publish, post, ESP, default)
+    | supervisor-heavy — slower generation / evaluation work
+    | supervisor-ai    — long OpenAI / indexing jobs (isolated so they cannot
+    |                    starve email or publish workers)
+    |
+    */
+
     'defaults' => [
-        'supervisor-traffic' => [
+        'supervisor-fast' => [
             'connection' => 'redis',
-            'queue' => ['traffic-post', 'traffic-generate', 'traffic-evaluate', 'promotion-publish', 'promotion-generate'],
+            'queue' => ['promotion-publish', 'traffic-post', 'esp-dispatch', 'default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
-            'maxProcesses' => 6,
-            'maxTime' => 0,
-            'maxJobs' => 0,
-            'memory' => 256,
+            'maxProcesses' => 3,
+            'maxTime' => 3600,
+            'maxJobs' => 500,
+            'memory' => 192,
             'tries' => 3,
             'timeout' => 120,
             'nice' => 0,
         ],
-        'supervisor-general' => [
+        'supervisor-heavy' => [
             'connection' => 'redis',
-            'queue' => ['esp-dispatch', 'webinar-ai', 'default'],
+            'queue' => ['traffic-generate', 'traffic-evaluate', 'promotion-generate'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 3,
-            'maxTime' => 0,
-            'maxJobs' => 0,
+            'maxTime' => 3600,
+            'maxJobs' => 300,
             'memory' => 256,
             'tries' => 3,
-            'timeout' => 90,
+            'timeout' => 180,
+            'nice' => 0,
+        ],
+        'supervisor-ai' => [
+            'connection' => 'redis',
+            'queue' => ['webinar-ai'],
+            'balance' => 'simple',
+            'autoScalingStrategy' => 'time',
+            'maxProcesses' => 1,
+            'maxTime' => 3600,
+            'maxJobs' => 100,
+            'memory' => 256,
+            'tries' => 2,
+            'timeout' => 300,
             'nice' => 0,
         ],
     ],
 
     'environments' => [
         'production' => [
-            'supervisor-traffic' => [
-                'maxProcesses' => (int) env('HORIZON_TRAFFIC_MAX_PROCESSES', 8),
+            'supervisor-fast' => [
+                'maxProcesses' => (int) env('HORIZON_FAST_MAX_PROCESSES', 4),
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 5,
             ],
-            'supervisor-general' => [
-                'maxProcesses' => (int) env('HORIZON_GENERAL_MAX_PROCESSES', 4),
+            'supervisor-heavy' => [
+                'maxProcesses' => (int) env('HORIZON_HEAVY_MAX_PROCESSES', 5),
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 5,
+            ],
+            'supervisor-ai' => [
+                'maxProcesses' => (int) env('HORIZON_AI_MAX_PROCESSES', 2),
             ],
         ],
 
         'local' => [
-            'supervisor-traffic' => [
-                'maxProcesses' => (int) env('HORIZON_TRAFFIC_MAX_PROCESSES', 4),
+            'supervisor-fast' => [
+                'maxProcesses' => (int) env('HORIZON_FAST_MAX_PROCESSES', 2),
             ],
-            'supervisor-general' => [
-                'maxProcesses' => (int) env('HORIZON_GENERAL_MAX_PROCESSES', 2),
+            'supervisor-heavy' => [
+                'maxProcesses' => (int) env('HORIZON_HEAVY_MAX_PROCESSES', 2),
+            ],
+            'supervisor-ai' => [
+                'maxProcesses' => (int) env('HORIZON_AI_MAX_PROCESSES', 1),
             ],
         ],
     ],
@@ -263,7 +294,7 @@ return [
     |
     | The following list of directories and files will be watched when using
     | the `horizon:listen` command. Whenever any directories or files are
-    | changed, Horizon will automatically restart to apply all changes.en
+    | changed, Horizon will automatically restart to apply all changes.
     |
     */
 
