@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -24,10 +23,14 @@ class DatabaseSeeder extends Seeder
             'email' => 'test@example.com',
         ])->assignRole('Bundle');
 
-        $this->call([
-            TemplateSeeder::class,
-            TemplatePaidTrafficDriveLinksSeeder::class,
-            TemplateAiKnowledgeSeeder::class,
-        ]);
+        // Legacy DFY catalog (~51 offers + AI knowledge + Drive links) is frozen by default.
+        // Enable with SEED_DFY_TEMPLATES=true when you explicitly need the old template pack.
+        if (filter_var(env('SEED_DFY_TEMPLATES', false), FILTER_VALIDATE_BOOLEAN)) {
+            $this->call([
+                TemplateSeeder::class,
+                TemplatePaidTrafficDriveLinksSeeder::class,
+                TemplateAiKnowledgeSeeder::class,
+            ]);
+        }
     }
 }

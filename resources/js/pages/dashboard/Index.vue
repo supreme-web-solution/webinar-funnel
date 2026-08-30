@@ -2,9 +2,9 @@
 import { Icon } from '@iconify/vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import DashboardPerformanceChart, { type ChartDay } from '@/components/dashboard/DashboardPerformanceChart.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const props = defineProps<{
     metrics: {
@@ -33,361 +33,253 @@ const props = defineProps<{
         created_at: string;
         template?: { name: string } | null;
     }>;
+    chartDays: ChartDay[];
 }>();
 
 const page = usePage();
 
 const userName = computed(() => {
     const user = (page.props.auth as { user?: { name: string } })?.user;
-
     return user?.name?.split(' ')[0] ?? 'there';
 });
 
-const currentHour = new Date().getHours();
-
 const greeting = computed(() => {
-    if (currentHour < 12) {
-        return 'Good morning';
-    }
-
-    if (currentHour < 17) {
-        return 'Good afternoon';
-    }
-
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
     return 'Good evening';
 });
 
-const currentDate = computed(() =>
-    new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-);
-
 function weekTrend(current: number, previous: number): { value: number; positive: boolean } {
-    if (previous === 0) {
-        return { value: current > 0 ? 100 : 0, positive: true };
-    }
-
+    if (previous === 0) return { value: current > 0 ? 100 : 0, positive: true };
     const pct = Math.round(((current - previous) / previous) * 100);
-
     return { value: Math.abs(pct), positive: pct >= 0 };
 }
 
 const leadTrend = computed(() => weekTrend(props.metrics.recentLeads, props.metrics.previousWeekLeads));
-
 const viewTrend = computed(() => weekTrend(props.metrics.recentViewCount, props.metrics.previousWeekViewCount));
 
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-    if (status === 'published') {
-        return 'default';
-    }
+const recentItems = computed(() => props.recentFunnels.slice(0, 3));
+const topItems = computed(() => props.topFunnels.slice(0, 3));
 
-    if (status === 'draft') {
-        return 'secondary';
-    }
+const quickLinks = [
+    { label: 'New Campaign', icon: 'heroicons:rocket-launch', href: '/campaigns/create' },
+    { label: 'Find Offers', icon: 'heroicons:light-bulb', href: '/growth/opportunities' },
+    { label: 'Traffic', icon: 'heroicons:signal', href: '/traffic' },
+    { label: 'Bonuses', icon: 'heroicons:gift', href: '/bonuses' },
+    { label: 'Links', icon: 'heroicons:shield-check', href: '/tracked-links' },
+];
 
-    return 'outline';
-}
+const stats = computed(() => [
+    {
+        label: 'Live',
+        value: props.metrics.publishedCount,
+        sub: props.metrics.draftCount > 0 ? `${props.metrics.draftCount} drafts` : 'funnels',
+        icon: 'heroicons:globe-alt',
+        trend: null,
+    },
+    {
+        label: 'Leads',
+        value: props.metrics.leadCount,
+        sub: 'total',
+        icon: 'heroicons:users',
+        trend: leadTrend.value,
+    },
+    {
+        label: 'Views',
+        value: props.metrics.totalViewCount,
+        sub: 'all time',
+        icon: 'heroicons:eye',
+        trend: viewTrend.value,
+    },
+    {
+        label: 'This week',
+        value: props.metrics.recentLeads,
+        sub: 'new leads',
+        icon: 'heroicons:calendar-days',
+        trend: null,
+    },
+]);
+
+const weekLeadTotal = computed(() => props.chartDays.reduce((s, d) => s + d.leads, 0));
+const weekViewTotal = computed(() => props.chartDays.reduce((s, d) => s + d.views, 0));
 
 function fmtDate(iso: string): string {
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 </script>
 
 <template>
     <Head title="Dashboard" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
+    <div class="mx-auto flex h-[calc(100dvh-3.5rem)] max-w-7xl flex-col gap-3 overflow-hidden p-3 md:gap-4 md:p-4">
 
-        <!-- ── Page header ── -->
-        <div class="relative overflow-hidden rounded-2xl border border-emerald-200/60 bg-linear-to-r from-emerald-50 via-cyan-50 to-sky-50 p-5 shadow-sm">
-            <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-emerald-200/40 blur-2xl"></div>
-            <div class="pointer-events-none absolute -bottom-12 left-24 h-32 w-32 rounded-full bg-cyan-200/40 blur-2xl"></div>
-            <div class="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-foreground">
-                    {{ greeting }}, {{ userName }} 👋
-                </h1>
-                <p class="text-sm text-muted-foreground mt-0.5">{{ currentDate }}</p>
+        <!-- Hero -->
+        <section class="relative shrink-0 overflow-hidden rounded-xl border border-teal-200/30 bg-linear-to-r from-slate-900 via-teal-950 to-slate-900 px-4 py-3 md:px-5 md:py-4">
+            <div class="pointer-events-none absolute -right-10 -top-10 size-32 rounded-full bg-teal-500/15 blur-2xl" />
+            <div class="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0">
+                    <p class="text-lg font-bold text-white md:text-xl">
+                        {{ greeting }}, {{ userName }}
+                    </p>
+                    <p class="mt-0.5 max-w-xl text-xs text-teal-100/65 md:text-sm">
+                        Paste one offer — AI builds campaigns, bonuses, emails & traffic for you.
+                    </p>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    <Button as-child variant="brand" size="sm">
+                        <Link href="/campaigns/create">
+                            <Icon icon="heroicons:rocket-launch" class="size-3.5" />
+                            New Campaign
+                        </Link>
+                    </Button>
+                    <Button as-child variant="brand-outline-on-dark" size="sm">
+                        <Link href="/growth/opportunities">
+                            <Icon icon="heroicons:light-bulb" class="size-3.5" />
+                            Find Offers
+                        </Link>
+                    </Button>
+                </div>
             </div>
-            <div class="flex items-center gap-2 self-start sm:self-auto">
-                <Button as-child size="sm" variant="outline" class="gap-1.5 border-emerald-200 bg-white/85 text-emerald-700 hover:bg-emerald-50">
-                    <Link href="/funnels/create?scratch=1">
-                        <Icon icon="heroicons:sparkles" class="size-4" />
-                        Create From Scratch
-                    </Link>
-                </Button>
-                <Button as-child size="sm" class="gap-1.5 bg-linear-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-95 shadow-md">
-                    <Link href="/funnels/create">
-                        <Icon icon="heroicons:plus" class="size-4" />
-                        New Funnel
-                    </Link>
-                </Button>
+        </section>
+
+        <!-- KPI strip -->
+        <div class="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
+            <div
+                v-for="stat in stats"
+                :key="stat.label"
+                class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
+            >
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
+                    <div class="flex items-baseline gap-1.5">
+                        <span class="text-xl font-bold leading-none">{{ stat.value }}</span>
+                        <span v-if="stat.trend" class="text-[0.65rem] font-medium" :class="stat.trend.positive ? 'text-teal-600' : 'text-rose-500'">
+                            {{ stat.trend.positive ? '↑' : '↓' }}{{ stat.trend.value }}%
+                        </span>
+                        <span v-else class="text-[0.65rem] text-muted-foreground">{{ stat.sub }}</span>
+                    </div>
+                </div>
             </div>
         </div>
-        </div>
 
-        <!-- ── KPI metric cards ── -->
-        <div class="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <!-- Bottom — separate cards -->
+        <div class="grid min-h-0 flex-1 gap-3 md:grid-cols-12 md:gap-4">
 
-            <!-- Published funnels -->
-            <Card class="border-emerald-200/60 bg-linear-to-br from-white to-emerald-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Published Funnels
-                    </CardTitle>
-                    <div class="flex size-8 items-center justify-center rounded-lg bg-primary/10">
-                        <Icon icon="heroicons:globe-alt" class="size-4 text-primary" />
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <p class="text-3xl font-bold text-foreground">{{ metrics.publishedCount }}</p>
-                    <p class="text-xs text-muted-foreground mt-1">
-                        <span v-if="metrics.draftCount > 0">{{ metrics.draftCount }} in draft</span>
-                        <span v-else>All funnels are live</span>
+            <!-- Weekly chart -->
+            <div class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-8">
+                <div class="mb-3 shrink-0">
+                    <p class="text-sm font-semibold">Weekly performance</p>
+                    <p class="text-[0.65rem] text-muted-foreground">
+                        {{ weekLeadTotal }} leads · {{ weekViewTotal }} views this week
                     </p>
-                </CardContent>
-            </Card>
+                </div>
+                <div class="min-h-0 flex-1">
+                    <DashboardPerformanceChart :days="chartDays" />
+                </div>
+            </div>
 
-            <!-- Total Leads -->
-            <Card class="border-amber-200/60 bg-linear-to-br from-white to-amber-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Total Leads
-                    </CardTitle>
-                    <div class="flex size-8 items-center justify-center rounded-lg" style="background: rgba(255,173,0,0.12)">
-                        <Icon icon="heroicons:users" class="size-4" style="color:#FFAD00" />
+            <!-- Best funnels -->
+            <div class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-4">
+                <div class="mb-3 shrink-0">
+                    <p class="text-sm font-semibold">Best funnels</p>
+                    <p class="text-[0.65rem] text-muted-foreground">Ranked by leads captured</p>
+                </div>
+
+                <div v-if="topItems.length === 0" class="flex flex-1 items-center justify-center rounded-lg bg-muted/20 px-3 py-6 text-center">
+                    <div>
+                        <Icon icon="heroicons:chart-bar" class="mx-auto mb-2 size-7 text-muted-foreground/40" />
+                        <p class="text-xs text-muted-foreground">No lead data yet</p>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    <p class="text-3xl font-bold text-foreground">{{ metrics.leadCount }}</p>
-                    <p class="text-xs mt-1">
+                </div>
+
+                <ul v-else class="flex flex-1 flex-col justify-center gap-3">
+                    <li
+                        v-for="(funnel, idx) in topItems"
+                        :key="funnel.id"
+                        class="flex items-center gap-3"
+                    >
                         <span
-                            class="inline-flex items-center gap-0.5 font-medium"
-                            :class="leadTrend.positive ? 'text-emerald-600' : 'text-rose-500'"
-                        >
-                            <Icon
-                                :icon="leadTrend.positive ? 'heroicons:arrow-trending-up' : 'heroicons:arrow-trending-down'"
-                                class="size-3"
-                            />
-                            {{ leadTrend.value }}%
-                        </span>
-                        <span class="text-muted-foreground"> vs last week</span>
-                    </p>
-                </CardContent>
-            </Card>
-
-            <!-- Total views -->
-            <Card class="border-cyan-200/60 bg-linear-to-br from-white to-cyan-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Total Views
-                    </CardTitle>
-                    <div class="flex size-8 items-center justify-center rounded-lg" style="background: rgba(64,224,208,0.12)">
-                        <Icon icon="heroicons:eye" class="size-4" style="color:#40E0D0" />
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <p class="text-3xl font-bold text-foreground">{{ metrics.totalViewCount }}</p>
-                    <p class="text-xs mt-1">
-                        <span
-                            class="inline-flex items-center gap-0.5 font-medium"
-                            :class="viewTrend.positive ? 'text-emerald-600' : 'text-rose-500'"
-                        >
-                            <Icon
-                                :icon="viewTrend.positive ? 'heroicons:arrow-trending-up' : 'heroicons:arrow-trending-down'"
-                                class="size-3"
-                            />
-                            {{ viewTrend.value }}%
-                        </span>
-                        <span class="text-muted-foreground"> vs last week</span>
-                    </p>
-                </CardContent>
-            </Card>
-
-            <!-- This Week -->
-            <Card class="border-violet-200/60 bg-linear-to-br from-white to-violet-50/60 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        This Week
-                    </CardTitle>
-                    <div class="flex size-8 items-center justify-center rounded-lg bg-violet-50">
-                        <Icon icon="heroicons:calendar-days" class="size-4 text-violet-500" />
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <p class="text-3xl font-bold text-foreground">{{ metrics.recentLeads }}</p>
-                    <p class="text-xs text-muted-foreground mt-1">New leads (last 7 days)</p>
-                </CardContent>
-            </Card>
-        </div>
-
-        <!-- ── Main content grid ── -->
-        <div class="grid gap-6 lg:grid-cols-3">
-
-            <!-- Recent Funnels table – 2/3 width -->
-            <div class="lg:col-span-2">
-                <Card class="h-full border-emerald-200/60 bg-linear-to-b from-white to-emerald-50/40 shadow-sm">
-                    <CardHeader class="flex flex-row items-center justify-between pb-3">
-                        <div>
-                            <CardTitle class="text-base font-semibold">Recent Funnels</CardTitle>
-                            <CardDescription class="text-xs">Your latest funnel activity</CardDescription>
-                        </div>
-                        <Button variant="outline" size="sm" as-child class="text-xs h-7 px-3">
-                            <Link href="/funnels">View all</Link>
-                        </Button>
-                    </CardHeader>
-                    <CardContent class="p-0">
-                        <div v-if="recentFunnels.length === 0" class="flex flex-col items-center justify-center py-14 gap-3 text-muted-foreground">
-                            <Icon icon="heroicons:funnel" class="size-10 opacity-30" />
-                            <p class="text-sm">No funnels yet. Create your first one!</p>
-                            <Button as-child size="sm" class="bg-primary text-primary-foreground hover:opacity-90">
-                                <Link href="/funnels/create">Create Funnel</Link>
-                            </Button>
-                        </div>
-                        <div v-else class="divide-y divide-emerald-100/80">
-                            <div
-                                v-for="funnel in recentFunnels"
-                                :key="funnel.id"
-                                class="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-emerald-50/70"
-                            >
-                                <!-- Icon col -->
-                                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                                    <Icon icon="heroicons:funnel" class="size-4 text-primary" />
-                                </div>
-                                <!-- Info col -->
-                                <div class="min-w-0 flex-1">
-                                    <p class="text-sm font-medium text-foreground truncate">{{ funnel.name }}</p>
-                                    <p class="text-xs text-muted-foreground truncate">
-                                        {{ funnel.template?.name ?? 'Custom' }}
-                                        <span class="mx-1">·</span>
-                                        {{ fmtDate(funnel.created_at) }}
-                                    </p>
-                                </div>
-                                <!-- Status badge -->
-                                <Badge
-                                    :variant="statusVariant(funnel.status)"
-                                    class="shrink-0 capitalize text-[0.65rem] px-2 py-0.5"
-                                    :class="{
-                                        'bg-emerald-100 text-emerald-700 border-emerald-200': funnel.status === 'published',
-                                        'bg-amber-50 text-amber-700 border-amber-200': funnel.status === 'draft',
-                                    }"
-                                >
-                                    {{ funnel.status }}
-                                </Badge>
-                                <!-- Edit link -->
-                                <Link
-                                    :href="`/funnels/${funnel.id}/edit`"
-                                    class="shrink-0 opacity-0 group-hover:opacity-100 flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                                    title="Edit funnel"
-                                >
-                                    <Icon icon="heroicons:pencil-square" class="size-3.5" />
-                                </Link>
+                            class="flex size-6 shrink-0 items-center justify-center rounded-full text-[0.65rem] font-bold"
+                            :class="idx === 0 ? 'bg-teal-600 text-white' : 'bg-muted text-muted-foreground'"
+                        >{{ idx + 1 }}</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-xs font-medium">{{ funnel.name }}</p>
+                            <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                                <div
+                                    class="h-full rounded-full bg-linear-to-r from-teal-600 to-cyan-400"
+                                    :style="{ width: topItems[0].leads_count > 0 ? `${Math.max(8, Math.round((funnel.leads_count / topItems[0].leads_count) * 100))}%` : '0%' }"
+                                />
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
+                        <span class="shrink-0 text-sm font-bold tabular-nums text-teal-700">{{ funnel.leads_count }}</span>
+                    </li>
+                </ul>
             </div>
 
-            <!-- Right column: Quick actions + Top funnels -->
-            <div class="flex flex-col gap-4">
+            <!-- Latest activity -->
+            <div class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-8">
+                <div class="mb-3 flex shrink-0 items-center justify-between">
+                    <div>
+                        <p class="text-sm font-semibold">Latest</p>
+                        <p class="text-[0.65rem] text-muted-foreground">Recent campaigns & funnels</p>
+                    </div>
+                    <Link href="/campaigns" class="text-[0.65rem] font-medium text-teal-700 hover:underline">All campaigns</Link>
+                </div>
 
-                <!-- Quick actions -->
-                <Card class="border-cyan-200/60 bg-linear-to-b from-white to-cyan-50/50 shadow-sm">
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-base font-semibold">Quick Actions</CardTitle>
-                    </CardHeader>
-                    <CardContent class="flex flex-col gap-2">
-                        <Button as-child variant="outline" class="h-9 justify-start gap-2.5 border-cyan-200/70 bg-white/90 text-sm font-medium hover:border-cyan-400/60 hover:bg-cyan-50 transition-colors">
-                            <Link href="/funnels/create">
-                                <Icon icon="heroicons:plus-circle" class="size-4 text-primary" />
-                                Create New Funnel
-                            </Link>
-                        </Button>
-                        <Button as-child variant="outline" class="h-9 justify-start gap-2.5 border-cyan-200/70 bg-white/90 text-sm font-medium hover:border-cyan-400/60 hover:bg-cyan-50 transition-colors">
-                            <Link href="/templates">
-                                <Icon icon="heroicons:rectangle-stack" class="size-4 text-primary" />
-                                Browse Templates
-                            </Link>
-                        </Button>
-                        <Button as-child variant="outline" class="h-9 justify-start gap-2.5 border-cyan-200/70 bg-white/90 text-sm font-medium hover:border-cyan-400/60 hover:bg-cyan-50 transition-colors">
-                            <Link href="/leads">
-                                <Icon icon="heroicons:users" class="size-4 text-primary" />
-                                View All Leads
-                            </Link>
-                        </Button>
-                        <Button as-child variant="outline" class="h-9 justify-start gap-2.5 border-cyan-200/70 bg-white/90 text-sm font-medium hover:border-cyan-400/60 hover:bg-cyan-50 transition-colors">
-                            <Link href="/integrations">
-                                <Icon icon="heroicons:puzzle-piece" class="size-4 text-primary" />
-                                Manage Integrations
-                            </Link>
-                        </Button>
-                    </CardContent>
-                </Card>
+                <div v-if="recentItems.length === 0" class="flex flex-1 items-center gap-3 rounded-lg bg-muted/15 px-3 py-4">
+                    <Icon icon="heroicons:rocket-launch" class="size-5 shrink-0 text-teal-600/50" />
+                    <p class="text-xs text-muted-foreground">Start your first campaign to see activity here.</p>
+                </div>
 
-                <!-- Top funnels by leads -->
-                <Card class="flex-1 border-violet-200/60 bg-linear-to-b from-white to-violet-50/50 shadow-sm">
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-base font-semibold">Top Funnels</CardTitle>
-                        <CardDescription class="text-xs">Ranked by lead count</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div v-if="topFunnels.length === 0" class="flex flex-col items-center py-6 gap-2 text-muted-foreground">
-                            <Icon icon="heroicons:chart-bar" class="size-8 opacity-30" />
-                            <p class="text-xs text-center">Publish funnels and capture leads<br>to see rankings here.</p>
-                        </div>
-                        <div v-else class="space-y-3">
-                            <div
-                                v-for="(funnel, idx) in topFunnels"
-                                :key="funnel.id"
-                                class="flex items-center gap-2.5"
-                            >
-                                <!-- Rank -->
-                                <span
-                                    class="flex size-5 shrink-0 items-center justify-center rounded-full text-[0.6rem] font-bold"
-                                    :class="{
-                                        'bg-amber-400/20 text-amber-600': idx === 0,
-                                        'bg-slate-100 text-slate-500': idx > 0,
-                                    }"
-                                >{{ idx + 1 }}</span>
-                                <!-- Name -->
-                                <div class="min-w-0 flex-1">
-                                    <p class="text-xs font-medium text-foreground truncate">{{ funnel.name }}</p>
-                                    <!-- Mini bar -->
-                                    <div class="mt-0.5 h-1 rounded-full bg-muted overflow-hidden">
-                                        <div
-                                            class="h-full rounded-full"
-                                            style="background: #40E0D0"
-                                            :style="{ width: topFunnels[0].leads_count > 0 ? `${Math.round((funnel.leads_count / topFunnels[0].leads_count) * 100)}%` : '0%' }"
-                                        />
-                                    </div>
-                                </div>
-                                <!-- Count -->
-                                <span class="text-xs font-semibold text-foreground shrink-0">{{ funnel.leads_count }}</span>
+                <ul v-else class="min-h-0 flex-1 space-y-1 overflow-y-auto">
+                    <li v-for="funnel in recentItems" :key="funnel.id">
+                        <Link
+                            :href="`/funnels/${funnel.id}/edit`"
+                            class="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-teal-50/60"
+                        >
+                            <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
+                                <Icon icon="heroicons:rocket-launch" class="size-4 text-teal-600" />
                             </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-xs font-medium">{{ funnel.name }}</p>
+                                <p class="text-[0.65rem] text-muted-foreground">{{ fmtDate(funnel.created_at) }}</p>
+                            </div>
+                            <Badge
+                                variant="outline"
+                                class="shrink-0 px-1.5 py-0 text-[0.6rem] capitalize"
+                                :class="funnel.status === 'published' ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
+                            >
+                                {{ funnel.status }}
+                            </Badge>
+                        </Link>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Shortcuts -->
+            <div class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-4">
+                <div class="mb-3 shrink-0">
+                    <p class="text-sm font-semibold">Shortcuts</p>
+                    <p class="text-[0.65rem] text-muted-foreground">Jump to a tool</p>
+                </div>
+                <div class="flex flex-1 flex-col gap-2">
+                    <Link
+                        v-for="link in quickLinks"
+                        :key="link.href"
+                        :href="link.href"
+                        class="flex items-center gap-2.5 rounded-lg border border-border/50 bg-muted/15 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-teal-300/50 hover:bg-teal-50 hover:text-teal-800"
+                    >
+                        <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
+                            <Icon :icon="link.icon" class="size-3.5 text-teal-600" />
                         </div>
-                    </CardContent>
-                </Card>
-
+                        {{ link.label }}
+                    </Link>
+                </div>
             </div>
         </div>
-
-        <!-- ── Getting started banner (shown when no funnels) ── -->
-        <div
-            v-if="metrics.funnelCount === 0"
-            class="flex flex-col items-center gap-4 rounded-2xl border border-emerald-300/60 bg-linear-to-r from-emerald-50 via-cyan-50 to-sky-50 p-6 sm:flex-row"
-        >
-            <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/15">
-                <Icon icon="heroicons:rocket-launch" class="size-6 text-primary" />
-            </div>
-            <div class="text-center sm:text-left">
-                <h3 class="font-semibold text-foreground">Ready to launch your first webinar funnel?</h3>
-                <p class="text-sm text-muted-foreground mt-0.5">
-                    Browse 50+ pre-built templates, customise your opt-in page, connect your ESP, and go live in minutes.
-                </p>
-            </div>
-            <Button as-child class="shrink-0 sm:ml-auto bg-linear-to-r from-emerald-500 to-cyan-500 text-white hover:opacity-95 shadow-md">
-                <Link href="/templates">Explore Templates</Link>
-            </Button>
-        </div>
-
     </div>
 </template>

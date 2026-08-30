@@ -5,10 +5,11 @@ namespace App\Http\Controllers;
 use App\Jobs\IndexFunnelAiSourceJob;
 use App\Models\Funnel;
 use App\Models\FunnelAiSource;
+use App\Models\FunnelAiSourceChunk;
+use App\Services\Campaigns\SalesPageFetcherService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -170,7 +171,7 @@ class FunnelAiSourceController extends Controller
         abort_unless((int) $source->funnel_id === (int) $funnel->id, 404);
 
         $source->delete();
-        \App\Models\FunnelAiSourceChunk::query()
+        FunnelAiSourceChunk::query()
             ->where('funnel_ai_source_id', $source->id)
             ->delete();
 
@@ -189,7 +190,7 @@ class FunnelAiSourceController extends Controller
             ->where('funnel_id', $funnel->id)
             ->whereIn('id', $validated['source_ids'])
             ->delete();
-        \App\Models\FunnelAiSourceChunk::query()
+        FunnelAiSourceChunk::query()
             ->where('funnel_id', $funnel->id)
             ->whereIn('funnel_ai_source_id', $validated['source_ids'])
             ->delete();
@@ -234,29 +235,12 @@ class FunnelAiSourceController extends Controller
 
     private function fetchUrlContent(string $url): ?string
     {
-        $apiKey = trim((string) config('services.scrapingbee.api_key', ''));
-        if ($apiKey === '') {
+        $result = app(SalesPageFetcherService::class)->fetch($url);
+
+        if (! ($result['ok'] ?? false) || ! is_string($result['text'] ?? null)) {
             return null;
         }
 
-        try {
-            $response = Http::timeout(45)->get('https://app.scrapingbee.com/api/v1/', [
-                'api_key' => $apiKey,
-                'url' => $url,
-                'render_js' => 'true',
-                'block_resources' => 'false',
-                'wait_browser' => 'networkidle2',
-            ]);
-
-            if (! $response->successful()) {
-                return null;
-            }
-            $html = (string) $response->body();
-            $clean = trim((string) preg_replace('/\s+/', ' ', strip_tags($html)));
-            return Str::limit($clean, 100000, '');
-        } catch (\Throwable) {
-            return null;
-        }
+        return Str::limit($result['text'], 100000, '');
     }
 }
-

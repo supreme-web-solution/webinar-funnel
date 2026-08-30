@@ -11,14 +11,18 @@ use App\Jobs\GeneratePromotionImageJob;
 use App\Jobs\GeneratePromotionTextJob;
 use App\Jobs\GeneratePromotionVideoJob;
 use App\Jobs\PublishPromotionPostJob;
+use App\Models\Campaign;
 use App\Models\Funnel;
 use App\Models\FunnelPromotionPost;
 use App\Models\FunnelPromotionScheduleEvent;
 use App\Models\FunnelPromotionTopicSuggestion;
+use App\Services\Campaigns\CampaignKnowledgeContextService;
+use App\Services\Campaigns\CampaignTrafficHubService;
 use App\Services\DID\DIDClient;
 use App\Services\Promotion\PromotionCtaResolverService;
 use App\Services\Promotion\PromotionGenerationCoordinator;
 use App\Services\Promotion\PromotionPlatformCatalog;
+use App\Services\Promotion\PromotionTopicSuggestionService;
 use App\Services\Promotion\PromotionPublishGuard;
 use App\Services\Promotion\PromotionTextGenerationService;
 use Illuminate\Http\JsonResponse;
@@ -31,7 +35,7 @@ use Inertia\Response;
 
 class FunnelPromotionController extends Controller
 {
-    public function index(Request $request, Funnel $funnel, DIDClient $did, PromotionPlatformCatalog $platformCatalog): Response
+    public function index(Request $request, Funnel $funnel, DIDClient $did, PromotionPlatformCatalog $platformCatalog, ?Campaign $campaign = null): Response
     {
         $this->authorizeFunnel($funnel);
 
@@ -63,6 +67,8 @@ class FunnelPromotionController extends Controller
         }
 
         $posts = $query->paginate(15)->withQueryString();
+
+        $this->refreshStaleCampaignTopicSuggestions($funnel, app(PromotionTopicSuggestionService::class));
 
         $statsBase = FunnelPromotionPost::query()->where('funnel_id', $funnel->id);
         $suggestedTopics = FunnelPromotionTopicSuggestion::query()
@@ -118,10 +124,13 @@ class FunnelPromotionController extends Controller
             'routes' => [
                 'store' => route('funnels.promotion.posts.store', $funnel),
                 'bulk' => route('funnels.promotion.posts.bulk', $funnel),
-                'calendar' => route('funnels.promotion.calendar.index', $funnel),
+                'calendar' => $campaign
+                    ? route('campaigns.traffic.promotion.calendar', $campaign)
+                    : route('funnels.promotion.calendar.index', $funnel),
                 'topicsGenerate' => route('funnels.promotion.topics.generate', $funnel),
                 'scriptGenerate' => route('funnels.promotion.scripts.generate', $funnel),
             ],
+            'campaignHub' => $campaign ? app(CampaignTrafficHubService::class)->hubPayload($campaign) : null,
         ]);
     }
 
@@ -531,5 +540,46 @@ class FunnelPromotionController extends Controller
         }
 
         $copy->save();
+    }
+
+    protected function refreshStaleCampaignTopicSuggestions(Funnel $funnel, PromotionTopicSuggestionService $service): void
+    {
+        $funnel->loadMissing(['campaign', 'settings', 'template.versions', 'keywords']);
+        $campaign = $funnel->campaign;
+        if ($campaign === null) {
+            return;
+        }
+
+        $knowledge = app(CampaignKnowledgeContextService::class);
+        if (! $knowledge->hasKnowledge($campaign)) {
+            return;
+        }
+
+        $existing = FunnelPromotionTopicSuggestion::query()
+            ->where('funnel_id', $funnel->id)
+            ->where('status', FunnelPromotionTopicSuggestion::STATUS_SUGGESTED)
+            ->pluck('topic');
+
+        if ($existing->isEmpty()) {
+            return;
+        }
+
+        $product = mb_strtolower($knowledge->productName($campaign));
+        $joined = mb_strtolower($existing->join(' '));
+
+        if ($product !== '' && str_contains(mb_strtolower($product), 'affiliateos')) {
+            return;
+        }
+
+        $looksStale = str_contains($joined, 'affiliateos blank')
+            || str_contains($joined, 'affiliateos')
+            || ($product !== '' && ! str_contains($joined, $product));
+
+        if (! $looksStale) {
+            return;
+        }
+
+        $topics = $service->generate($funnel, 12, null);
+        $service->persist($funnel, $topics);
     }
 }

@@ -73,23 +73,78 @@ return [
         'embedding_model' => env('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
     ],
 
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+        'model' => env('OPENROUTER_MODEL', 'openai/gpt-4o-mini'),
+        'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+        'timeout' => env('OPENROUTER_TIMEOUT', 90),
+        'connect_timeout' => env('OPENROUTER_CONNECT_TIMEOUT', 15),
+        'retries' => env('OPENROUTER_RETRIES', 2),
+        'lead_magnet_timeout' => env('OPENROUTER_LEAD_MAGNET_TIMEOUT', 180),
+        'lead_magnet_max_tokens' => env('OPENROUTER_LEAD_MAGNET_MAX_TOKENS', 8192),
+        'models' => [
+            'lead_magnet_blueprint' => env('OPENROUTER_MODEL_LM_BLUEPRINT', env('OPENROUTER_MODEL', 'openai/gpt-4o-mini')),
+            'lead_magnet_content' => env('OPENROUTER_MODEL_LM_CONTENT', env('OPENROUTER_MODEL', 'openai/gpt-4o')),
+            'lead_magnet_polish' => env('OPENROUTER_MODEL_LM_POLISH', env('OPENROUTER_MODEL', 'openai/gpt-4o')),
+            'free_fallback' => env('OPENROUTER_MODEL_FREE', 'google/gemma-2-9b-it:free'),
+        ],
+    ],
+
     'scrapingbee' => [
         'api_key' => env('SCRAPINGBEE_API_KEY'),
     ],
 
+    // Free URL-to-markdown reader (no key required; optional JINA_API_KEY for higher limits)
+    'jina_reader' => [
+        'enabled' => env('JINA_READER_ENABLED', true),
+        'api_key' => env('JINA_API_KEY'),
+        'timeout' => env('JINA_READER_TIMEOUT', 60),
+    ],
+
+    'sales_page_fetcher' => [
+        'direct_timeout' => env('SALES_PAGE_DIRECT_TIMEOUT', 30),
+    ],
+
+    'campaigns' => [
+        'generation_queue' => env('CAMPAIGN_GENERATION_QUEUE', 'campaign-generate'),
+    ],
+
+    /*
+    | Marketplace offer search (Opportunity Finder + campaign keyword intake).
+    | JVZoo / WarriorPlus: public pages scraped via Jina Reader (free).
+    | ClickBank: React SPA — needs browser automation (Apify actor types search + reads XHR).
+    | URL ?search= params are ignored by ClickBank; plain HTTP/Jina returns an empty shell.
+    */
+    'marketplace' => [
+        'max_results' => (int) env('MARKETPLACE_MAX_RESULTS', 12),
+        'html_scrape_enabled' => env('MARKETPLACE_HTML_SCRAPE_ENABLED', true),
+        'html_timeout' => (int) env('MARKETPLACE_HTML_TIMEOUT', 30),
+        'jvzoo_html_enabled' => env('MARKETPLACE_JVZOO_HTML_ENABLED', true),
+        'warriorplus_html_enabled' => env('MARKETPLACE_WARRIORPLUS_HTML_ENABLED', true),
+        'clickbank_apify_enabled' => env('MARKETPLACE_CLICKBANK_APIFY_ENABLED', true),
+        'clickbank_apify_actor_id' => env('MARKETPLACE_CLICKBANK_APIFY_ACTOR_ID', 'bovi/clickbank-marketplace-scraper'),
+        'clickbank_apify_timeout' => (int) env('MARKETPLACE_CLICKBANK_APIFY_TIMEOUT', 180),
+        'clickbank_affiliate_nickname' => env('CLICKBANK_AFFILIATE_NICKNAME'),
+        'trending_keywords' => array_filter(array_map('trim', explode(',', (string) env(
+            'MARKETPLACE_TRENDING_KEYWORDS',
+            'ai software,weight loss,email marketing,keto'
+        )))),
+        'trending_cache_ttl' => (int) env('MARKETPLACE_TRENDING_CACHE_TTL', 86400),
+    ],
+
     'did' => [
-        'api_key'               => env('DID_API_KEY'),
-        'enabled'               => env('DID_ENABLED', false),
-        'timeout'               => (int) env('DID_TIMEOUT', 120),
-        'default_voice_id'      => env('DID_DEFAULT_VOICE_ID', 'en-US-JennyNeural'),
+        'api_key' => env('DID_API_KEY'),
+        'enabled' => env('DID_ENABLED', false),
+        'timeout' => (int) env('DID_TIMEOUT', 120),
+        'default_voice_id' => env('DID_DEFAULT_VOICE_ID', 'en-US-JennyNeural'),
         'default_presenter_url' => env('DID_DEFAULT_PRESENTER_URL', ''),
     ],
 
     'cloudinary' => [
         'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
-        'api_key'    => env('CLOUDINARY_API_KEY'),
+        'api_key' => env('CLOUDINARY_API_KEY'),
         'api_secret' => env('CLOUDINARY_API_SECRET'),
-        'url'        => env('CLOUDINARY_URL'),
+        'url' => env('CLOUDINARY_URL'),
     ],
 
     // Zernio – OAuth, inbox (Twitter/X), and reply posting for traffic auto-replies.

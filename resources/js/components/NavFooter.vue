@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
+import { Link } from '@inertiajs/vue3';
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { toUrl } from '@/lib/utils';
 import type { NavItem } from '@/types';
 
 type Props = {
@@ -10,6 +10,10 @@ type Props = {
 };
 
 defineProps<Props>();
+
+function isExternal(href: string): boolean {
+    return href.startsWith('http') || href === '#';
+}
 </script>
 
 <template>
@@ -18,20 +22,15 @@ defineProps<Props>();
             <SidebarMenu>
                 <SidebarMenuItem v-for="item in items" :key="item.title">
                     <SidebarMenuButton
-                        class="h-8 rounded-lg px-3 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground/80 hover:bg-sidebar-accent transition-colors"
+                        class="h-8 rounded-lg px-3 text-xs text-teal-200/40 hover:bg-sidebar-accent/60 hover:text-teal-100/70 transition-colors"
                         as-child
                     >
-                        <a :href="toUrl(item.href)" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2.5">
-                            <Icon
-                                v-if="typeof item.icon === 'string'"
-                                :icon="item.icon"
-                                class="size-3.5 shrink-0"
-                            />
-                            <component
-                                :is="item.icon"
-                                v-else-if="item.icon"
-                                class="size-3.5 shrink-0"
-                            />
+                        <Link v-if="!isExternal(item.href)" :href="item.href" class="flex items-center gap-2.5">
+                            <Icon v-if="typeof item.icon === 'string'" :icon="item.icon" class="size-3.5 shrink-0" />
+                            <span>{{ item.title }}</span>
+                        </Link>
+                        <a v-else :href="item.href" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2.5">
+                            <Icon v-if="typeof item.icon === 'string'" :icon="item.icon" class="size-3.5 shrink-0" />
                             <span>{{ item.title }}</span>
                         </a>
                     </SidebarMenuButton>

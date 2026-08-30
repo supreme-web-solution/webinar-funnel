@@ -5,8 +5,10 @@ namespace App\Services\Esp;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
-class GenericWebhookEspAdapter implements EspProviderAdapter
+class GenericWebhookEspAdapter implements EspProviderAdapter, EspSequenceAdapter
 {
+    use FormatsEmailSequenceHtml;
+
     public function subscribe(array $payload, array $credentials, array $config): array
     {
         $url = (string) ($credentials['webhook_url'] ?? '');
@@ -121,6 +123,68 @@ class GenericWebhookEspAdapter implements EspProviderAdapter
         }
 
         return ['ok' => true, 'message' => 'ok'];
+    }
+
+    /**
+     * @param  array<int, array{subject: string, body: string, sequence_key?: string, sort_order?: int}>  $emails
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $config
+     * @return array{ok: bool, message: string, uploaded?: int, details?: array<int, string>}
+     */
+    public function uploadSequence(array $emails, array $credentials, array $config): array
+    {
+        $url = (string) ($credentials['webhook_url'] ?? '');
+
+        if ($url === '') {
+            return ['ok' => false, 'message' => 'Webhook URL is required.'];
+        }
+
+        $urlCheck = $this->validateWebhookUrl($url);
+        if (! $urlCheck['ok']) {
+            return ['ok' => false, 'message' => $urlCheck['message']];
+        }
+
+        $headers = ['Accept' => 'application/json', 'Content-Type' => 'application/json'];
+        if (! empty($credentials['api_key'])) {
+            $headers['Authorization'] = 'Bearer '.$credentials['api_key'];
+        }
+
+        $payload = [
+            'type' => 'email_sequence',
+            'campaign' => [
+                'name' => $config['campaign_name'] ?? null,
+                'uuid' => $config['campaign_uuid'] ?? null,
+                'affiliate_link' => $config['affiliate_link'] ?? null,
+                'tag' => $config['tag'] ?? null,
+            ],
+            'emails' => array_map(fn (array $email, int $i) => [
+                'index' => $i + 1,
+                'sequence_key' => $email['sequence_key'] ?? null,
+                'subject' => $email['subject'] ?? '',
+                'body' => $email['body'] ?? '',
+                'body_html' => $this->bodyToHtml((string) ($email['body'] ?? '')),
+            ], $emails, array_keys($emails)),
+        ];
+
+        $response = Http::withHeaders($headers)
+            ->timeout(30)
+            ->connectTimeout(5)
+            ->withoutRedirecting()
+            ->post($url, $payload);
+
+        if (! $response->successful()) {
+            return [
+                'ok' => false,
+                'message' => "Webhook returned HTTP {$response->status()}.",
+                'uploaded' => 0,
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'message' => count($emails).' swipes delivered to webhook.',
+            'uploaded' => count($emails),
+        ];
     }
 
     private function isPublicIp(string $ip): bool

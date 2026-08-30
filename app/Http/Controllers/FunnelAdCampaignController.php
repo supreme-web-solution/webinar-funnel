@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\LaunchAdCampaignJob;
 use App\Jobs\SyncAdPerformanceJob;
+use App\Models\Campaign;
 use App\Models\Funnel;
 use App\Models\FunnelAdCampaign;
 use App\Models\FunnelAdCreative;
@@ -12,6 +13,7 @@ use App\Services\Ads\AdCampaignService;
 use App\Services\Ads\AdLaunchErrorFormatter;
 use App\Services\Ads\AdPlatformRules;
 use App\Services\Ads\AdGenerationService;
+use App\Services\Campaigns\CampaignTrafficHubService;
 use App\Services\Zernio\ZernioClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -29,7 +31,7 @@ class FunnelAdCampaignController extends Controller
 
     // ─── Page ────────────────────────────────────────────────────────────────
 
-    public function index(Request $request, Funnel $funnel): Response
+    public function index(Request $request, Funnel $funnel, ?Campaign $campaign = null): Response
     {
         $this->authorize($funnel);
 
@@ -57,8 +59,11 @@ class FunnelAdCampaignController extends Controller
             'adsEnabled'       => $this->zernio->isConfigured(),
             'routes'           => [
                 'store'   => route('funnels.ads.store', $funnel),
-                'posts'   => route('funnels.promotion.posts.index', $funnel),
+                'posts'   => $campaign
+                    ? route('campaigns.traffic.promotion.posts', $campaign)
+                    : route('funnels.promotion.posts.index', $funnel),
             ],
+            'campaignHub' => $campaign ? app(CampaignTrafficHubService::class)->hubPayload($campaign) : null,
             'savedAdAccountIds' => $request->user()->resolvedPlatformAdAccountIds(),
             'adAccountsSettingsUrl' => route('settings.ad-accounts.edit'),
             'minBudgetAmount' => AdBudgetRules::minAmount('USD'),

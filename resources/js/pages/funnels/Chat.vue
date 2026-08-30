@@ -241,112 +241,115 @@ onUnmounted(() => {
 <template>
     <Head :title="`Chat — ${funnel.name}`" />
 
-    <!-- Full-viewport chat shell -->
-    <div class="flex flex-col" style="height: calc(100vh - 56px)">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4" style="height: calc(100vh - 56px)">
 
-        <!-- ── Top nav bar ── -->
-        <div class="flex items-center justify-between gap-3 border-b border-border/60 bg-background px-4 py-2.5 shrink-0">
-            <div class="flex items-center gap-2 min-w-0">
-                <Button as-child variant="ghost" size="sm" class="shrink-0 h-8 w-8 p-0 text-muted-foreground">
-                    <Link :href="`/funnels/${funnel.id}/edit`">
-                        <Icon icon="heroicons:arrow-left" class="size-4" />
-                    </Link>
-                </Button>
-                <div class="min-w-0">
-                    <div class="flex items-center gap-2">
-                        <span class="text-sm font-bold text-foreground truncate">{{ funnel.name }}</span>
-                        <Badge
-                            class="text-[0.6rem] capitalize px-2 py-0.5 shrink-0"
-                            :class="funnel.status === 'published'
-                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border-amber-200'"
-                        >
-                            {{ funnel.status }}
-                        </Badge>
+        <!-- Header -->
+        <div class="shrink-0 rounded-xl border border-border/60 bg-white p-4 shadow-sm">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex min-w-0 items-start gap-3">
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
+                        <Icon icon="heroicons:chat-bubble-left-right" class="size-5 text-teal-600" />
                     </div>
-                    <p class="text-[0.65rem] text-muted-foreground">Chat Manager · {{ conversations.length }} conversation{{ conversations.length !== 1 ? 's' : '' }}</p>
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h1 class="truncate text-xl font-bold tracking-tight md:text-2xl">{{ funnel.name }}</h1>
+                            <Badge
+                                variant="outline"
+                                class="capitalize text-[0.65rem]"
+                                :class="funnel.status === 'published'
+                                    ? 'border-teal-200 bg-teal-50 text-teal-700'
+                                    : 'border-amber-200 bg-amber-50 text-amber-700'"
+                            >
+                                {{ funnel.status }}
+                            </Badge>
+                        </div>
+                        <p class="mt-0.5 text-sm text-muted-foreground">
+                            Chat manager · {{ conversations.length }} conversation{{ conversations.length !== 1 ? 's' : '' }}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    <Button as-child variant="brand-outline" size="sm">
+                        <Link :href="`/funnels/${funnel.id}/edit`">
+                            <Icon icon="heroicons:arrow-left" class="size-3.5" />
+                            Back to editor
+                        </Link>
+                    </Button>
+                    <Button as-child variant="brand-outline" size="sm">
+                        <a :href="publicLinks.webinar" target="_blank" rel="noopener noreferrer">
+                            <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
+                            Open webinar
+                        </a>
+                    </Button>
                 </div>
             </div>
-            <Button as-child variant="outline" size="sm" class="shrink-0 h-8 text-xs gap-1.5">
-                <a :href="publicLinks.webinar" target="_blank" rel="noopener noreferrer">
-                    <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
-                    Webinar
-                </a>
-            </Button>
         </div>
 
-        <!-- ── Two-pane layout ── -->
-        <div class="flex flex-1 overflow-hidden">
+        <!-- Chat workspace -->
+        <div
+            class="flex min-h-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm"
+            style="min-height: 480px"
+        >
+            <!-- Left: conversation list -->
+            <div class="flex w-72 shrink-0 flex-col border-r border-border/60 bg-muted/30">
 
-            <!-- ════════════ LEFT SIDEBAR ════════════ -->
-            <div class="flex w-72 shrink-0 flex-col border-r border-border/60 bg-muted/20">
-
-                <!-- Sidebar header + search -->
-                <div class="border-b border-border/60 p-3 space-y-2">
-                    <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Conversations</p>
+                <div class="space-y-2 border-b border-border/60 p-3">
+                    <p class="px-1 text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">Conversations</p>
                     <div class="relative">
-                        <Icon icon="heroicons:magnifying-glass" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                        <Icon icon="heroicons:magnifying-glass" class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             v-model="sidebarSearch"
                             placeholder="Search attendees…"
-                            class="pl-8 h-8 text-xs bg-background"
+                            class="h-8 bg-white pl-8 text-xs"
                         />
                     </div>
                 </div>
 
-                <!-- Conversation list -->
                 <div class="flex-1 overflow-y-auto">
-
-                    <!-- Empty state -->
-                    <div v-if="conversations.length === 0" class="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground px-4 text-center py-12">
+                    <div v-if="conversations.length === 0" class="flex h-full flex-col items-center justify-center gap-2 px-4 py-12 text-center text-muted-foreground">
                         <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-10 opacity-25" />
-                        <p class="text-xs font-medium">No conversations yet</p>
-                        <p class="text-[0.65rem] opacity-70">Share your webinar link to start getting attendees.</p>
+                        <p class="text-xs font-medium text-foreground">No conversations yet</p>
+                        <p class="text-[0.65rem]">Share your webinar link to start getting attendees.</p>
                     </div>
 
-                    <!-- No filter match -->
-                    <div v-else-if="filteredConvos.length === 0" class="flex flex-col items-center py-10 gap-2 text-muted-foreground">
+                    <div v-else-if="filteredConvos.length === 0" class="flex flex-col items-center gap-2 py-10 text-muted-foreground">
                         <Icon icon="heroicons:magnifying-glass" class="size-6 opacity-30" />
                         <p class="text-xs">No matches</p>
                     </div>
 
-                    <!-- List items -->
                     <button
                         v-for="convo in filteredConvos"
                         :key="convo.conversation_key"
-                        class="flex w-full items-start gap-2.5 px-3 py-3 text-left transition-colors border-b border-border/30 last:border-0 hover:bg-muted/60 relative"
+                        class="relative flex w-full items-start gap-2.5 border-b border-border/30 px-3 py-3 text-left transition-colors last:border-0 hover:bg-white/80"
                         :class="activeKey === convo.conversation_key
-                            ? 'bg-primary/8 border-l-[3px] border-l-primary pl-[9px]'
+                            ? 'border-l-[3px] border-l-teal-600 bg-teal-50/60 pl-[9px]'
                             : 'border-l-[3px] border-l-transparent'"
                         @click="selectConvo(convo.conversation_key)"
                     >
-                        <!-- Avatar -->
                         <div
-                            class="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold mt-0.5"
+                            class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
                             :class="activeKey === convo.conversation_key
-                                ? 'bg-primary/20 text-primary'
-                                : 'bg-muted-foreground/10 text-muted-foreground'"
+                                ? 'bg-teal-500/15 text-teal-700'
+                                : 'bg-muted text-muted-foreground'"
                         >
                             {{ initials(convo.attendee_name) }}
                         </div>
 
-                        <!-- Info -->
                         <div class="min-w-0 flex-1">
                             <div class="flex items-baseline justify-between gap-1">
-                                <p class="text-xs font-semibold text-foreground truncate">{{ convo.attendee_name }}</p>
-                                <span class="text-[0.58rem] text-muted-foreground shrink-0">
+                                <p class="truncate text-xs font-semibold text-foreground">{{ convo.attendee_name }}</p>
+                                <span class="shrink-0 text-[0.58rem] text-muted-foreground">
                                     {{ fmtShort(undefined) }}
                                 </span>
                             </div>
-                            <p class="text-[0.65rem] text-muted-foreground/70 truncate mt-0.5">
+                            <p class="mt-0.5 truncate text-[0.65rem] text-muted-foreground">
                                 {{ convo.latest_message ?? 'No messages yet' }}
                             </p>
                         </div>
 
-                        <!-- Unread count badge -->
                         <span
                             v-if="convo.message_count > 0"
-                            class="absolute right-2.5 bottom-3 flex size-4 items-center justify-center rounded-full bg-primary/15 text-[0.55rem] font-bold text-primary"
+                            class="absolute bottom-3 right-2.5 flex size-4 items-center justify-center rounded-full bg-teal-600 text-[0.55rem] font-bold text-white"
                         >
                             {{ convo.message_count > 99 ? '99+' : convo.message_count }}
                         </span>
@@ -354,44 +357,38 @@ onUnmounted(() => {
                 </div>
             </div>
 
-            <!-- ════════════ RIGHT: CHAT PANEL ════════════ -->
-            <div class="flex flex-1 flex-col overflow-hidden bg-background">
+            <!-- Right: active thread -->
+            <div class="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
 
-                <!-- ── No conversation selected ── -->
                 <div v-if="!activeConvo" class="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-                    <div class="flex size-16 items-center justify-center rounded-2xl bg-muted">
-                        <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-8 opacity-40" />
+                    <div class="flex size-16 items-center justify-center rounded-2xl border border-teal-500/15 bg-teal-500/10">
+                        <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-8 text-teal-600/60" />
                     </div>
                     <p class="text-sm font-medium text-foreground">Select a conversation</p>
-                    <p class="text-xs max-w-xs text-center">Click an attendee on the left to open their chat thread.</p>
+                    <p class="max-w-xs text-center text-xs">Click an attendee on the left to open their chat thread.</p>
                 </div>
 
-                <!-- ── Active conversation ── -->
                 <template v-else>
-
-                    <!-- Chat header -->
-                    <div class="flex items-center gap-3 border-b border-border/60 bg-muted/20 px-4 py-2.5 shrink-0">
-                        <!-- Avatar -->
-                        <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                    <!-- Thread header -->
+                    <div class="flex shrink-0 items-center gap-3 border-b border-border/60 bg-muted/20 px-4 py-3">
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs font-bold text-teal-700">
                             {{ initials(activeConvo.attendee_name) }}
                         </div>
-                        <!-- Info -->
                         <div class="min-w-0 flex-1">
-                            <p class="text-sm font-semibold text-foreground truncate">{{ activeConvo.attendee_name }}</p>
-                            <p class="text-[0.65rem] text-muted-foreground truncate">
+                            <p class="truncate text-sm font-semibold text-foreground">{{ activeConvo.attendee_name }}</p>
+                            <p class="truncate text-[0.65rem] text-muted-foreground">
                                 {{ activeConvo.attendee_email ?? 'Anonymous' }}
                                 <span class="mx-1 opacity-50">·</span>
                                 {{ activeConvo.message_count }} message{{ activeConvo.message_count !== 1 ? 's' : '' }}
                             </p>
                         </div>
 
-                        <!-- Delete button -->
-                        <div class="flex items-center gap-2 shrink-0">
+                        <div class="flex shrink-0 items-center gap-2">
                             <template v-if="confirmDelete">
                                 <span class="text-xs text-muted-foreground">Delete this chat?</span>
                                 <Button
                                     size="sm"
-                                    class="h-7 px-2.5 text-xs bg-rose-600 hover:bg-rose-700 text-white gap-1"
+                                    class="h-7 gap-1 bg-rose-600 px-2.5 text-xs text-white hover:bg-rose-700"
                                     :disabled="deleting"
                                     @click="doDeleteConvo"
                                 >
@@ -399,12 +396,7 @@ onUnmounted(() => {
                                     <Icon v-else icon="heroicons:trash" class="size-3" />
                                     {{ deleting ? 'Deleting…' : 'Confirm' }}
                                 </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    class="h-7 px-2 text-xs"
-                                    @click="confirmDelete = false"
-                                >
+                                <Button variant="ghost" size="sm" class="h-7 px-2 text-xs" @click="confirmDelete = false">
                                     Cancel
                                 </Button>
                             </template>
@@ -412,7 +404,7 @@ onUnmounted(() => {
                                 v-else
                                 variant="ghost"
                                 size="sm"
-                                class="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                class="h-8 w-8 p-0 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600"
                                 title="Delete conversation"
                                 @click="confirmDelete = true"
                             >
@@ -421,19 +413,17 @@ onUnmounted(() => {
                         </div>
                     </div>
 
-                    <!-- Messages area -->
+                    <!-- Messages -->
                     <div
                         ref="messagesEl"
-                        class="flex-1 overflow-y-auto px-4 py-4 space-y-1"
-                        style="background: radial-gradient(ellipse at top, hsl(174 72% 56% / 0.03) 0%, transparent 60%)"
+                        class="flex-1 space-y-1 overflow-y-auto px-4 py-4"
+                        style="background: radial-gradient(ellipse at top, hsl(174 72% 56% / 0.04) 0%, transparent 60%)"
                     >
-                        <!-- Empty thread -->
-                        <div v-if="messages.length === 0" class="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground py-12">
+                        <div v-if="messages.length === 0" class="flex h-full flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
                             <Icon icon="heroicons:chat-bubble-oval-left" class="size-8 opacity-25" />
                             <p class="text-xs">No messages yet in this conversation.</p>
                         </div>
 
-                        <!-- Message bubbles -->
                         <template v-else>
                             <div
                                 v-for="(msg, idx) in messages"
@@ -441,48 +431,39 @@ onUnmounted(() => {
                                 class="flex gap-2"
                                 :class="msg.participant_role === 'owner' ? 'flex-row-reverse' : 'flex-row'"
                             >
-                                <!-- Avatar — only show if different role from prev message -->
                                 <div
                                     v-if="idx === 0 || messages[idx - 1].participant_role !== msg.participant_role"
-                                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-[0.55rem] font-bold self-end mb-1"
+                                    class="mb-1 flex size-7 shrink-0 items-center justify-center self-end rounded-full text-[0.55rem] font-bold"
                                     :class="msg.participant_role === 'owner'
-                                        ? 'bg-primary/20 text-primary'
+                                        ? 'bg-teal-500/20 text-teal-700'
                                         : 'bg-muted text-muted-foreground'"
                                 >
                                     {{ initials(msg.author_name) }}
                                 </div>
                                 <div v-else class="size-7 shrink-0" />
 
-                                <!-- Bubble group -->
                                 <div
-                                    class="flex flex-col max-w-[65%]"
+                                    class="flex max-w-[65%] flex-col"
                                     :class="msg.participant_role === 'owner' ? 'items-end' : 'items-start'"
                                 >
-                                    <!-- Sender name — first in a group -->
                                     <p
                                         v-if="idx === 0 || messages[idx - 1].participant_role !== msg.participant_role"
-                                        class="text-[0.6rem] font-semibold mb-0.5 px-1"
-                                        :class="msg.participant_role === 'owner' ? 'text-primary text-right' : 'text-muted-foreground'"
+                                        class="mb-0.5 px-1 text-[0.6rem] font-semibold"
+                                        :class="msg.participant_role === 'owner' ? 'text-right text-teal-700' : 'text-muted-foreground'"
                                     >
                                         {{ msg.participant_role === 'owner' ? 'You (Host)' : msg.author_name }}
                                     </p>
 
-                                    <!-- Bubble -->
                                     <div
                                         class="rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm"
                                         :class="msg.participant_role === 'owner'
-                                            ? 'rounded-tr-sm bg-primary text-primary-foreground'
-                                            : 'rounded-tl-sm bg-muted text-foreground'"
-                                        :style="msg.participant_role === 'owner' ? 'background:#40E0D0; color:#0f172a' : ''"
+                                            ? 'rounded-tr-sm bg-teal-500 text-slate-900'
+                                            : 'rounded-tl-sm border border-border/60 bg-muted/50 text-foreground'"
                                     >
                                         {{ msg.message }}
                                     </div>
 
-                                    <!-- Timestamp -->
-                                    <p
-                                        v-if="msg.created_at"
-                                        class="text-[0.55rem] text-muted-foreground/60 mt-0.5 px-1"
-                                    >
+                                    <p v-if="msg.created_at" class="mt-0.5 px-1 text-[0.55rem] text-muted-foreground">
                                         {{ fmtTime(msg.created_at) }}
                                     </p>
                                 </div>
@@ -490,50 +471,39 @@ onUnmounted(() => {
                         </template>
                     </div>
 
-                    <!-- ── Reply input ── -->
-                    <div class="border-t border-border/60 bg-muted/10 px-4 py-3 shrink-0">
+                    <!-- Reply -->
+                    <div class="shrink-0 border-t border-border/60 bg-muted/20 px-4 py-3">
                         <div class="flex items-end gap-2">
-                            <!-- Host avatar -->
-                            <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[0.6rem] font-bold text-primary self-end mb-0.5" style="color:#40E0D0">
+                            <div class="mb-0.5 flex size-8 shrink-0 items-center justify-center self-end rounded-full bg-teal-500/15 text-[0.6rem] font-bold text-teal-700">
                                 H
                             </div>
 
-                            <!-- Textarea -->
-                            <div class="flex-1 relative">
+                            <div class="relative flex-1">
                                 <textarea
                                     v-model="replyText"
                                     rows="1"
                                     placeholder="Reply as host…"
-                                    class="w-full resize-none rounded-2xl border border-input bg-background px-4 py-2.5 pr-12 text-sm leading-5 focus:outline-none focus:ring-2 focus:ring-ring/40 transition-all placeholder:text-muted-foreground"
+                                    class="w-full resize-none rounded-2xl border border-border/60 bg-white px-4 py-2.5 pr-12 text-sm leading-5 transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                                     style="min-height: 42px; max-height: 120px; overflow-y: auto; field-sizing: content"
                                     @keydown="handleKeydown"
                                 />
-                                <!-- Send button inside textarea -->
                                 <button
-                                    class="absolute right-2 bottom-2 flex size-7 items-center justify-center rounded-full transition-all disabled:opacity-30"
+                                    class="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full transition-all disabled:opacity-30"
                                     :class="replyText.trim() && !sending
-                                        ? 'shadow-sm hover:scale-105'
-                                        : 'cursor-not-allowed'"
-                                    :style="replyText.trim() && !sending
-                                        ? 'background:#40E0D0; color:#0f172a'
-                                        : 'background: hsl(var(--muted)); color: hsl(var(--muted-foreground))'"
+                                        ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700'
+                                        : 'cursor-not-allowed bg-muted text-muted-foreground'"
                                     :disabled="sending || !replyText.trim()"
                                     @click="sendReply"
                                 >
-                                    <Icon
-                                        v-if="sending"
-                                        icon="heroicons:arrow-path"
-                                        class="size-3.5 animate-spin"
-                                    />
+                                    <Icon v-if="sending" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
                                     <Icon v-else icon="heroicons:paper-airplane" class="size-3.5" />
                                 </button>
                             </div>
                         </div>
-                        <p class="mt-1.5 text-[0.58rem] text-muted-foreground/50 ml-10">
+                        <p class="ml-10 mt-1.5 text-[0.58rem] text-muted-foreground">
                             Enter to send · Shift + Enter for new line
                         </p>
                     </div>
-
                 </template>
             </div>
         </div>

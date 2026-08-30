@@ -15,6 +15,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import TrafficFeatureShell from '@/components/campaign-traffic/TrafficFeatureShell.vue';
+import type { CampaignHubContext } from '@/components/campaign-traffic/CampaignTrafficLayout.vue';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type AdPerformance = {
@@ -85,6 +87,7 @@ const props = defineProps<{
     minBudgetByCurrency?: Record<string, number>;
     budgetCurrencies?: string[];
     defaultBudgetCurrency?: string;
+    campaignHub?: CampaignHubContext | null;
 }>();
 
 // ─── Wizard state ────────────────────────────────────────────────────────────
@@ -656,12 +659,17 @@ function launchStats(campaign: Campaign): { total: number; live: number } {
 <template>
     <Head :title="`Paid Ads – ${funnel.name}`" />
 
-    <div class="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 md:px-6">
+    <TrafficFeatureShell
+        :campaign-hub="campaignHub"
+        active="ads"
+        :paid-ads-enabled="adsEnabled"
+        standalone-class="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 md:px-6"
+    >
 
         <!-- ── Header ─────────────────────────────────────────────────── -->
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <div class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div v-if="!campaignHub" class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Link :href="`/funnels/${funnel.id}/edit`" class="hover:text-foreground transition-colors">Funnels</Link>
                     <Icon icon="heroicons:chevron-right" class="size-3" />
                     <Link :href="`/funnels/${funnel.id}/edit`" class="hover:text-foreground transition-colors truncate max-w-[160px]">{{ funnel.name }}</Link>
@@ -969,7 +977,7 @@ function launchStats(campaign: Campaign): { total: number; live: number } {
                 Create first campaign
             </Button>
         </div>
-    </div>
+    </TrafficFeatureShell>
 
     <!-- ── Campaign Creation Wizard ──────────────────────────────────────────── -->
     <Dialog :open="wizardOpen" @update:open="(v) => { if (!v) wizardOpen = false; }">

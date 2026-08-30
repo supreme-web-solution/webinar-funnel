@@ -19,6 +19,8 @@ import {
     promotionPlatformIcon,
     promotionPlatformLabel,
 } from '@/lib/promotionPlatforms';
+import TrafficFeatureShell from '@/components/campaign-traffic/TrafficFeatureShell.vue';
+import type { CampaignHubContext } from '@/components/campaign-traffic/CampaignTrafficLayout.vue';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type PromotionPost = {
@@ -88,6 +90,7 @@ const props = defineProps<{
     availableVoices: DIDVoice[];
     routes: { store: string; bulk: string; calendar: string; topicsGenerate: string; scriptGenerate: string };
     defaultCta?: { url: string | null; label: string | null };
+    campaignHub?: CampaignHubContext | null;
 }>();
 
 // ─── Background job polling ──────────────────────────────────────────────────
@@ -844,7 +847,11 @@ const statItems = computed(() => [
                             <div class="flex items-center justify-between gap-3">
                                 <div>
                                     <p class="text-xs font-semibold">AI Topic Suggestions</p>
-                                    <p class="text-xs text-muted-foreground">Based on your funnel. Click any topic to use it.</p>
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ campaignHub
+                                            ? 'Based on this campaign\'s knowledge base. Click any topic to use it.'
+                                            : 'Based on your funnel. Click any topic to use it.' }}
+                                    </p>
                                 </div>
                                 <Button size="sm" variant="outline" class="h-7 text-xs gap-1.5 shrink-0" :disabled="generatingTopics" @click="generateTopics">
                                     <Icon :icon="generatingTopics ? 'heroicons:arrow-path' : 'heroicons:sparkles'" class="size-3.5" :class="generatingTopics ? 'animate-spin' : ''" />
@@ -1269,12 +1276,12 @@ const statItems = computed(() => [
     </Dialog>
 
     <!-- ── Page ──────────────────────────────────────────────────────────── -->
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 md:px-6">
+    <TrafficFeatureShell :campaign-hub="campaignHub" active="promotion">
 
         <!-- Header -->
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <div class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div v-if="!campaignHub" class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Link :href="`/funnels/${funnel.id}/edit`" class="hover:text-foreground transition-colors">Funnels</Link>
                     <Icon icon="heroicons:chevron-right" class="size-3" />
                     <Link :href="`/funnels/${funnel.id}/edit`" class="hover:text-foreground transition-colors truncate max-w-[160px]">{{ funnel.name }}</Link>
@@ -1694,7 +1701,7 @@ const statItems = computed(() => [
                 />
             </div>
         </div>
-    </div>
+    </TrafficFeatureShell>
 
     <!-- ── Post Preview Modal ────────────────────────────────────────────── -->
     <Dialog :open="previewPost !== null" @update:open="(v) => { if (!v) previewPost = null }">

@@ -268,59 +268,60 @@ function formatDateTime(dt: string | null): string {
 }
 
 const activeCount = computed(() => props.accounts.filter((a) => a.status === 'active').length);
+
+const statCards = computed(() => [
+    { label: 'Connected', value: props.accounts.length, sub: 'accounts', icon: 'heroicons:puzzle-piece' },
+    { label: 'Active', value: activeCount.value, sub: 'live', icon: 'heroicons:signal' },
+    { label: 'Providers', value: PROVIDERS.length, sub: 'supported', icon: 'heroicons:squares-2x2' },
+    { label: 'Queued', value: props.queueHealth.queued, sub: 'dispatches', icon: 'heroicons:queue-list' },
+]);
 </script>
 
 <template>
     <Head title="ESP Integrations" />
 
-    <div class="flex flex-col gap-6 p-4 md:p-6 w-full max-w-screen-xl mx-auto">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
 
-            <!-- ── Page header ── -->
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                    <h1 class="text-xl font-bold tracking-tight text-foreground">ESP Integrations</h1>
-                    <p class="text-sm text-muted-foreground mt-0.5">
+            <!-- Header -->
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0">
+                    <h1 class="text-xl font-bold tracking-tight text-foreground md:text-2xl">ESP integrations</h1>
+                    <p class="mt-0.5 text-sm text-muted-foreground">
                         Connect your email service provider — leads captured on opt-in pages are automatically subscribed.
                     </p>
                 </div>
 
-                <Button
-                    size="sm"
-                    class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shrink-0 self-start"
-                    @click="openForm"
-                >
-                    <Icon icon="heroicons:plus" class="size-4" />
-                    Connect Integration
+                <Button variant="brand" size="sm" class="shrink-0 self-start" @click="openForm">
+                    <Icon icon="heroicons:plus" class="size-3.5" />
+                    Connect integration
                 </Button>
             </div>
 
-            <!-- ── Stats ── -->
-            <div class="grid grid-cols-3 gap-3">
-                <Card class="border shadow-sm">
-                    <CardContent class="p-4">
-                        <p class="text-xs text-muted-foreground">Connected</p>
-                        <p class="text-2xl font-bold text-foreground mt-1">{{ accounts.length }}</p>
-                    </CardContent>
-                </Card>
-                <Card class="border shadow-sm">
-                    <CardContent class="p-4">
-                        <p class="text-xs text-muted-foreground">Active</p>
-                        <p class="text-2xl font-bold text-emerald-500 mt-1">{{ activeCount }}</p>
-                    </CardContent>
-                </Card>
-                <Card class="border shadow-sm">
-                    <CardContent class="p-4">
-                        <p class="text-xs text-muted-foreground">Providers</p>
-                        <p class="text-2xl font-bold text-foreground mt-1">{{ PROVIDERS.length }}</p>
-                    </CardContent>
-                </Card>
+            <!-- Stats -->
+            <div class="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
+                <div
+                    v-for="stat in statCards"
+                    :key="stat.label"
+                    class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
+                >
+                    <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
+                        <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
+                        <div class="flex items-baseline gap-1.5">
+                            <span class="text-xl font-bold leading-none tabular-nums">{{ stat.value }}</span>
+                            <span class="text-[0.65rem] text-muted-foreground">{{ stat.sub }}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ── Connect integration modal ── -->
             <Dialog :open="showForm" @update:open="onConnectDialogChange">
-                <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto gap-0 p-0">
-                    <div class="border-b px-5 py-4">
-                        <DialogHeader>
+                <DialogContent class="max-h-[90vh] max-w-2xl gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-xl">
+                    <div class="bg-linear-to-br from-teal-50 via-cyan-50/60 to-white px-5 py-4">
+                        <DialogHeader class="text-left">
                             <DialogTitle class="text-base">Connect a new integration</DialogTitle>
                             <DialogDescription class="text-xs">
                                 Select a provider, then enter your credentials
@@ -328,7 +329,7 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                         </DialogHeader>
                     </div>
 
-                    <div class="space-y-5 px-5 py-4">
+                    <div class="space-y-5 bg-white px-5 py-4">
                         <!-- Step 1: Provider grid -->
                         <div>
                             <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
@@ -339,10 +340,10 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                                     v-for="p in PROVIDERS"
                                     :key="p.id"
                                     type="button"
-                                    class="group relative flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all hover:border-primary/60 hover:shadow-sm"
+                                    class="group relative flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center shadow-sm transition-all hover:border-teal-300 hover:shadow-md"
                                     :class="selectedId === p.id
-                                        ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
-                                        : 'border-border bg-card'"
+                                        ? 'border-teal-500 bg-teal-50/50 ring-2 ring-teal-200'
+                                        : 'border-border/60 bg-white'"
                                     @click="selectProvider(p.id as ProviderId)"
                                 >
                                     <div
@@ -360,7 +361,7 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                                     <span class="text-[0.7rem] font-medium leading-tight text-foreground">{{ p.label }}</span>
                                     <div
                                         v-if="selectedId === p.id"
-                                        class="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary"
+                                        class="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-teal-600"
                                     >
                                         <Icon icon="heroicons:check" class="size-2.5 text-white" />
                                     </div>
@@ -444,8 +445,8 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                                 <div class="flex items-center gap-2 pt-1 pb-1">
                                     <Button
                                         type="submit"
+                                        variant="brand"
                                         size="sm"
-                                        class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
                                         :disabled="form.processing"
                                     >
                                         <Icon
@@ -466,41 +467,38 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                 </DialogContent>
             </Dialog>
 
-            <!-- ── Connected integrations ── -->
+            <!-- Connected integrations -->
             <div>
-                <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Connected accounts ({{ accounts.length }})
                 </p>
 
                 <!-- Empty state -->
-                <Card v-if="accounts.length === 0" class="border border-dashed shadow-none">
-                    <CardContent class="flex flex-col items-center justify-center py-14 text-center gap-3">
-                        <div class="flex size-14 items-center justify-center rounded-full bg-primary/10">
-                            <Icon icon="heroicons:puzzle-piece" class="size-7 text-primary" />
-                        </div>
-                        <div>
-                            <p class="font-semibold text-foreground">No integrations connected</p>
-                            <p class="text-sm text-muted-foreground mt-1">
-                                Connect an ESP to automatically push leads to your email list.
-                            </p>
-                        </div>
-                        <Button
-                            size="sm"
-                            class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90 mt-2"
-                            @click="openForm"
-                        >
-                            <Icon icon="heroicons:plus" class="size-4" />
-                            Connect your first integration
-                        </Button>
-                    </CardContent>
-                </Card>
+                <div
+                    v-if="accounts.length === 0"
+                    class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-teal-200/60 bg-white px-6 py-14 text-center shadow-sm"
+                >
+                    <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
+                        <Icon icon="heroicons:puzzle-piece" class="size-7 text-teal-600/60" />
+                    </div>
+                    <div>
+                        <p class="font-semibold text-foreground">No integrations connected</p>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Connect an ESP to automatically push leads to your email list.
+                        </p>
+                    </div>
+                    <Button variant="brand" size="sm" @click="openForm">
+                        <Icon icon="heroicons:plus" class="size-3.5" />
+                        Connect your first integration
+                    </Button>
+                </div>
 
                 <!-- Account cards -->
                 <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <Card
                         v-for="account in accounts"
                         :key="account.id"
-                        class="border shadow-sm overflow-hidden"
+                        class="overflow-hidden border border-border/60 shadow-sm"
                     >
                         <CardContent class="p-0">
                             <!-- Provider colour header -->
@@ -561,9 +559,9 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                                 <!-- Actions -->
                                 <div class="flex items-center gap-2">
                                     <Button
-                                        variant="outline"
+                                        variant="brand-outline"
                                         size="sm"
-                                        class="h-7 text-xs gap-1 flex-1"
+                                        class="h-7 flex-1 text-xs"
                                         :disabled="testingId === account.id"
                                         @click="testConnection(account)"
                                     >
@@ -596,9 +594,9 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
             </div>
 
             <!-- ── Provider reference ── -->
-            <Card class="border shadow-sm">
+            <Card class="border border-border/60 bg-white shadow-sm">
                 <CardHeader class="pb-3">
-                    <CardTitle class="text-sm font-semibold">Dispatch Monitor</CardTitle>
+                    <CardTitle class="text-sm font-semibold">Dispatch monitor</CardTitle>
                     <CardDescription class="text-xs">Track queued, successful, and failed ESP deliveries in real time.</CardDescription>
                 </CardHeader>
                 <!-- <CardContent class="space-y-3">
@@ -655,9 +653,9 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                 </CardContent> -->
             </Card>
 
-            <Card class="border shadow-sm">
+            <Card class="border border-border/60 bg-white shadow-sm">
                 <CardHeader class="pb-3">
-                    <CardTitle class="text-sm font-semibold">Supported Providers</CardTitle>
+                    <CardTitle class="text-sm font-semibold">Supported providers</CardTitle>
                     <CardDescription class="text-xs">All providers use API key authentication — no OAuth redirects required.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -665,7 +663,7 @@ const activeCount = computed(() => props.accounts.filter((a) => a.status === 'ac
                         <div
                             v-for="p in PROVIDERS"
                             :key="p.id"
-                            class="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2"
+                            class="flex items-center gap-2.5 rounded-xl border border-border/60 bg-white px-3 py-2 shadow-sm"
                         >
                             <div
                                 class="flex size-7 items-center justify-center rounded-md shrink-0"

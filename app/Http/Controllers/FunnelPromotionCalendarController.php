@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\FunnelPromotionScheduleRequest;
+use App\Models\Campaign;
 use App\Models\Funnel;
 use App\Models\FunnelPromotionPost;
 use App\Models\FunnelPromotionScheduleEvent;
+use App\Services\Campaigns\CampaignTrafficHubService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,7 +15,7 @@ use Inertia\Response;
 
 class FunnelPromotionCalendarController extends Controller
 {
-    public function index(Request $request, Funnel $funnel): Response
+    public function index(Request $request, Funnel $funnel, ?Campaign $campaign = null): Response
     {
         $this->authorizeFunnel($funnel);
 
@@ -62,9 +64,12 @@ class FunnelPromotionCalendarController extends Controller
             'currentMonth' => $month,
             'currentYear' => $year,
             'routes' => [
-                'posts' => route('funnels.promotion.posts.index', $funnel),
+                'posts' => $campaign
+                    ? route('campaigns.traffic.promotion.posts', $campaign)
+                    : route('funnels.promotion.posts.index', $funnel),
                 'move' => route('funnels.promotion.calendar.move', [$funnel, '__POST__']),
             ],
+            'campaignHub' => $campaign ? app(CampaignTrafficHubService::class)->hubPayload($campaign) : null,
         ]);
     }
 

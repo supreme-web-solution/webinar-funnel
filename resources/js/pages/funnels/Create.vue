@@ -113,6 +113,12 @@ function coverIcon(cat: string): string {
 
     <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
 
+        <div class="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+            Preferred path:
+            <Link href="/campaigns/create" class="font-semibold underline">New Campaign</Link>
+            (URL/keyword → Sales or Webinar). This page is the legacy DFY template flow.
+        </div>
+
         <!-- ── Page header ── -->
         <div class="flex items-center gap-3">
             <Button as-child variant="ghost" size="sm" class="text-muted-foreground h-8 px-2 -ml-1">
@@ -124,7 +130,7 @@ function coverIcon(cat: string): string {
             <div class="h-4 w-px bg-border/60" />
             <div>
                 <h1 class="text-xl font-bold tracking-tight text-foreground leading-tight">Create New Funnel</h1>
-                <p class="text-xs text-muted-foreground">Configure your funnel details below</p>
+                <p class="text-xs text-muted-foreground">Legacy template path — prefer Campaigns for new work</p>
             </div>
         </div>
 

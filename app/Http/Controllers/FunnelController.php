@@ -42,12 +42,17 @@ class FunnelController extends Controller
 
         $funnels = Funnel::query()
             ->where('user_id', $userId)
-            ->with('template:id,name,category')
+            ->with(['template:id,name,category', 'campaign:id,name,type'])
             ->withCount('leads')
             ->latest()
-            ->get(['id', 'template_id', 'name', 'slug', 'status', 'published_at', 'created_at']);
+            ->get(['id', 'template_id', 'campaign_id', 'name', 'slug', 'status', 'published_at', 'created_at', 'meta']);
 
-        $funnels = $funnels->map(function (Funnel $funnel) use ($username) {
+        $funnels = $funnels
+            ->filter(fn (Funnel $funnel) => ! in_array($funnel->meta['campaign_variant'] ?? null, ['optin_capture', 'traffic'], true))
+            ->map(function (Funnel $funnel) use ($username) {
+            $variant = (string) ($funnel->meta['campaign_variant'] ?? '');
+            $isWebinar = $variant === 'webinar' || $funnel->campaign?->type === 'webinar';
+
             return [
                 'id' => $funnel->id,
                 'name' => $funnel->name,
@@ -56,6 +61,8 @@ class FunnelController extends Controller
                 'published_at' => $funnel->published_at,
                 'created_at' => $funnel->created_at,
                 'leads_count' => $funnel->leads_count,
+                'kind' => $isWebinar ? 'webinar' : 'funnel',
+                'campaign_name' => $funnel->campaign?->name,
                 'template' => $funnel->template
                     ? [
                         'name' => $funnel->template->name,
@@ -63,10 +70,9 @@ class FunnelController extends Controller
                     ]
                     : null,
                 'public_url' => $funnel->status === 'published'
-                    ? route('public.optin', [
-                        'username' => $username,
-                        'slug' => $funnel->slug,
-                    ])
+                    ? ($isWebinar
+                        ? route('public.webinar', ['username' => $username, 'slug' => $funnel->slug])
+                        : route('public.optin', ['username' => $username, 'slug' => $funnel->slug]))
                     : null,
             ];
         })->values();
@@ -174,7 +180,7 @@ class FunnelController extends Controller
     {
         $this->authorizeFunnel($funnel);
 
-        $funnel->load(['template', 'pages', 'settings', 'chatRoom', 'integrations.integrationAccount']);
+        $funnel->load(['template', 'pages', 'settings', 'chatRoom', 'integrations.integrationAccount', 'campaign:id,slug,type']);
 
         $settings = $funnel->settings;
         if (
@@ -234,16 +240,10 @@ class FunnelController extends Controller
                 'file' => route('funnels.ai.sources.store-file', $funnel->id),
                 'bulk_delete' => route('funnels.ai.sources.bulk-delete', $funnel->id),
             ],
-            'publicLinks' => [
-                'optin' => route('public.optin', [
-                    'username' => $username,
-                    'slug' => $funnel->slug,
-                ]),
-                'webinar' => route('public.webinar', [
-                    'username' => $username,
-                    'slug' => $funnel->slug,
-                ]),
-            ],
+            'publicLinks' => $funnel->publicLinksForUsername($username),
+            'campaignTrafficHubUrl' => $funnel->campaign_id
+                ? route('campaigns.traffic.index', $funnel->campaign_id)
+                : null,
         ]);
     }
 

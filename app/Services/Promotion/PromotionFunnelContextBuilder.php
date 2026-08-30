@@ -4,10 +4,15 @@ namespace App\Services\Promotion;
 
 use App\Models\Funnel;
 use App\Models\TemplateVersion;
+use App\Services\Campaigns\CampaignKnowledgeContextService;
 use Illuminate\Support\Str;
 
 final class PromotionFunnelContextBuilder
 {
+    public function __construct(
+        private readonly CampaignKnowledgeContextService $campaignKnowledge,
+    ) {}
+
     private const GENERIC_WEBINAR_TITLES = [
         'watch this training completely to be our next success story',
     ];
@@ -52,7 +57,7 @@ final class PromotionFunnelContextBuilder
 
         $productName = $this->resolveProductName($funnel, $template?->name, $settings?->offers ?? []);
 
-        return [
+        $context = [
             'product_name' => $productName,
             'category' => $template?->category,
             'conversion_style' => $template?->conversion_style,
@@ -67,7 +72,27 @@ final class PromotionFunnelContextBuilder
             'traffic_keywords' => $funnel->keywords()->pluck('name')->filter()->values()->all(),
             'audience' => $this->inferAudience($template?->category, $optinIntro),
             'cta_label' => $this->cleanText($settings?->webinar_cta_label),
+            'knowledge_pass1' => [],
+            'knowledge_pass2' => [],
         ];
+
+        $overlay = $this->campaignKnowledge->promotionOverlayForFunnel($funnel);
+        if ($overlay !== null) {
+            $context['product_name'] = $overlay['product_name'] ?: $context['product_name'];
+            $context['audience'] = $overlay['audience'] ?: $context['audience'];
+            $context['optin_intro'] = $overlay['optin_intro'] ?: $context['optin_intro'];
+            $context['webinar_description'] = $overlay['webinar_description'] ?: $context['webinar_description'];
+            if ($overlay['bullet_points'] !== []) {
+                $context['bullet_points'] = $overlay['bullet_points'];
+            }
+            if ($overlay['template_keywords'] !== []) {
+                $context['template_keywords'] = $overlay['template_keywords'];
+            }
+            $context['knowledge_pass1'] = $overlay['knowledge_pass1'];
+            $context['knowledge_pass2'] = $overlay['knowledge_pass2'];
+        }
+
+        return $context;
     }
 
     /**

@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
-/* ─── Types ─────────────────────────────────────────────────────────────── */
 interface LeadRow {
     id: number;
     name: string;
@@ -47,8 +45,7 @@ const props = defineProps<{
     filters: { search: string; funnel_id: number | null };
 }>();
 
-/* ─── Local filter state ─────────────────────────────────────────────────── */
-const search   = ref(props.filters.search ?? '');
+const search = ref(props.filters.search ?? '');
 const funnelId = ref<number | null>(props.filters.funnel_id ?? null);
 
 let debounce: ReturnType<typeof setTimeout>;
@@ -63,17 +60,18 @@ watch([search, funnelId], ([s, f]) => {
     }, 350);
 });
 
-/* ─── Helpers ────────────────────────────────────────────────────────────── */
+const statCards = computed(() => [
+    { label: 'Total', value: props.stats.total, sub: 'leads', icon: 'heroicons:users' },
+    { label: 'This week', value: props.stats.this_week, sub: 'new', icon: 'heroicons:arrow-trending-up' },
+    { label: 'Funnels', value: props.stats.funnel_count, sub: 'with leads', icon: 'heroicons:funnel' },
+]);
+
 function fmtDate(dt: string): string {
-    return new Date(dt).toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric',
-    });
+    return new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function fmtTime(dt: string): string {
-    return new Date(dt).toLocaleTimeString('en-US', {
-        hour: '2-digit', minute: '2-digit',
-    });
+    return new Date(dt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
 function avatarInitials(name: string): string {
@@ -81,30 +79,22 @@ function avatarInitials(name: string): string {
 }
 
 const AVATAR_COLORS = [
-    ['#40E0D0', '#060d1a'],
-    ['#FFAD00', '#1a0d00'],
-    ['#6366f1', '#0e0d2a'],
-    ['#10b981', '#031a10'],
-    ['#f43f5e', '#1a030a'],
+    ['#0d9488', '#ecfdf5'],
+    ['#0891b2', '#ecfeff'],
+    ['#6366f1', '#eef2ff'],
+    ['#059669', '#ecfdf5'],
+    ['#d97706', '#fffbeb'],
 ];
 
 function avatarColor(id: number): { bg: string; color: string } {
-    const [bg, color] = AVATAR_COLORS[id % AVATAR_COLORS.length];
-
+    const [color, bg] = AVATAR_COLORS[id % AVATAR_COLORS.length];
     return { bg, color };
 }
 
 function exportCsv(): void {
     const params = new URLSearchParams();
-
-    if (search.value) {
-        params.set('search', search.value);
-    }
-
-    if (funnelId.value) {
-        params.set('funnel_id', String(funnelId.value));
-    }
-
+    if (search.value) params.set('search', search.value);
+    if (funnelId.value) params.set('funnel_id', String(funnelId.value));
     params.set('export', 'csv');
     window.location.href = `/leads?${params.toString()}`;
 }
@@ -114,252 +104,187 @@ function clearFilters(): void {
     funnelId.value = null;
 }
 
-const hasFilters = () => search.value !== '' || funnelId.value !== null;
+const hasFilters = computed(() => search.value !== '' || funnelId.value !== null);
 </script>
 
 <template>
     <Head title="Leads" />
 
-    <div class="flex flex-col gap-6 p-4 md:p-6 w-full max-w-screen-xl mx-auto">
-
-        <!-- ── Page header ── -->
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-foreground">Leads</h1>
-                <p class="text-sm text-muted-foreground mt-0.5">
-                    All opt-in registrations captured across your funnels.
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+        <!-- Header -->
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
+                <h1 class="text-xl font-bold tracking-tight text-foreground md:text-2xl">Leads</h1>
+                <p class="mt-0.5 text-sm text-muted-foreground">
+                    Opt-in registrations captured across your funnels and campaigns.
                 </p>
             </div>
+            <div class="flex shrink-0 flex-wrap gap-2">
+                <Button variant="brand-outline" size="sm" class="gap-1.5" @click="exportCsv">
+                    <Icon icon="heroicons:arrow-down-tray" class="size-3.5" />
+                    Export CSV
+                </Button>
+                <Button as-child variant="brand" size="sm">
+                    <Link href="/funnels">
+                        <Icon icon="heroicons:video-camera" class="size-3.5" />
+                        View funnels
+                    </Link>
+                </Button>
+            </div>
+        </div>
 
-            <Button
-                variant="outline"
-                size="sm"
-                class="gap-1.5 shrink-0 self-start"
-                @click="exportCsv"
+        <!-- Stats -->
+        <div class="grid grid-cols-2 gap-2 md:grid-cols-3 md:gap-3">
+            <div
+                v-for="stat in statCards"
+                :key="stat.label"
+                class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <Icon icon="heroicons:arrow-down-tray" class="size-3.5" />
-                Export CSV
-            </Button>
-        </div>
-
-        <!-- ── Stats ── -->
-        <div class="grid grid-cols-3 gap-3">
-            <Card class="border shadow-sm">
-                <CardContent class="p-4">
-                    <div class="flex items-start justify-between">
-                        <div>
-                            <p class="text-xs text-muted-foreground">Total Leads</p>
-                            <p class="text-2xl font-bold text-foreground mt-1">{{ stats.total.toLocaleString() }}</p>
-                        </div>
-                        <div class="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                            <Icon icon="heroicons:users" class="size-5 text-primary" />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card class="border shadow-sm">
-                <CardContent class="p-4">
-                    <div class="flex items-start justify-between">
-                        <div>
-                            <p class="text-xs text-muted-foreground">This Week</p>
-                            <p class="text-2xl font-bold text-[#40E0D0] mt-1">{{ stats.this_week.toLocaleString() }}</p>
-                        </div>
-                        <div class="flex size-9 items-center justify-center rounded-lg bg-[#40E0D0]/10">
-                            <Icon icon="heroicons:arrow-trending-up" class="size-5 text-[#40E0D0]" />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card class="border shadow-sm">
-                <CardContent class="p-4">
-                    <div class="flex items-start justify-between">
-                        <div>
-                            <p class="text-xs text-muted-foreground">Funnels w/ Leads</p>
-                            <p class="text-2xl font-bold text-[#FFAD00] mt-1">{{ stats.funnel_count }}</p>
-                        </div>
-                        <div class="flex size-9 items-center justify-center rounded-lg bg-[#FFAD00]/10">
-                            <Icon icon="heroicons:funnel" class="size-5 text-[#FFAD00]" />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-
-        <!-- ── Filters ── -->
-        <Card class="border shadow-sm">
-            <CardHeader class="pb-3 pt-4 px-4">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <CardTitle class="text-sm font-semibold">
-                        All Leads
-                        <span v-if="leads.total > 0" class="ml-1.5 text-xs font-normal text-muted-foreground">
-                            {{ leads.from }}–{{ leads.to }} of {{ leads.total.toLocaleString() }}
-                        </span>
-                    </CardTitle>
-
-                    <div class="flex items-center gap-2">
-                        <!-- Search -->
-                        <div class="relative">
-                            <Icon
-                                icon="heroicons:magnifying-glass"
-                                class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none"
-                            />
-                            <Input
-                                v-model="search"
-                                type="text"
-                                placeholder="Search name or email…"
-                                class="h-8 pl-8 text-xs w-48 sm:w-60"
-                            />
-                        </div>
-
-                        <!-- Funnel filter -->
-                        <select
-                            v-model="funnelId"
-                            class="h-8 rounded-md border border-input bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                        >
-                            <option :value="null">All funnels</option>
-                            <option v-for="f in funnels" :key="f.id" :value="f.id">{{ f.name }}</option>
-                        </select>
-
-                        <!-- Clear -->
-                        <Button
-                            v-if="hasFilters()"
-                            variant="ghost"
-                            size="sm"
-                            class="h-8 px-2 text-xs gap-1 text-muted-foreground"
-                            @click="clearFilters"
-                        >
-                            <Icon icon="heroicons:x-mark" class="size-3.5" />
-                            Clear
-                        </Button>
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
+                    <div class="flex items-baseline gap-1.5">
+                        <span class="text-xl font-bold leading-none tabular-nums">{{ stat.value.toLocaleString() }}</span>
+                        <span class="text-[0.65rem] text-muted-foreground">{{ stat.sub }}</span>
                     </div>
                 </div>
-            </CardHeader>
+            </div>
+        </div>
+
+        <!-- Filters + table -->
+        <div class="overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm">
+            <div class="flex flex-col gap-3 border-b border-border/60 p-3 md:flex-row md:items-center md:justify-between md:p-4">
+                <div>
+                    <p class="text-sm font-semibold text-foreground">All leads</p>
+                    <p v-if="leads.total > 0" class="text-xs text-muted-foreground">
+                        {{ leads.from }}–{{ leads.to }} of {{ leads.total.toLocaleString() }}
+                    </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="relative min-w-[12rem] flex-1 sm:flex-none">
+                        <Icon icon="heroicons:magnifying-glass" class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input v-model="search" placeholder="Search name or email…" class="pl-9" />
+                    </div>
+                    <select
+                        v-model="funnelId"
+                        class="h-9 rounded-xl border border-border/60 bg-white px-3 text-sm shadow-sm"
+                    >
+                        <option :value="null">All funnels</option>
+                        <option v-for="f in funnels" :key="f.id" :value="f.id">{{ f.name }}</option>
+                    </select>
+                    <Button
+                        v-if="hasFilters"
+                        variant="ghost"
+                        size="sm"
+                        class="text-teal-700"
+                        @click="clearFilters"
+                    >
+                        <Icon icon="heroicons:x-mark" class="size-3.5" />
+                        Clear
+                    </Button>
+                </div>
+            </div>
+
+            <!-- Empty -->
+            <div v-if="leads.data.length === 0" class="flex flex-col items-center justify-center gap-4 px-6 py-14 text-center">
+                <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
+                    <Icon icon="heroicons:users" class="size-7 text-teal-600/60" />
+                </div>
+                <div>
+                    <p class="font-semibold text-foreground">
+                        {{ hasFilters ? 'No leads match your filters' : 'No leads yet' }}
+                    </p>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        {{ hasFilters ? 'Try adjusting your search or funnel filter.' : 'Publish a funnel and share the opt-in link to start collecting leads.' }}
+                    </p>
+                </div>
+                <Button v-if="hasFilters" variant="brand-outline" size="sm" @click="clearFilters">Clear filters</Button>
+                <Button v-else as-child variant="brand" size="sm">
+                    <Link href="/campaigns/create">Create a campaign</Link>
+                </Button>
+            </div>
 
             <!-- Table -->
-            <CardContent class="p-0">
-                <!-- Empty state -->
-                <div v-if="leads.data.length === 0" class="flex flex-col items-center justify-center py-14 text-center gap-3">
-                    <div class="flex size-14 items-center justify-center rounded-full bg-primary/10">
-                        <Icon icon="heroicons:users" class="size-7 text-primary" />
-                    </div>
-                    <div>
-                        <p class="font-semibold text-foreground">
-                            {{ hasFilters() ? 'No leads match your filters' : 'No leads yet' }}
-                        </p>
-                        <p class="text-sm text-muted-foreground mt-1">
-                            {{ hasFilters() ? 'Try adjusting your search or funnel filter.' : 'Publish a funnel and share the opt-in link to start collecting leads.' }}
-                        </p>
-                    </div>
-                    <Button v-if="hasFilters()" variant="outline" size="sm" class="mt-1 gap-1.5" @click="clearFilters">
-                        <Icon icon="heroicons:x-mark" class="size-3.5" />
-                        Clear filters
-                    </Button>
-                    <Button v-else as-child size="sm" class="mt-1 gap-1.5 bg-primary text-primary-foreground hover:opacity-90">
-                        <Link href="/funnels">Go to Funnels</Link>
-                    </Button>
-                </div>
-
-                <!-- Data table -->
-                <div v-else class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b bg-muted/30">
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">#</th>
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Lead</th>
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Funnel</th>
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Source</th>
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Date</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-border">
-                            <tr
-                                v-for="(lead, i) in leads.data"
-                                :key="lead.id"
-                                class="hover:bg-muted/20 transition-colors"
-                            >
-                                <!-- Row number -->
-                                <td class="px-4 py-3 text-xs text-muted-foreground tabular-nums w-10">
-                                    {{ (leads.from ?? 0) + i }}
-                                </td>
-
-                                <!-- Lead avatar + name/email -->
-                                <td class="px-4 py-3">
-                                    <div class="flex items-center gap-3">
-                                        <div
-                                            class="flex size-8 shrink-0 items-center justify-center rounded-full text-[0.65rem] font-bold"
-                                            :style="{ background: avatarColor(lead.id).bg, color: avatarColor(lead.id).color }"
-                                        >
-                                            {{ avatarInitials(lead.name) }}
-                                        </div>
-                                        <div class="min-w-0">
-                                            <p class="font-medium text-foreground truncate max-w-[180px]">{{ lead.name }}</p>
-                                            <p class="text-xs text-muted-foreground truncate max-w-[180px]">{{ lead.email }}</p>
-                                        </div>
+            <div v-else class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-border/60 bg-teal-50/20">
+                            <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">#</th>
+                            <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Lead</th>
+                            <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Funnel</th>
+                            <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Source</th>
+                            <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border/60">
+                        <tr v-for="(lead, i) in leads.data" :key="lead.id" class="transition-colors hover:bg-teal-50/20">
+                            <td class="w-10 px-4 py-3 text-xs tabular-nums text-muted-foreground">
+                                {{ (leads.from ?? 0) + i }}
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-3">
+                                    <div
+                                        class="flex size-8 shrink-0 items-center justify-center rounded-full text-[0.65rem] font-bold"
+                                        :style="{ background: avatarColor(lead.id).bg, color: avatarColor(lead.id).color }"
+                                    >
+                                        {{ avatarInitials(lead.name) }}
                                     </div>
-                                </td>
+                                    <div class="min-w-0">
+                                        <p class="max-w-[180px] truncate font-medium text-foreground">{{ lead.name }}</p>
+                                        <p class="max-w-[180px] truncate text-xs text-muted-foreground">{{ lead.email }}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <Link
+                                    v-if="lead.funnel"
+                                    :href="`/funnels/${lead.funnel.id}/edit`"
+                                    class="group inline-flex max-w-[160px] items-center gap-1 truncate text-xs font-medium text-foreground hover:text-teal-700"
+                                >
+                                    <Icon icon="heroicons:funnel" class="size-3 shrink-0 text-teal-600" />
+                                    {{ lead.funnel.name }}
+                                </Link>
+                                <span v-else class="text-xs text-muted-foreground">—</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <Badge
+                                    variant="outline"
+                                    class="text-[0.65rem] capitalize"
+                                    :class="lead.source === 'optin' ? 'border-teal-200 bg-teal-50 text-teal-700' : ''"
+                                >
+                                    {{ lead.source }}
+                                </Badge>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="text-xs text-foreground">{{ fmtDate(lead.created_at) }}</div>
+                                <div class="text-[0.65rem] text-muted-foreground">{{ fmtTime(lead.created_at) }}</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
-                                <!-- Funnel -->
-                                <td class="px-4 py-3">
-                                    <Link
-                                        v-if="lead.funnel"
-                                        :href="`/funnels/${lead.funnel.id}/edit`"
-                                        class="group inline-flex items-center gap-1 text-xs font-medium text-foreground hover:text-primary transition-colors"
-                                    >
-                                        <Icon icon="heroicons:funnel" class="size-3 text-muted-foreground group-hover:text-primary" />
-                                        <span class="truncate max-w-[140px]">{{ lead.funnel.name }}</span>
-                                    </Link>
-                                    <span v-else class="text-xs text-muted-foreground">—</span>
-                                </td>
-
-                                <!-- Source -->
-                                <td class="px-4 py-3">
-                                    <Badge
-                                        class="text-[0.65rem] capitalize px-1.5 py-0"
-                                        :class="lead.source === 'optin'
-                                            ? 'bg-[#40E0D0]/10 text-[#40E0D0] border-[#40E0D0]/25'
-                                            : 'bg-muted text-muted-foreground border-border'"
-                                    >
-                                        {{ lead.source }}
-                                    </Badge>
-                                </td>
-
-                                <!-- Date -->
-                                <td class="px-4 py-3">
-                                    <div class="text-xs text-foreground">{{ fmtDate(lead.created_at) }}</div>
-                                    <div class="text-[0.65rem] text-muted-foreground">{{ fmtTime(lead.created_at) }}</div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <!-- Pagination -->
+            <div v-if="leads.last_page > 1" class="flex items-center justify-between border-t border-border/60 px-4 py-3">
+                <p class="text-xs text-muted-foreground">
+                    Page {{ leads.current_page }} of {{ leads.last_page }}
+                </p>
+                <div class="flex items-center gap-1">
+                    <button
+                        v-for="link in leads.links"
+                        :key="link.label"
+                        :disabled="!link.url"
+                        class="inline-flex h-7 min-w-7 items-center justify-center rounded-lg border px-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                        :class="link.active
+                            ? 'border-teal-600 bg-teal-600 text-white'
+                            : 'border-border/60 bg-white text-foreground hover:bg-teal-50'"
+                        @click="link.url && router.get(link.url, {}, { preserveState: true })"
+                        v-html="link.label"
+                    />
                 </div>
-
-                <!-- Pagination -->
-                <div
-                    v-if="leads.last_page > 1"
-                    class="flex items-center justify-between border-t px-4 py-3"
-                >
-                    <p class="text-xs text-muted-foreground">
-                        Page {{ leads.current_page }} of {{ leads.last_page }}
-                    </p>
-
-                    <div class="flex items-center gap-1">
-                        <button
-                            v-for="link in leads.links"
-                            :key="link.label"
-                            :disabled="!link.url"
-                            class="inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                            :class="link.active
-                                ? 'bg-primary text-primary-foreground border-primary'
-                                : 'bg-background text-foreground border-border hover:bg-muted'"
-                            @click="link.url && router.get(link.url, {}, { preserveState: true })"
-                            v-html="link.label"
-                        />
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-
+            </div>
+        </div>
     </div>
 </template>

@@ -138,11 +138,25 @@ class LeadController extends Controller
             'integration_count' => $enabledIntegrations->count(),
         ]);
 
-        $request->session()->put("funnel_lead.{$funnel->id}", [
+        $sessionData = [
             'lead_id' => $lead->id,
             'name' => $lead->name,
             'email' => $lead->email,
-        ]);
+        ];
+        $request->session()->put("funnel_lead.{$funnel->id}", $sessionData);
+
+        $pitchSlug = (string) ($funnel->meta['pitch_funnel_slug'] ?? '');
+        if ($pitchSlug !== '') {
+            $pitchFunnel = Funnel::query()->where('user_id', $funnel->user_id)->where('slug', $pitchSlug)->first();
+            if ($pitchFunnel) {
+                $request->session()->put("funnel_lead.{$pitchFunnel->id}", $sessionData);
+            }
+
+            return redirect()->route('public.webinar', [
+                'username' => $username,
+                'slug' => $pitchSlug,
+            ]);
+        }
 
         return redirect()->route('public.webinar', [
             'username' => $username,

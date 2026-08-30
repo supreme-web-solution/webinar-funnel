@@ -23,6 +23,8 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import FreeTrafficPanel from '@/components/campaign-traffic/FreeTrafficPanel.vue';
+import type { FreeTrafficRoutes } from '@/composables/useFreeTrafficPanel';
 
 const props = defineProps<{
     funnel: {
@@ -30,6 +32,8 @@ const props = defineProps<{
         name: string;
         slug: string;
         status: string;
+        campaign_id?: number | null;
+        meta?: { campaign_variant?: string | null } | null;
         settings: {
             webinar_title?: string | null;
             webinar_description?: string | null;
@@ -110,6 +114,7 @@ const props = defineProps<{
     publicLinks: {
         optin: string;
         webinar: string;
+        optin_from_campaign_squeeze?: boolean;
     };
     traffic: {
         keywords: Array<{
@@ -221,11 +226,24 @@ const props = defineProps<{
         watched_to_end: number;
         avg_watch_seconds: number;
     };
+    campaignTrafficHubUrl?: string | null;
 }>();
 
 const page = usePage();
 const paidAdsEnabled = computed(() => page.props.paidAdsEnabled === true);
 const hasPaidTrafficAssets = computed(() => props.paidTrafficAssets !== null && props.paidTrafficAssets !== undefined);
+const isCampaignAttachedFunnel = computed(() => Boolean(props.funnel.campaign_id));
+const showFunnelTrafficTools = computed(() => !isCampaignAttachedFunnel.value);
+
+const freeTrafficRoutes = computed((): FreeTrafficRoutes => ({
+    filter: `/funnels/${props.funnel.id}/edit`,
+    keywords_store: `/funnels/${props.funnel.id}/traffic/keywords`,
+    keywords_update: `/funnels/${props.funnel.id}/traffic/keywords/__ID__`,
+    keywords_destroy: `/funnels/${props.funnel.id}/traffic/keywords/__ID__`,
+    keywords_fetch: `/funnels/${props.funnel.id}/traffic/keywords/__ID__/fetch`,
+    settings_patch: `/funnels/${props.funnel.id}/settings`,
+    draft_reply: `/funnels/${props.funnel.id}/traffic/mentions/__ID__/draft-reply`,
+}));
 
 const optinPage = props.funnel.pages.find((p) => p.page_type === 'optin');
 
@@ -282,7 +300,7 @@ const publishing    = ref(false);
 const activeTab     = ref('optin');
 
 const funnelTabTriggerClass =
-    'relative flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-2 text-center text-[0.65rem] leading-tight xl:min-h-0 xl:flex-1 xl:flex-row xl:gap-1.5 xl:px-3 xl:py-1.5 xl:text-xs xl:whitespace-nowrap';
+    'relative flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-2 text-center text-[0.65rem] leading-tight text-muted-foreground transition-colors data-[state=active]:bg-teal-600 data-[state=active]:text-white data-[state=active]:shadow-sm xl:min-h-0 xl:flex-1 xl:flex-row xl:gap-1.5 xl:px-3 xl:py-1.5 xl:text-xs xl:whitespace-nowrap';
 const funnelTabIconClass = 'size-4 shrink-0 xl:size-3.5';
 const funnelTabBadgeClass =
     'absolute right-1 top-1 flex size-4 items-center justify-center rounded-full text-[0.6rem] font-bold xl:relative xl:right-auto xl:top-auto xl:ml-0.5';
@@ -311,6 +329,13 @@ watch(activeTab, (tab) => {
     }
     if (tab === 'ai-assistant' && aiSourcesList.value.length === 0 && props.aiSourceUrls.index) {
         void loadAiSources();
+    }
+});
+
+onMounted(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'webinar') {
+        activeTab.value = 'webinar';
     }
 });
 
@@ -496,56 +521,6 @@ const saveSettings = (): void => {
         },
     });
 };
-
-function trafficAiSettingsPayload(): Record<string, unknown> {
-    const linkOverride = settingsForm.traffic_ai_link_override.trim();
-
-    return {
-        chat_mode: settingsForm.chat_mode,
-        allow_replay: settingsForm.allow_replay,
-        traffic_ai_reply_enabled: settingsForm.traffic_ai_reply_enabled,
-        traffic_ai_link_override: linkOverride === '' ? null : linkOverride,
-        traffic_ai_extra_context: settingsForm.traffic_ai_extra_context,
-        traffic_ai_social_account_ids: { ...settingsForm.traffic_ai_social_account_ids },
-    };
-}
-
-function patchTrafficAiSettings(successMessage: string, onErrorRevert?: () => void): void {
-    autoAssignTrafficAccounts();
-    trafficAiLinkError.value = null;
-    savingSettings.value = true;
-    router.patch(`/funnels/${props.funnel.id}/settings`, trafficAiSettingsPayload(), {
-        preserveScroll: true,
-        onSuccess: () => {
-            toast.success(successMessage);
-        },
-        onError: (errors) => {
-            const linkErr = errors.traffic_ai_link_override;
-            const linkMsg = Array.isArray(linkErr) ? linkErr[0] : linkErr;
-            trafficAiLinkError.value = typeof linkMsg === 'string' ? linkMsg : null;
-            const first = linkMsg ?? errors.traffic_ai_reply_enabled ?? Object.values(errors)[0];
-            toast.error(typeof first === 'string' ? first : 'Could not save auto-reply settings.');
-            onErrorRevert?.();
-        },
-        onFinish: () => {
-            savingSettings.value = false;
-        },
-    });
-}
-
-function saveTrafficAiReplyEnabled(enabled: boolean): void {
-    settingsForm.traffic_ai_reply_enabled = enabled;
-    patchTrafficAiSettings(
-        enabled ? 'Traffic AI reply enabled' : 'Traffic AI reply disabled',
-        () => {
-            settingsForm.traffic_ai_reply_enabled = !enabled;
-        },
-    );
-}
-
-function saveTrafficAiSettings(): void {
-    patchTrafficAiSettings('Auto-reply settings saved');
-}
 
 watch(
     () => props.funnel.settings,
@@ -875,509 +850,6 @@ const toggleSourceChunks = (source: { id: number; chunks_url: string }): void =>
     }
     expandedSourceIds.value = next;
 };
-
-/* ─── Traffic Settings state ───────────────────────────────────────────── */
-const trafficSearch = ref(props.traffic.filters.search ?? '');
-const trafficPlatform = ref(props.traffic.filters.platform ?? '');
-const trafficKeywordId = ref<number | string>(props.traffic.filters.keyword_id ?? '');
-const trafficKeywordModalOpen = ref(false);
-const trafficAiSectionOpen = ref(false);
-let trafficDebounce: ReturnType<typeof setTimeout>;
-
-const trafficKeywordForm = useForm({
-    name: '',
-    platforms: ['reddit', 'youtube', 'twitter', 'news'],
-});
-
-const PLATFORM_OPTIONS = ['reddit', 'youtube', 'twitter', 'news'];
-const PLATFORM_META: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-    reddit: { label: 'Reddit', icon: 'simple-icons:reddit', color: '#ff6b35', bg: 'rgba(255,69,0,0.12)' },
-    youtube: { label: 'YouTube', icon: 'simple-icons:youtube', color: '#ff4444', bg: 'rgba(255,0,0,0.12)' },
-    twitter: { label: 'Twitter', icon: 'simple-icons:x', color: '#e2e8f0', bg: 'rgba(255,255,255,0.08)' },
-    news: { label: 'News', icon: 'heroicons:newspaper', color: '#4e9af1', bg: 'rgba(26,115,232,0.12)' },
-};
-
-function trafficPlatformMeta(key: string) {
-    const normalized = String(key).toLowerCase();
-    return PLATFORM_META[normalized] ?? { label: key, icon: 'heroicons:globe-alt', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' };
-}
-
-const trafficMaxKeywords = computed(() => props.traffic.limits.max_keywords_per_funnel);
-const trafficMaxMentionsPerKeyword = computed(() => props.traffic.limits.max_mentions_per_keyword);
-const trafficAtKeywordLimit = computed(
-    () => props.traffic.keywords.length >= trafficMaxKeywords.value,
-);
-
-const trafficSuggestedKeywords = computed(() => props.traffic.suggested_keywords ?? []);
-
-const trafficRemainingKeywordSlots = computed(() =>
-    Math.max(0, trafficMaxKeywords.value - props.traffic.keywords.length),
-);
-
-function trafficKeywordIsTracked(name: string): boolean {
-    const needle = name.trim().toLowerCase();
-
-    return props.traffic.keywords.some((kw) => kw.name.trim().toLowerCase() === needle);
-}
-
-const trafficKeywordCapTooltip = computed(
-    () =>
-        `This keyword hit the ${trafficMaxMentionsPerKeyword.value.toLocaleString()} mention limit. Fetching was paused automatically. Delete some mentions, or delete this keyword and add a new one to fetch again.`,
-);
-
-const trafficKeywordFetchCapTooltip = computed(
-    () =>
-        `Fetch is off — this keyword reached the ${trafficMaxMentionsPerKeyword.value.toLocaleString()} mention limit and was paused automatically.`,
-);
-
-function trafficKeywordShowsPaused(kw: { is_active: boolean; mention_cap_reached: boolean }): boolean {
-    return kw.mention_cap_reached || !kw.is_active;
-}
-
-/** Active tracking: show pause icon (click to pause). Paused: show play icon (click to resume). */
-function trafficKeywordIsFetching(kw: { is_active: boolean; mention_cap_reached: boolean }): boolean {
-    return kw.is_active && !kw.mention_cap_reached;
-}
-
-function trafficKeywordPlayPauseDisabled(kw: { mention_cap_reached: boolean }): boolean {
-    return kw.mention_cap_reached;
-}
-
-function trafficKeywordFilterActive(kw: { id: number }): boolean {
-    return String(trafficKeywordId.value) === String(kw.id);
-}
-
-const TRAFFIC_PLATFORM_PICK_ORDER = ['twitter', 'youtube', 'reddit', 'news'] as const;
-
-function firstTrafficPlatformWithMentions(counts: Record<string, number>): string {
-    for (const key of TRAFFIC_PLATFORM_PICK_ORDER) {
-        if ((counts[key] ?? 0) > 0) {
-            return key;
-        }
-    }
-
-    for (const [key, count] of Object.entries(counts)) {
-        if (count > 0) {
-            return key.toLowerCase();
-        }
-    }
-
-    return '';
-}
-
-function pickTrafficPlatformForKeyword(counts: Record<string, number>): string {
-    const current = String(trafficPlatform.value).toLowerCase();
-
-    if (current && (counts[current] ?? 0) > 0) {
-        return current;
-    }
-
-    return firstTrafficPlatformWithMentions(counts);
-}
-
-function syncTrafficPlatformToKeywordStats(): void {
-    if (!trafficKeywordId.value) {
-        return;
-    }
-
-    const counts = props.traffic.stats.platforms ?? {};
-    const next = pickTrafficPlatformForKeyword(counts);
-    const current = String(trafficPlatform.value).toLowerCase();
-
-    if (next !== current) {
-        trafficPlatform.value = next;
-    }
-}
-
-function toggleTrafficKeywordFilter(kw: {
-    id: number;
-    mention_counts_by_platform?: Record<string, number>;
-}): void {
-    if (trafficKeywordFilterActive(kw)) {
-        trafficKeywordId.value = '';
-
-        return;
-    }
-
-    trafficKeywordId.value = kw.id;
-    trafficPlatform.value = pickTrafficPlatformForKeyword(kw.mention_counts_by_platform ?? {});
-}
-
-const trafficActiveKeyword = computed(() => {
-    if (!trafficKeywordId.value) {
-        return null;
-    }
-
-    return props.traffic.keywords.find((kw) => String(kw.id) === String(trafficKeywordId.value)) ?? null;
-});
-
-const trafficStatsScopeLabel = computed(() =>
-    trafficActiveKeyword.value ? `for #${trafficActiveKeyword.value.name}` : 'all keywords',
-);
-
-const trafficPlatformTabs = computed(() => {
-    const platformLabels: Record<string, string> = {
-        reddit: 'Reddit',
-        youtube: 'YouTube',
-        twitter: 'X (Twitter)',
-        news: 'News',
-    };
-
-    const all = { key: '', label: 'All', count: props.traffic.stats.total };
-    const entries = Object.entries(props.traffic.stats.platforms ?? {}).map(([k, v]) => {
-        const key = String(k).toLowerCase();
-
-        return {
-            key,
-            label: platformLabels[key] ?? key.charAt(0).toUpperCase() + key.slice(1),
-            count: Number(v),
-        };
-    });
-
-    return [all, ...entries];
-});
-
-watch([trafficSearch, trafficPlatform, trafficKeywordId], ([s, p, k]) => {
-    clearTimeout(trafficDebounce);
-    trafficDebounce = setTimeout(() => {
-        router.get(`/funnels/${props.funnel.id}/edit`, {
-            traffic_search: s || undefined,
-            traffic_platform: p || undefined,
-            traffic_keyword_id: k || undefined,
-            page: 1,
-        }, {
-            preserveState: true,
-            replace: true,
-            preserveScroll: true,
-        });
-    }, 350);
-});
-
-watch(
-    () => [props.traffic.filters.keyword_id, props.traffic.stats.platforms] as const,
-    () => {
-        syncTrafficPlatformToKeywordStats();
-    },
-    { immediate: true },
-);
-
-const goToTrafficMentionsPage = (url: string | null): void => {
-    if (!url) {
-        return;
-    }
-
-    router.get(url, {}, { preserveState: true, preserveScroll: true });
-};
-
-function toggleTrafficPlatform(p: string): void {
-    const idx = trafficKeywordForm.platforms.indexOf(p);
-    if (idx === -1) trafficKeywordForm.platforms.push(p);
-    else trafficKeywordForm.platforms.splice(idx, 1);
-}
-
-function resetTrafficKeywordForm(): void {
-    trafficKeywordForm.reset();
-    trafficKeywordForm.platforms = ['reddit', 'youtube', 'twitter', 'news'];
-    trafficKeywordForm.clearErrors();
-}
-
-function openTrafficKeywordModal(): void {
-    if (trafficAtKeywordLimit.value) {
-        return;
-    }
-
-    resetTrafficKeywordForm();
-    trafficKeywordModalOpen.value = true;
-}
-
-function closeTrafficKeywordModal(): void {
-    trafficKeywordModalOpen.value = false;
-    resetTrafficKeywordForm();
-}
-
-function submitTrafficKeyword(): void {
-    trafficKeywordForm.post(`/funnels/${props.funnel.id}/traffic/keywords`, {
-        preserveScroll: true,
-        onSuccess: () => {
-            if (trafficAtKeywordLimit.value) {
-                closeTrafficKeywordModal();
-            }
-        },
-    });
-}
-
-function selectTrafficSuggestedKeyword(keyword: string): void {
-    if (trafficAtKeywordLimit.value || trafficKeywordIsTracked(keyword)) {
-        return;
-    }
-
-    trafficKeywordForm.name = keyword;
-}
-
-function addTrafficSuggestedKeyword(keyword: string): void {
-    if (trafficAtKeywordLimit.value || trafficKeywordIsTracked(keyword) || trafficKeywordForm.processing) {
-        return;
-    }
-
-    trafficKeywordForm.name = keyword;
-    submitTrafficKeyword();
-}
-
-function toggleTrafficKeywordActive(keyword: {
-    id: number;
-    is_active: boolean;
-    mention_cap_reached: boolean;
-}): void {
-    if (trafficKeywordPlayPauseDisabled(keyword)) {
-        return;
-    }
-
-    router.patch(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}`, {
-        is_active: !keyword.is_active,
-    }, { preserveScroll: true });
-}
-
-function canFetchTrafficKeyword(keyword: { mention_cap_reached: boolean }): boolean {
-    return !keyword.mention_cap_reached;
-}
-
-function toggleTrafficKeywordNotifications(keyword: { id: number; email_notifications: boolean }): void {
-    router.patch(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}`, {
-        email_notifications: !keyword.email_notifications,
-    }, { preserveScroll: true });
-}
-
-function fetchTrafficKeywordNow(keyword: { id: number }): void {
-    router.post(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}/fetch`, {}, { preserveScroll: true });
-}
-
-function deleteTrafficKeyword(keyword: { id: number; name: string }): void {
-    if (!window.confirm(`Delete keyword "${keyword.name}" and its mentions?`)) return;
-    router.delete(`/funnels/${props.funnel.id}/traffic/keywords/${keyword.id}`, { preserveScroll: true });
-}
-
-function fmtTrafficDate(dt: string | null): string {
-    if (!dt) return '';
-    const d = new Date(dt);
-    const now = Date.now();
-    const diff = (now - d.getTime()) / 1000;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-type TrafficMentionReplyAttempt = NonNullable<
-    (typeof props.traffic.mentions.data)[number]['traffic_reply_attempt']
->;
-
-function trafficReplyPostBlockedMessage(attempt: TrafficMentionReplyAttempt): boolean {
-    const err = (attempt.last_error ?? '').toLowerCase();
-    if (err === '') {
-        return false;
-    }
-
-    return (
-        err.includes('too old') ||
-        err.includes('rate limit') ||
-        err.includes('archived') ||
-        err.includes('locked') ||
-        err.includes('cannot comment')
-    );
-}
-
-function trafficReplyStatusMeta(attempt: TrafficMentionReplyAttempt | null | undefined): {
-    label: string;
-    class: string;
-} | null {
-    if (!attempt) {
-        return null;
-    }
-
-    if (attempt.status === 'failed') {
-        if (trafficReplyPostBlockedMessage(attempt)) {
-            return {
-                label: 'Not posted',
-                class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400',
-            };
-        }
-
-        return {
-            label: 'Could not post',
-            class: 'border-slate-500/40 bg-slate-500/10 text-muted-foreground',
-        };
-    }
-
-    const map: Record<string, { label: string; class: string }> = {
-        posted: { label: 'Auto-replied', class: 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400' },
-        queued_post: { label: 'Posting…', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
-        generating: { label: 'Generating…', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
-        pending_evaluation: { label: 'Queued', class: 'border-slate-500/40 bg-slate-500/10 text-muted-foreground' },
-        skipped_gate: { label: 'Filtered out', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
-        skipped_no_account: { label: 'No account', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
-        skipped_daily_cap: { label: 'Daily cap', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
-        skipped_unsupported: { label: 'Not supported', class: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-400' },
-    };
-
-    return map[attempt.status] ?? {
-        label: attempt.status.replaceAll('_', ' '),
-        class: 'border-border bg-muted/30 text-muted-foreground',
-    };
-}
-
-function trafficReplyStatusHint(attempt: TrafficMentionReplyAttempt | null | undefined): string | null {
-    if (!attempt) {
-        return null;
-    }
-
-    if (attempt.status === 'posted' && attempt.posted_at) {
-        return `Posted ${fmtTrafficDate(attempt.posted_at)}`;
-    }
-
-    if (attempt.last_error) {
-        return attempt.last_error;
-    }
-
-    if (attempt.skip_reason) {
-        return attempt.skip_reason.replaceAll('_', ' ');
-    }
-
-    return null;
-}
-
-function trafficMentionAutoReplied(attempt: TrafficMentionReplyAttempt | null | undefined): boolean {
-    return attempt?.status === 'posted';
-}
-
-type TrafficMentionRow = (typeof props.traffic.mentions.data)[number];
-
-const trafficReplyDraftModalOpen = ref(false);
-const trafficReplyDraftLoading = ref(false);
-const trafficReplyDraftText = ref('');
-const trafficReplyDraftWarning = ref<string | null>(null);
-const trafficReplyDraftSource = ref<'openai' | 'fallback' | null>(null);
-const trafficReplyDraftMention = ref<TrafficMentionRow | null>(null);
-const trafficAiLinkError = ref<string | null>(null);
-
-function trafficMentionCanDraftReply(mention: TrafficMentionRow): boolean {
-    return String(mention.source_type ?? '').toLowerCase() !== 'news';
-}
-
-async function openTrafficReplyDraftModal(mention: TrafficMentionRow): Promise<void> {
-    trafficReplyDraftMention.value = mention;
-    trafficReplyDraftText.value = '';
-    trafficReplyDraftWarning.value = null;
-    trafficReplyDraftSource.value = null;
-    trafficReplyDraftModalOpen.value = true;
-    trafficReplyDraftLoading.value = true;
-
-    try {
-        const response = await fetch(`/funnels/${props.funnel.id}/traffic/mentions/${mention.id}/draft-reply`, {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '',
-            },
-        });
-
-        const payload = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            trafficReplyDraftModalOpen.value = false;
-            toast.error(typeof payload.message === 'string' ? payload.message : 'Could not generate reply.');
-
-            return;
-        }
-
-        trafficReplyDraftText.value = typeof payload.reply === 'string' ? payload.reply : '';
-        trafficReplyDraftSource.value = payload.source === 'openai' || payload.source === 'fallback' ? payload.source : null;
-        trafficReplyDraftWarning.value = typeof payload.warning === 'string' ? payload.warning : null;
-
-        if (trafficReplyDraftWarning.value) {
-            toast.warning(trafficReplyDraftWarning.value);
-        }
-    } catch {
-        trafficReplyDraftModalOpen.value = false;
-        toast.error('Could not generate reply.');
-    } finally {
-        trafficReplyDraftLoading.value = false;
-    }
-}
-
-async function copyTrafficReplyDraft(): Promise<void> {
-    if (!trafficReplyDraftText.value) {
-        return;
-    }
-
-    try {
-        await navigator.clipboard.writeText(trafficReplyDraftText.value);
-        toast.success('Reply copied to clipboard');
-    } catch {
-        toast.error('Could not copy to clipboard');
-    }
-}
-
-const trafficReplyPlatforms = [
-    { key: 'reddit' as const, label: 'Reddit', icon: 'simple-icons:reddit', color: '#ff6b35' },
-    { key: 'youtube' as const, label: 'YouTube', icon: 'simple-icons:youtube', color: '#ff0000' },
-    { key: 'twitter' as const, label: 'X (Twitter)', icon: 'simple-icons:x', color: '#e2e8f0' },
-];
-
-function trafficAccountsForPlatform(platform: string): Array<{ id: number; platform: string; platform_username: string | null }> {
-    return props.traffic.social_accounts.filter((a) => a.platform === platform || (platform === 'twitter' && a.platform === 'x'));
-}
-
-function trafficAccountForPlatform(platform: 'reddit' | 'youtube' | 'twitter') {
-    return trafficAccountsForPlatform(platform)[0] ?? null;
-}
-
-const trafficMaxRepliesPerDay = computed(() => props.traffic.max_replies_per_day_per_account ?? 20);
-
-function trafficRepliesPostedToday(platform: 'reddit' | 'youtube' | 'twitter'): number {
-    const account = trafficAccountForPlatform(platform);
-    if (!account) {
-        return 0;
-    }
-    const resetOn = account.posts_today_reset_on;
-    if (resetOn) {
-        const resetDate = new Date(resetOn);
-        const today = new Date();
-        if (
-            resetDate.getFullYear() !== today.getFullYear()
-            || resetDate.getMonth() !== today.getMonth()
-            || resetDate.getDate() !== today.getDate()
-        ) {
-            return 0;
-        }
-    }
-    return account.posts_today ?? 0;
-}
-
-/** One Zernio account per platform — wire IDs automatically. */
-function autoAssignTrafficAccounts(): boolean {
-    let changed = false;
-    for (const p of trafficReplyPlatforms) {
-        const account = trafficAccountForPlatform(p.key);
-        if (account && settingsForm.traffic_ai_social_account_ids[p.key] !== account.id) {
-            settingsForm.traffic_ai_social_account_ids[p.key] = account.id;
-            changed = true;
-        }
-        if (!account && settingsForm.traffic_ai_social_account_ids[p.key] !== null) {
-            settingsForm.traffic_ai_social_account_ids[p.key] = null;
-            changed = true;
-        }
-    }
-    return changed;
-}
-
-autoAssignTrafficAccounts();
-
-function trunc(text: string | null, len = 200): string {
-    if (!text) return '';
-    return text.length > len ? `${text.slice(0, len)}…` : text;
-}
 
 /** Converts common YouTube/Vimeo URLs into an embeddable iframe src. */
 function toVideoEmbedUrl(raw: string): string {
@@ -1967,145 +1439,109 @@ onUnmounted(() => {
 <template>
     <Head :title="`Edit — ${funnel.name}`" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 md:p-6">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
 
-        <!-- ── Page header ── -->
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div class="flex items-start gap-3 min-w-0">
-                <Button as-child variant="ghost" size="sm" class="shrink-0 text-muted-foreground h-8 px-2 -ml-1 mt-0.5">
-                    <Link href="/dashboard">
-                        <Icon icon="heroicons:arrow-left" class="size-4" />
-                    </Link>
-                </Button>
-                <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <h1 class="text-xl font-bold tracking-tight text-foreground truncate">{{ funnel.name }}</h1>
-                        <Badge
-                            class="capitalize text-[0.65rem] px-2 py-0.5 shrink-0"
-                            :class="funnel.status === 'published'
-                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                                : funnel.status === 'archived'
-                                    ? 'bg-slate-100 text-slate-700 border-slate-200'
-                                    : 'bg-amber-50 text-amber-700 border-amber-200'"
-                        >
-                            <span
-                                v-if="funnel.status === 'published'"
-                                class="mr-1 inline-block size-1.5 rounded-full bg-emerald-500"
-                            />
-                            {{ funnel.status }}
-                        </Badge>
+        <!-- Header -->
+        <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div class="flex min-w-0 items-start gap-3">
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
+                        <Icon icon="heroicons:video-camera" class="size-5 text-teal-600" />
                     </div>
-                    <p class="text-xs text-muted-foreground mt-0.5">/{{ funnel.slug }}</p>
-                </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap justify-end">
-                <!-- Compact video stats chip -->
-                <TooltipProvider :delay-duration="120">
-                    <Tooltip>
-                        <TooltipTrigger as-child>
-                            <button
-                                type="button"
-                                class="hidden md:inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 h-8 text-[0.7rem] font-medium hover:bg-muted/70 transition-colors"
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h1 class="truncate text-xl font-bold tracking-tight md:text-2xl">{{ funnel.name }}</h1>
+                            <Badge
+                                variant="outline"
+                                class="capitalize text-[0.65rem]"
+                                :class="funnel.status === 'published'
+                                    ? 'border-teal-200 bg-teal-50 text-teal-700'
+                                    : funnel.status === 'archived'
+                                        ? 'border-slate-200 bg-slate-50 text-slate-700'
+                                        : 'border-amber-200 bg-amber-50 text-amber-700'"
                             >
-                                <span class="inline-flex items-center gap-1 text-muted-foreground">
-                                    <Icon icon="heroicons:eye" class="size-3.5" />
-                                    <span class="text-foreground tabular-nums">{{ props.videoStats.accessed.toLocaleString() }}</span>
-                                </span>
-                                <span class="inline-block h-3 w-px bg-border" />
-                                <span class="inline-flex items-center gap-1 text-muted-foreground">
-                                    <Icon icon="heroicons:play" class="size-3.5" />
-                                    <span class="text-[#0aa89a] tabular-nums">{{ props.videoStats.watched_60s.toLocaleString() }}</span>
-                                </span>
-                                <Icon icon="heroicons:chevron-down" class="size-3 text-muted-foreground" />
-                            </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" align="end" class="px-3 py-2 max-w-[260px]">
-                            <p class="text-[0.65rem] font-semibold uppercase tracking-wide opacity-70 mb-1.5">Video watch stats</p>
-                            <div class="space-y-1 text-[0.7rem]">
-                                <div class="flex justify-between gap-4"><span class="opacity-80">Accessed link</span><span class="font-semibold tabular-nums">{{ props.videoStats.accessed.toLocaleString() }}</span></div>
-                                <div class="flex justify-between gap-4"><span class="opacity-80">Watched 60s</span><span class="font-semibold tabular-nums">{{ props.videoStats.watched_60s.toLocaleString() }}</span></div>
-                                <div class="flex justify-between gap-4"><span class="opacity-80">Watched 50%</span><span class="font-semibold tabular-nums">{{ props.videoStats.watched_50_percent.toLocaleString() }}</span></div>
-                                <div class="flex justify-between gap-4"><span class="opacity-80">Watched end</span><span class="font-semibold tabular-nums">{{ props.videoStats.watched_to_end.toLocaleString() }}</span></div>
-                                <div class="flex justify-between gap-4"><span class="opacity-80">Avg watch (s)</span><span class="font-semibold tabular-nums">{{ props.videoStats.avg_watch_seconds.toLocaleString() }}</span></div>
-                            </div>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                                {{ funnel.status }}
+                            </Badge>
+                        </div>
+                        <p class="mt-0.5 truncate font-mono text-xs text-muted-foreground">/{{ funnel.slug }}</p>
+                        <div class="mt-2 hidden md:flex flex-wrap items-center gap-2">
+                            <span class="inline-flex items-center gap-1 rounded-md bg-muted/50 px-2 py-0.5 text-[0.65rem] text-foreground">
+                                <Icon icon="heroicons:eye" class="size-3 text-teal-600" />
+                                {{ props.videoStats.accessed.toLocaleString() }} views
+                            </span>
+                            <span class="inline-flex items-center gap-1 rounded-md bg-muted/50 px-2 py-0.5 text-[0.65rem] text-foreground">
+                                <Icon icon="heroicons:play" class="size-3 text-teal-600" />
+                                {{ props.videoStats.watched_60s.toLocaleString() }} watched 60s
+                            </span>
+                        </div>
+                    </div>
+                </div>
 
-                <Button as-child variant="outline" size="sm" class="h-8 text-xs gap-1.5">
-                    <a :href="`/funnels/${funnel.id}/chat`">
-                        <Icon icon="heroicons:chat-bubble-left-right" class="size-3.5" />
-                        Chat Manager
-                    </a>
-                </Button>
-
-                <!-- Share button -->
-                <Button
-                    variant="outline"
-                    size="sm"
-                    class="h-8 text-xs gap-1.5"
-                    @click="shareModalOpen = true"
-                >
-                    <Icon icon="heroicons:share" class="size-3.5" />
-                    Share
-                </Button>
-
-                <Button
-                    v-if="funnel.status === 'published'"
-                    variant="outline"
-                    size="sm"
-                    class="h-8 text-xs gap-1.5"
-                    :disabled="publishing"
-                    @click="unpublish"
-                >
-                    <Icon icon="heroicons:arrow-uturn-left" class="size-3.5" />
-                    Unpublish
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    class="h-8 text-xs gap-1.5"
-                    :disabled="publishing"
-                    @click="archive"
-                >
-                    <Icon icon="heroicons:archive-box" class="size-3.5" />
-                    Archive
-                </Button>
-                <Button
-                    size="sm"
-                    class="h-8 text-xs gap-1.5 font-semibold"
-                    :class="funnel.status === 'published'
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                        : 'bg-primary text-primary-foreground hover:opacity-90'"
-                    :disabled="publishing"
-                    @click="publish"
-                >
-                    <Icon
-                        v-if="publishing"
-                        icon="heroicons:arrow-path"
-                        class="size-3.5 animate-spin"
-                    />
-                    <Icon v-else icon="heroicons:rocket-launch" class="size-3.5" />
-                    {{ publishing ? 'Publishing…' : funnel.status === 'published' ? 'Re-publish' : 'Publish' }}
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    class="h-8 text-xs gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5"
-                    :disabled="publishing"
-                    @click="removeFunnel"
-                >
-                    <Icon icon="heroicons:trash" class="size-3.5" />
-                    Delete
-                </Button>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    <Button as-child variant="brand-outline" size="sm">
+                        <Link href="/funnels">
+                            <Icon icon="heroicons:arrow-left" class="size-3.5" />
+                            All funnels
+                        </Link>
+                    </Button>
+                    <Button as-child variant="brand-outline" size="sm">
+                        <a :href="`/funnels/${funnel.id}/chat`">
+                            <Icon icon="heroicons:chat-bubble-left-right" class="size-3.5" />
+                            Chat
+                        </a>
+                    </Button>
+                    <Button variant="brand-outline" size="sm" @click="shareModalOpen = true">
+                        <Icon icon="heroicons:share" class="size-3.5" />
+                        Share
+                    </Button>
+                    <Button
+                        v-if="funnel.status === 'published'"
+                        variant="brand-outline"
+                        size="sm"
+                        :disabled="publishing"
+                        @click="unpublish"
+                    >
+                        Unpublish
+                    </Button>
+                    <Button variant="brand" size="sm" :disabled="publishing" @click="publish">
+                        <Icon v-if="publishing" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
+                        <Icon v-else icon="heroicons:rocket-launch" class="size-3.5" />
+                        {{ publishing ? 'Publishing…' : funnel.status === 'published' ? 'Re-publish' : 'Publish' }}
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        class="text-muted-foreground hover:text-destructive"
+                        :disabled="publishing"
+                        @click="removeFunnel"
+                    >
+                        <Icon icon="heroicons:trash" class="size-3.5" />
+                    </Button>
+                </div>
             </div>
         </div>
 
-        <!-- ── Tabs ── -->
-        <Tabs v-model="activeTab" default-value="optin" class="space-y-5">
-            <TabsList class="h-auto w-full gap-1 rounded-xl bg-muted p-1 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:inline-flex xl:w-fit xl:flex-nowrap">
+        <!-- Campaign traffic hub notice -->
+        <div
+            v-if="campaignTrafficHubUrl"
+            class="flex flex-col gap-3 rounded-xl border border-teal-200/60 bg-teal-50/30 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+        >
+            <div class="flex items-start gap-3">
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-teal-500/15 bg-teal-500/10">
+                    <Icon icon="heroicons:signal" class="size-5 text-teal-600" />
+                </div>
+                <div>
+                    <p class="text-sm font-semibold text-foreground">Traffic lives in the campaign hub</p>
+                    <p class="text-xs text-muted-foreground">Free traffic, social posts, calendar & paid ads are managed per campaign — not in the webinar editor.</p>
+                </div>
+            </div>
+            <Button as-child variant="brand" size="sm" class="shrink-0">
+                <Link :href="campaignTrafficHubUrl">Open traffic hub</Link>
+            </Button>
+        </div>
+
+        <Tabs v-model="activeTab" default-value="optin" class="space-y-4">
+            <TabsList class="grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-border/60 bg-white p-1.5 shadow-sm sm:grid-cols-4 md:grid-cols-5 xl:inline-flex xl:w-fit xl:flex-nowrap">
                 <TabsTrigger value="optin" :class="funnelTabTriggerClass">
                     <Icon icon="heroicons:cursor-arrow-ripple" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Opt-in Editor</span>
@@ -2130,15 +1566,15 @@ onUnmounted(() => {
                     <Icon icon="heroicons:link" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Share Links</span>
                 </TabsTrigger>
-                <TabsTrigger value="promotion" :class="funnelTabTriggerClass">
+                <TabsTrigger v-if="showFunnelTrafficTools" value="promotion" :class="funnelTabTriggerClass">
                     <Icon icon="heroicons:megaphone" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Promotion</span>
                 </TabsTrigger>
-                <TabsTrigger v-if="hasPaidTrafficAssets" value="paid-traffic-assets" :class="funnelTabTriggerClass">
+                <TabsTrigger v-if="showFunnelTrafficTools && hasPaidTrafficAssets" value="paid-traffic-assets" :class="funnelTabTriggerClass">
                     <Icon icon="heroicons:rectangle-stack" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Marketing Assets</span>
                 </TabsTrigger>
-                <TabsTrigger v-if="paidAdsEnabled" value="ads" :class="funnelTabTriggerClass">
+                <TabsTrigger v-if="showFunnelTrafficTools && paidAdsEnabled" value="ads" :class="funnelTabTriggerClass">
                     <Icon icon="heroicons:rocket-launch" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Paid Ads</span>
                     <span
@@ -2153,12 +1589,12 @@ onUnmounted(() => {
                     <span class="max-w-full truncate">Chat</span>
                     <span
                         v-if="conversationSummaries.length > 0"
-                        :class="[funnelTabBadgeClass, 'bg-primary text-primary-foreground']"
+                        :class="[funnelTabBadgeClass, 'bg-teal-600 text-white']"
                     >
                         {{ conversationSummaries.length }}
                     </span>
                 </TabsTrigger>
-                <TabsTrigger value="traffic" :class="funnelTabTriggerClass">
+                <TabsTrigger v-if="showFunnelTrafficTools" value="traffic" :class="funnelTabTriggerClass">
                     <Icon icon="heroicons:megaphone" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Traffic Settings</span>
                 </TabsTrigger>
@@ -2168,7 +1604,7 @@ onUnmounted(() => {
             <TabsContent value="optin" force-mount class="m-0 p-0 data-[state=inactive]:hidden">
                 <!-- Full-height 3-pane editor workspace -->
                 <div
-                    class="flex flex-col overflow-hidden border shadow-sm"
+                    class="flex flex-col overflow-hidden border border-border/60 bg-white shadow-sm"
                     :class="isFullscreen
                         ? 'fixed inset-0 z-50 rounded-none'
                         : 'rounded-xl'"
@@ -2199,7 +1635,7 @@ onUnmounted(() => {
                         <button
                             title="Desktop preview"
                             class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                            :class="activeDevice === 'desktop' ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            :class="activeDevice === 'desktop' ? 'bg-teal-500/10 text-teal-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                             @click="setDevice('desktop')"
                         >
                             <Icon icon="heroicons:computer-desktop" class="size-3.5" />
@@ -2208,7 +1644,7 @@ onUnmounted(() => {
                         <button
                             title="Mobile preview"
                             class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                            :class="activeDevice === 'mobile' ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            :class="activeDevice === 'mobile' ? 'bg-teal-500/10 text-teal-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                             @click="setDevice('mobile')"
                         >
                             <Icon icon="heroicons:device-phone-mobile" class="size-3.5" />
@@ -2227,7 +1663,7 @@ onUnmounted(() => {
                         <button
                             title="Toggle Styles panel"
                             class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                            :class="showStyles ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            :class="showStyles ? 'bg-teal-500/10 text-teal-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                             @click="showStyles = !showStyles"
                         >
                             <Icon icon="heroicons:paint-brush" class="size-3.5" />
@@ -2238,7 +1674,7 @@ onUnmounted(() => {
                         <button
                             :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'"
                             class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                            :class="isFullscreen ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            :class="isFullscreen ? 'bg-teal-500/10 text-teal-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                             @click="toggleFullscreen"
                         >
                             <Icon
@@ -2252,8 +1688,7 @@ onUnmounted(() => {
 
                         <!-- Save button -->
                         <Button
-                            size="sm"
-                            class="h-7 gap-1.5 bg-primary text-xs text-primary-foreground hover:opacity-90"
+                            variant="brand" size="sm" class="h-7 gap-1.5 text-xs"
                             :disabled="savingPage || pageForm.processing"
                             @click="savePage"
                         >
@@ -2508,7 +1943,7 @@ onUnmounted(() => {
                                 </div>
                                 <div class="rounded-lg border bg-muted/30 p-2.5">
                                     <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Watched 50%</p>
-                                    <p class="mt-0.5 text-lg font-bold text-violet-600 tabular-nums">{{ props.videoStats.watched_50_percent.toLocaleString() }}</p>
+                                    <p class="mt-0.5 text-lg font-bold text-teal-600 tabular-nums">{{ props.videoStats.watched_50_percent.toLocaleString() }}</p>
                                 </div>
                                 <div class="rounded-lg border bg-muted/30 p-2.5">
                                     <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Watched End</p>
@@ -2539,8 +1974,7 @@ onUnmounted(() => {
 
                 <div class="flex justify-end">
                     <Button
-                        size="sm"
-                        class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                        variant="brand" size="sm" class="gap-1.5"
                         :disabled="savingSettings || settingsForm.processing"
                         @click="saveSettings"
                     >
@@ -2705,8 +2139,7 @@ onUnmounted(() => {
 
                 <div class="flex justify-end">
                     <Button
-                        size="sm"
-                        class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                        variant="brand" size="sm" class="gap-1.5"
                         :disabled="savingSettings || settingsForm.processing"
                         @click="saveSettings"
                     >
@@ -2721,10 +2154,10 @@ onUnmounted(() => {
             <TabsContent value="ai-assistant" class="space-y-5">
 
                 <!-- ── Hero toggle card ─────────────────────────────── -->
-                <div class="flex items-center justify-between gap-4 rounded-xl border bg-linear-to-r from-violet-50/60 to-indigo-50/60 p-4 dark:from-violet-950/20 dark:to-indigo-950/20">
+                <div class="flex items-center justify-between gap-4 rounded-xl border border-teal-200/60 bg-teal-50/30 p-4 shadow-sm">
                     <div class="flex items-center gap-3 min-w-0">
-                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/40">
-                            <Icon icon="heroicons:cpu-chip" class="size-5 text-violet-600 dark:text-violet-400" />
+                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/40">
+                            <Icon icon="heroicons:cpu-chip" class="size-5 text-teal-600 dark:text-teal-400" />
                         </div>
                         <div class="min-w-0">
                             <p class="text-sm font-semibold text-foreground">Webinar AI Assistant</p>
@@ -2781,7 +2214,7 @@ onUnmounted(() => {
                                     v-for="i in AI_SOURCE_LIMIT"
                                     :key="i"
                                     class="h-2 w-8 rounded-full transition-colors"
-                                    :class="i <= aiSourceCount ? 'bg-violet-500' : 'bg-muted'"
+                                    :class="i <= aiSourceCount ? 'bg-teal-500' : 'bg-muted'"
                                 />
                                 <span class="ml-1 text-xs text-muted-foreground">{{ aiSourceCount }}/{{ AI_SOURCE_LIMIT }}</span>
                             </div>
@@ -2796,7 +2229,7 @@ onUnmounted(() => {
                                     :key="tab"
                                     class="flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors"
                                     :class="addSourceTab === tab
-                                        ? 'border-b-2 border-violet-500 bg-background text-violet-600 dark:text-violet-400'
+                                        ? 'border-b-2 border-teal-500 bg-background text-teal-600 dark:text-teal-400'
                                         : 'text-muted-foreground hover:text-foreground'"
                                     :disabled="aiSourceLimitReached"
                                     @click="addSourceTab = tab"
@@ -2854,7 +2287,7 @@ onUnmounted(() => {
                                 <!-- File tab -->
                                 <div v-else class="space-y-2.5">
                                     <Input v-model="aiFileForm.title" class="h-8 text-xs" placeholder="Optional title" />
-                                    <label class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors hover:border-violet-400 hover:bg-violet-50/40 dark:hover:bg-violet-950/20">
+                                    <label class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors hover:border-teal-400 hover:bg-teal-50/40 dark:hover:bg-teal-950/20">
                                         <Icon icon="heroicons:arrow-up-tray" class="size-6 text-muted-foreground" />
                                         <span class="text-xs text-muted-foreground">
                                             <span class="font-medium text-foreground">Click to browse</span> or drag &amp; drop
@@ -2863,7 +2296,7 @@ onUnmounted(() => {
                                         <input type="file" class="sr-only" accept=".pdf,.txt,.md,.csv,.xlsx,.xls,.docx" @change="setAiFile" />
                                     </label>
                                     <p v-if="aiFileForm.file" class="flex items-center gap-1.5 text-xs text-foreground">
-                                        <Icon icon="heroicons:document" class="size-3.5 text-violet-500" />
+                                        <Icon icon="heroicons:document" class="size-3.5 text-teal-500" />
                                         {{ aiFileForm.file.name }}
                                     </p>
                                     <Button
@@ -2937,7 +2370,7 @@ onUnmounted(() => {
                                                     {{ source.status }}
                                                 </span>
                                                 <!-- chunk count pill -->
-                                                <span v-if="source.chunk_count > 0" class="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[0.65rem] font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+                                                <span v-if="source.chunk_count > 0" class="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[0.65rem] font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
                                                     <Icon icon="heroicons:square-3-stack-3d" class="size-3" />
                                                     {{ source.chunk_count }} chunks
                                                 </span>
@@ -2954,7 +2387,7 @@ onUnmounted(() => {
                                                         <Button
                                                             v-if="source.chunk_count > 0"
                                                             variant="ghost" size="sm"
-                                                            class="h-7 w-7 p-0 text-muted-foreground hover:text-violet-600"
+                                                            class="h-7 w-7 p-0 text-muted-foreground hover:text-teal-600"
                                                             @click="toggleSourceChunks(source)"
                                                         >
                                                             <Icon
@@ -2994,13 +2427,13 @@ onUnmounted(() => {
                                                     class="group relative flex flex-col gap-1.5 rounded-lg border bg-background p-2.5 text-xs shadow-sm"
                                                 >
                                                     <div class="flex items-center gap-1.5">
-                                                        <span class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-violet-100 px-1 text-[0.6rem] font-bold text-violet-700 dark:bg-violet-900/40 dark:text-violet-400">
+                                                        <span class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-teal-100 px-1 text-[0.6rem] font-bold text-teal-700 dark:bg-teal-900/40 dark:text-teal-400">
                                                             #{{ chunk.chunk_index }}
                                                         </span>
                                                         <span class="text-[0.65rem] text-muted-foreground">chunk</span>
                                                     </div>
                                                     <p class="line-clamp-4 text-[0.72rem] leading-relaxed text-foreground/80">{{ chunk.content }}</p>
-                                                    <div class="absolute inset-0 rounded-lg ring-1 ring-transparent transition group-hover:ring-violet-300 dark:group-hover:ring-violet-700" />
+                                                    <div class="absolute inset-0 rounded-lg ring-1 ring-transparent transition group-hover:ring-teal-300 dark:group-hover:ring-teal-700" />
                                                 </div>
                                             </div>
                                             <p v-if="source.chunk_count > (sourceChunks[source.id]?.length ?? 0)" class="text-[0.65rem] text-muted-foreground">
@@ -3018,8 +2451,7 @@ onUnmounted(() => {
                 <!-- ── Save button ──────────────────────────────────── -->
                 <div class="flex justify-end pt-1">
                     <Button
-                        size="sm"
-                        class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                        variant="brand" size="sm" class="gap-1.5"
                         :disabled="savingSettings || settingsForm.processing"
                         @click="saveSettings"
                     >
@@ -3037,7 +2469,7 @@ onUnmounted(() => {
                         <CardTitle class="text-base font-semibold">ESP Integrations</CardTitle>
                         <CardDescription class="text-xs">
                             Connect an email service provider — leads will be auto-subscribed when they register.
-                            <Link href="/integrations" class="text-primary underline ml-1">Add more accounts →</Link>
+                            <Link href="/integrations" class="text-teal-600 underline ml-1">Add more accounts →</Link>
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -3055,7 +2487,7 @@ onUnmounted(() => {
                                 :key="account.id"
                                 class="flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition-colors"
                                 :class="settingsForm.integration_account_ids.includes(account.id)
-                                    ? 'border-primary bg-primary/5'
+                                    ? 'border-teal-500 bg-teal-500/5'
                                     : 'hover:border-border/80'"
                             >
                                 <input
@@ -3074,7 +2506,7 @@ onUnmounted(() => {
                                 <Icon
                                     v-if="settingsForm.integration_account_ids.includes(account.id)"
                                     icon="heroicons:check-circle"
-                                    class="size-5 shrink-0 text-primary"
+                                    class="size-5 shrink-0 text-teal-600"
                                 />
                                 <Icon
                                     v-else
@@ -3086,8 +2518,7 @@ onUnmounted(() => {
 
                         <div v-if="integrationAccounts.length > 0" class="flex justify-end mt-4">
                             <Button
-                                size="sm"
-                                class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
+                                variant="brand" size="sm" class="gap-1.5"
                                 :disabled="savingSettings || settingsForm.processing"
                                 @click="saveSettings"
                             >
@@ -3126,12 +2557,20 @@ onUnmounted(() => {
                     <Card class="border shadow-sm">
                         <CardHeader class="pb-2">
                             <div class="flex items-center gap-2">
-                                <div class="flex size-8 items-center justify-center rounded-lg bg-primary/10">
-                                    <Icon icon="heroicons:cursor-arrow-ripple" class="size-4 text-primary" />
+                                <div class="flex size-8 items-center justify-center rounded-lg bg-teal-500/10">
+                                    <Icon icon="heroicons:cursor-arrow-ripple" class="size-4 text-teal-600" />
                                 </div>
                                 <div>
-                                    <CardTitle class="text-sm font-semibold">Opt-in Page</CardTitle>
-                                    <CardDescription class="text-xs">Share this to collect registrations</CardDescription>
+                                    <CardTitle class="text-sm font-semibold">
+                                        {{ publicLinks.optin_from_campaign_squeeze ? 'Campaign opt-in page' : 'Opt-in Page' }}
+                                    </CardTitle>
+                                    <CardDescription class="text-xs">
+                                        {{
+                                            publicLinks.optin_from_campaign_squeeze
+                                                ? 'Same as your campaign squeeze page — share this to collect registrations'
+                                                : 'Share this to collect registrations'
+                                        }}
+                                    </CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -3207,7 +2646,7 @@ onUnmounted(() => {
             </TabsContent>
 
             <!-- ── Tab: Promotion ── -->
-            <TabsContent value="promotion" class="space-y-4">
+            <TabsContent v-if="showFunnelTrafficTools" value="promotion" class="space-y-4">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h3 class="text-sm font-semibold text-foreground">Funnel Promotion</h3>
@@ -3222,7 +2661,7 @@ onUnmounted(() => {
                                 Open Posts
                             </a>
                         </Button>
-                        <Button size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90" as-child>
+                        <Button as-child variant="brand" size="sm" class="h-8 text-xs gap-1.5 shrink-0">
                             <a :href="props.promotion.routes.calendar">
                                 <Icon icon="heroicons:calendar-days" class="size-3.5" />
                                 Open Calendar
@@ -3238,7 +2677,7 @@ onUnmounted(() => {
                     <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Published</p><p class="text-2xl font-bold mt-1 text-emerald-600">{{ props.promotion.stats.published }}</p></CardContent></Card>
                 </div>
 
-                <Card class="border shadow-sm border-dashed border-primary/30">
+                <Card class="border shadow-sm border-dashed border-teal-500/30">
                     <CardHeader class="pb-2">
                         <CardTitle class="text-sm font-semibold">Auto topic suggestions</CardTitle>
                         <CardDescription class="text-xs">
@@ -3254,7 +2693,8 @@ onUnmounted(() => {
                             />
                             <Button
                                 size="sm"
-                                class="h-9 text-xs bg-primary text-primary-foreground hover:opacity-90"
+                                variant="brand"
+                                class="h-9 text-xs"
                                 :disabled="promotionGeneratingTopics"
                                 @click="generatePromotionTopicsFromEdit"
                             >
@@ -3297,10 +2737,10 @@ onUnmounted(() => {
             </TabsContent>
 
             <!-- ── Tab: Paid Traffic Assets ── -->
-            <TabsContent v-if="hasPaidTrafficAssets && props.paidTrafficAssets" value="paid-traffic-assets" class="space-y-4">
+            <TabsContent v-if="showFunnelTrafficTools && hasPaidTrafficAssets && props.paidTrafficAssets" value="paid-traffic-assets" class="space-y-4">
                 <div class="overflow-hidden rounded-xl border bg-gradient-to-br from-amber-500/10 via-primary/5 to-emerald-500/10 p-5">
                     <div class="flex items-center gap-2 mb-2">
-                        <Icon icon="heroicons:rocket-launch" class="size-5 text-primary" />
+                        <Icon icon="heroicons:rocket-launch" class="size-5 text-teal-600" />
                         <h3 class="text-sm font-semibold text-foreground">Paid Traffic Assets</h3>
                     </div>
                     <p class="text-sm text-muted-foreground max-w-2xl">
@@ -3318,7 +2758,7 @@ onUnmounted(() => {
                     :href="props.paidTrafficAssets.drive_url"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="group relative mx-auto block max-w-2xl overflow-hidden rounded-2xl border bg-black shadow-lg transition hover:border-primary/50"
+                    class="group relative mx-auto block max-w-2xl overflow-hidden rounded-2xl border bg-black shadow-lg transition hover:border-teal-500/50"
                 >
                     <div class="relative aspect-video w-full">
                         <img
@@ -3334,7 +2774,7 @@ onUnmounted(() => {
                             <Icon icon="heroicons:film" class="size-16 text-white/30" />
                         </div>
                         <div class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/30 transition group-hover:bg-black/45">
-                            <div class="flex size-16 items-center justify-center rounded-full bg-white/95 text-primary shadow-xl transition group-hover:scale-105">
+                            <div class="flex size-16 items-center justify-center rounded-full bg-white/95 text-teal-600 shadow-xl transition group-hover:scale-105">
                                 <Icon icon="heroicons:play-solid" class="size-8 ml-1" />
                             </div>
                             <p class="text-sm font-semibold text-white drop-shadow">Download paid traffic assets</p>
@@ -3354,7 +2794,7 @@ onUnmounted(() => {
             </TabsContent>
 
             <!-- ── Tab: Paid Ads ── -->
-            <TabsContent v-if="paidAdsEnabled && props.ads" value="ads" class="space-y-4">
+            <TabsContent v-if="showFunnelTrafficTools && paidAdsEnabled && props.ads" value="ads" class="space-y-4">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <h3 class="text-sm font-semibold text-foreground">Paid Ad Campaigns</h3>
@@ -3362,7 +2802,7 @@ onUnmounted(() => {
                             AI generates hooks, copy, and images — then launches across 7 platforms Ads API.
                         </p>
                     </div>
-                    <Button size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shrink-0" as-child>
+                    <Button as-child variant="brand" size="sm" class="h-8 text-xs gap-1.5 shrink-0">
                         <a :href="props.ads.route">
                             <Icon icon="heroicons:rocket-launch" class="size-3.5" />
                             Manage Campaigns
@@ -3388,21 +2828,21 @@ onUnmounted(() => {
 
                 <!-- Feature highlight -->
                 <div class="rounded-xl border bg-gradient-to-br from-primary/5 to-primary/10 p-4 space-y-3">
-                    <p class="text-xs font-semibold text-primary">What the AI Ads engine does:</p>
+                    <p class="text-xs font-semibold text-teal-600">What the AI Ads engine does:</p>
                     <div class="grid sm:grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:sparkles" class="size-3.5 text-primary shrink-0 mt-0.5" />AI researches your audience: hooks, angles, personas, pain points</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:document-text" class="size-3.5 text-primary shrink-0 mt-0.5" />Generates complete ad copy: headline, primary text, CTA</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:photo" class="size-3.5 text-primary shrink-0 mt-0.5" />Generates banner images for each creative</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:rocket-launch" class="size-3.5 text-primary shrink-0 mt-0.5" />Launches across Facebook, Instagram, TikTok, Google, X, LinkedIn</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:chart-bar" class="size-3.5 text-primary shrink-0 mt-0.5" />Tracks spend, CTR, CPC, conversions, and ROAS per creative</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:trophy" class="size-3.5 text-primary shrink-0 mt-0.5" />Auto-identifies winning creatives for scaling</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:sparkles" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />AI researches your audience: hooks, angles, personas, pain points</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:document-text" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Generates complete ad copy: headline, primary text, CTA</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:photo" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Generates banner images for each creative</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:rocket-launch" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Launches across Facebook, Instagram, TikTok, Google, X, LinkedIn</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:chart-bar" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Tracks spend, CTR, CPC, conversions, and ROAS per creative</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:trophy" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Auto-identifies winning creatives for scaling</div>
                     </div>
                 </div>
 
                 <div v-if="props.ads.campaigns_count === 0" class="flex flex-col items-center rounded-xl border border-dashed py-10 gap-3 text-center">
                     <Icon icon="heroicons:rocket-launch" class="size-10 text-muted-foreground/30" />
                     <p class="text-sm text-muted-foreground">No ad campaigns yet.</p>
-                    <Button size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground" as-child>
+                    <Button as-child variant="brand" size="sm" class="h-8 text-xs gap-1.5">
                         <a :href="props.ads.route">
                             <Icon icon="heroicons:plus" class="size-3.5" />
                             Create first campaign
@@ -3418,7 +2858,7 @@ onUnmounted(() => {
                         <h3 class="text-sm font-semibold text-foreground">Attendee Conversations</h3>
                         <p class="text-xs text-muted-foreground mt-0.5">{{ conversationSummaries.length }} thread{{ conversationSummaries.length !== 1 ? 's' : '' }} so far</p>
                     </div>
-                    <Button as-child size="sm" class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90">
+                    <Button as-child variant="brand" size="sm" class="h-8 text-xs gap-1.5">
                         <a :href="`/funnels/${funnel.id}/chat`">
                             <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
                             Open Chat Manager
@@ -3436,10 +2876,10 @@ onUnmounted(() => {
                         v-for="thread in conversationSummaries"
                         :key="thread.conversation_key"
                         :href="`/funnels/${funnel.id}/chat`"
-                        class="flex items-start gap-3 rounded-xl border p-3.5 hover:border-primary/30 hover:bg-muted/30 transition-colors"
+                        class="flex items-start gap-3 rounded-xl border p-3.5 hover:border-teal-500/30 hover:bg-muted/30 transition-colors"
                     >
-                        <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                            <span class="text-xs font-bold text-primary">{{ thread.attendee_name.charAt(0).toUpperCase() }}</span>
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-500/10">
+                            <span class="text-xs font-bold text-teal-600">{{ thread.attendee_name.charAt(0).toUpperCase() }}</span>
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="text-sm font-semibold text-foreground">{{ thread.attendee_name }}</p>
@@ -3454,562 +2894,15 @@ onUnmounted(() => {
             </TabsContent>
 
             <!-- ── Tab: Traffic Settings ── -->
-            <TabsContent value="traffic" class="space-y-4">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <h3 class="text-sm font-semibold text-foreground">Funnel Traffic Settings</h3>
-                        <p class="text-xs text-muted-foreground mt-0.5">
-                            Track mentions and conversations per funnel keyword (up to {{ trafficMaxKeywords }} keywords, {{ trafficMaxMentionsPerKeyword.toLocaleString() }} mentions each).
-                        </p>
-                    </div>
-                    <TooltipProvider :delay-duration="120">
-                        <Tooltip>
-                            <TooltipTrigger as-child>
-                                <span class="inline-flex">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        class="h-8 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
-                                        :disabled="trafficAtKeywordLimit"
-                                        @click="openTrafficKeywordModal"
-                                    >
-                                        <Icon icon="heroicons:plus" class="size-3.5" />
-                                        Add Keyword
-                                    </Button>
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipContent v-if="trafficAtKeywordLimit" side="bottom" class="max-w-xs text-xs">
-                                This funnel already has the maximum of {{ trafficMaxKeywords }} keywords. Delete one to add another.
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
-
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Total Mentions <span class="text-muted-foreground/70">({{ trafficStatsScopeLabel }})</span></p><p class="text-2xl font-bold mt-1">{{ props.traffic.stats.total.toLocaleString() }}</p></CardContent></Card>
-                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">This Week <span class="text-muted-foreground/70">({{ trafficStatsScopeLabel }})</span></p><p class="text-2xl font-bold mt-1 text-[#40E0D0]">{{ props.traffic.stats.this_week.toLocaleString() }}</p></CardContent></Card>
-                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Keywords</p><p class="text-2xl font-bold mt-1 text-[#FFAD00]">{{ props.traffic.stats.keywords_count }}</p></CardContent></Card>
-                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Platforms</p><p class="text-2xl font-bold mt-1 text-[#a78bfa]">{{ Object.keys(props.traffic.stats.platforms ?? {}).length }}</p></CardContent></Card>
-                </div>
-
-                <Card class="border shadow-sm border-dashed border-primary/25 overflow-hidden">
-                    <Collapsible v-model:open="trafficAiSectionOpen">
-                        <CardHeader class="space-y-0 pb-3 pt-4 px-4">
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                                <CollapsibleTrigger
-                                    type="button"
-                                    class="flex flex-1 min-w-0 items-start gap-2 rounded-lg border border-transparent px-1 py-0.5 text-left outline-none ring-offset-background transition-colors hover:border-border hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
-                                >
-                                    <Icon
-                                        icon="heroicons:chevron-right"
-                                        class="size-5 shrink-0 text-muted-foreground transition-transform duration-200"
-                                        :class="{ 'rotate-90': trafficAiSectionOpen }"
-                                    />
-                                    <div class="min-w-0 space-y-0.5">
-                                        <CardTitle class="text-sm font-semibold leading-tight">AI traffic auto-reply</CardTitle>
-                                        <p class="text-[0.65rem] text-muted-foreground leading-snug">
-                                            <span v-if="!trafficAiSectionOpen">Collapsed — expand to enable auto-replies and set your link / tone.</span>
-                                            <span v-else>Uses your connected Social posting accounts (one per platform).</span>
-                                        </p>
-                                    </div>
-                                </CollapsibleTrigger>
-                                <div class="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                                    <Button size="sm" variant="outline" class="h-9 text-xs gap-1.5" as-child>
-                                        <Link href="/settings/social-traffic">
-                                            <Icon icon="heroicons:link-20-solid" class="size-3.5" />
-                                            Connect accounts
-                                        </Link>
-                                    </Button>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CollapsibleContent>
-                            <CardContent class="space-y-3 border-t border-border/60 px-4 pb-4 pt-3">
-                                
-                                <div class="flex flex-wrap gap-2">
-                                    <Button size="sm" class="h-9 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90" as-child>
-                                        <Link href="/settings/social-traffic">
-                                            <Icon icon="simple-icons:reddit" class="size-3.5" />
-                                            Go to Social posting settings
-                                        </Link>
-                                    </Button>
-                                </div>
-                                <div class="flex items-center justify-between gap-3">
-                                    <Label class="text-xs">Enable auto-replies for this funnel</Label>
-                                    <Switch
-                                        :model-value="Boolean(settingsForm.traffic_ai_reply_enabled)"
-                                        :disabled="savingSettings || settingsForm.processing"
-                                        @update:model-value="saveTrafficAiReplyEnabled(Boolean($event))"
-                                    />
-                                </div>
-                                <div class="space-y-1">
-                                    <Label class="text-xs">Link override (optional)</Label>
-                                    <Input
-                                        v-model="settingsForm.traffic_ai_link_override"
-                                        type="text"
-                                        class="h-9 text-xs"
-                                        placeholder="https://… (else: affiliate → offer → webinar CTA)"
-                                    />
-                                    <p v-if="trafficAiLinkError" class="text-[0.65rem] text-destructive">
-                                        {{ trafficAiLinkError }}
-                                    </p>
-                                </div>
-                                <div class="space-y-1">
-                                    <Label class="text-xs">More context</Label>
-                                    <p class="text-[0.65rem] text-muted-foreground leading-snug">
-                                        Optional background for AI replies — used by auto-reply and Draft reply on mentions.
-                                    </p>
-                                    <Textarea
-                                        v-model="settingsForm.traffic_ai_extra_context"
-                                        class="min-h-[72px] text-xs resize-y"
-                                        placeholder="Your product, audience, tone, what to avoid…"
-                                    />
-                                </div>
-                                <div class="space-y-2">
-                                    <Label class="text-xs">Posting accounts (from Settings → Social posting)</Label>
-                                    <div class="grid gap-2 sm:grid-cols-3">
-                                        <div
-                                            v-for="p in trafficReplyPlatforms"
-                                            :key="p.key"
-                                            class="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5"
-                                            :class="trafficAccountForPlatform(p.key) ? 'border-green-500/40' : ''"
-                                        >
-                                            <div class="flex items-center gap-2">
-                                                <Icon :icon="p.icon" class="size-4 shrink-0" :style="{ color: p.color }" />
-                                                <span class="text-xs font-medium">{{ p.label }}</span>
-                                            </div>
-                                            <p v-if="trafficAccountForPlatform(p.key)" class="mt-1.5 text-[0.65rem] text-green-600 dark:text-green-400">
-                                                Connected · {{ trafficAccountForPlatform(p.key)?.platform_username || 'account linked' }}
-                                            </p>
-                                            <p v-if="trafficAccountForPlatform(p.key)" class="text-[0.65rem] text-muted-foreground">
-                                                {{ trafficRepliesPostedToday(p.key) }} / {{ trafficMaxRepliesPerDay }} replies sent today
-                                            </p>
-                                            <p v-else class="mt-1.5 text-[0.65rem] text-muted-foreground">
-                                                Not connected —
-                                                <Link href="/settings/social-traffic" class="underline hover:text-foreground">connect</Link>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <Button
-                                    size="sm"
-                                    class="h-9 text-xs bg-primary text-primary-foreground hover:opacity-90"
-                                    :disabled="savingSettings || settingsForm.processing"
-                                    @click="saveTrafficAiSettings()"
-                                >
-                                    Save auto-reply settings
-                                </Button>
-                            </CardContent>
-                        </CollapsibleContent>
-                    </Collapsible>
-                </Card>
-
-                <Dialog v-model:open="trafficKeywordModalOpen">
-                    <DialogContent class="sm:max-w-md">
-                        <DialogHeader>
-                            <DialogTitle>Track a new traffic keyword</DialogTitle>
-                            <DialogDescription>
-                                Search Reddit, YouTube, X, and news for this term and attach mentions to this funnel.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <form id="traffic-keyword-form" class="flex flex-col gap-4" @submit.prevent="submitTrafficKeyword">
-                            <div class="space-y-2">
-                                <Label for="traffic-keyword-name" class="text-xs">Keyword</Label>
-                                <Input
-                                    id="traffic-keyword-name"
-                                    v-model="trafficKeywordForm.name"
-                                    placeholder="e.g. your brand name…"
-                                    class="h-9 text-sm"
-                                    autocomplete="off"
-                                />
-                                <p v-if="trafficKeywordForm.errors.name" class="text-xs text-destructive">
-                                    {{ trafficKeywordForm.errors.name }}
-                                </p>
-                                <div
-                                    v-if="trafficSuggestedKeywords.length > 0"
-                                    class="space-y-2 rounded-lg border border-dashed border-emerald-200/80 bg-emerald-50/50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20"
-                                >
-                                    <div>
-                                        <p class="text-xs font-semibold text-foreground">Suggested keywords</p>
-                                        <p class="text-[0.65rem] text-muted-foreground leading-relaxed mt-0.5">
-                                            High-intent phrases for this offer. Click a phrase to fill the field, or
-                                            <span class="font-medium text-foreground">+</span> to add and start fetching.
-                                            <template v-if="trafficRemainingKeywordSlots > 0">
-                                                {{ trafficRemainingKeywordSlots }} slot{{ trafficRemainingKeywordSlots === 1 ? '' : 's' }} left.
-                                            </template>
-                                        </p>
-                                    </div>
-                                    <div class="flex flex-wrap gap-1.5">
-                                        <div
-                                            v-for="suggestion in trafficSuggestedKeywords"
-                                            :key="suggestion"
-                                            class="inline-flex max-w-full items-stretch overflow-hidden rounded-full border text-xs shadow-sm"
-                                            :class="
-                                                trafficKeywordForm.name.trim().toLowerCase() === suggestion.trim().toLowerCase()
-                                                    ? 'border-primary/50 bg-primary/10'
-                                                    : 'border-border bg-background/90'
-                                            "
-                                        >
-                                            <button
-                                                type="button"
-                                                class="inline-flex min-w-0 items-center px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-muted/60"
-                                                :title="`Use “${suggestion}”`"
-                                                @click="selectTrafficSuggestedKeyword(suggestion)"
-                                            >
-                                                <span class="truncate">{{ suggestion }}</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                class="inline-flex shrink-0 items-center border-l border-border/80 px-2 text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
-                                                :disabled="trafficKeywordForm.processing || trafficAtKeywordLimit"
-                                                :title="`Add “${suggestion}” and fetch`"
-                                                @click="addTrafficSuggestedKeyword(suggestion)"
-                                            >
-                                                <Icon icon="heroicons:plus" class="size-3.5" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <Label class="text-xs">Platforms</Label>
-                                <div class="flex flex-wrap gap-1.5">
-                                    <button
-                                        v-for="p in PLATFORM_OPTIONS"
-                                        :key="p"
-                                        type="button"
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors"
-                                        :class="trafficKeywordForm.platforms.includes(p) ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-muted/30 border-border text-muted-foreground'"
-                                        @click="toggleTrafficPlatform(p)"
-                                    >
-                                        <Icon :icon="trafficPlatformMeta(p).icon" class="size-3" />
-                                        {{ p }}
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                        <DialogFooter class="gap-2 sm:gap-0">
-                            <Button type="button" variant="outline" size="sm" class="h-9" @click="closeTrafficKeywordModal">
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                form="traffic-keyword-form"
-                                size="sm"
-                                class="h-9 bg-primary text-primary-foreground hover:opacity-90"
-                                :disabled="trafficKeywordForm.processing || !trafficKeywordForm.name.trim()"
-                            >
-                                Add & Fetch
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                <Dialog v-model:open="trafficReplyDraftModalOpen">
-                    <DialogContent class="sm:max-w-lg">
-                        <DialogHeader>
-                            <DialogTitle>Draft reply</DialogTitle>
-                            <DialogDescription>
-                                Copy this reply, open the post, and paste it as a comment. This does not auto-post.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div v-if="trafficReplyDraftMention" class="space-y-3">
-                            <p
-                                v-if="trafficReplyDraftWarning"
-                                class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
-                            >
-                                {{ trafficReplyDraftWarning }}
-                            </p>
-                            <p v-else-if="trafficReplyDraftSource === 'openai'" class="text-[0.65rem] text-muted-foreground">
-                                Generated with AI using your More context and this post.
-                            </p>
-                            <p class="text-xs text-muted-foreground line-clamp-2">
-                                {{ trunc(trafficReplyDraftMention.title ?? trafficReplyDraftMention.content ?? '', 160) }}
-                            </p>
-                            <Textarea
-                                v-model="trafficReplyDraftText"
-                                class="min-h-[140px] text-sm"
-                                :disabled="trafficReplyDraftLoading"
-                                placeholder="Generating reply…"
-                            />
-                            <a
-                                v-if="trafficReplyDraftMention.permalink"
-                                :href="trafficReplyDraftMention.permalink"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                            >
-                                <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
-                                Open post to comment
-                            </a>
-                        </div>
-                        <DialogFooter class="gap-2 sm:gap-0">
-                            <Button type="button" variant="outline" @click="trafficReplyDraftModalOpen = false">Close</Button>
-                            <Button
-                                type="button"
-                                :disabled="trafficReplyDraftLoading || !trafficReplyDraftText"
-                                @click="copyTrafficReplyDraft"
-                            >
-                                Copy reply
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
-                    <Card class="border shadow-sm">
-                        <CardHeader class="pb-2 pt-4 px-4">
-                            <CardTitle class="text-sm font-semibold">
-                                Tracked Keywords ({{ props.traffic.keywords.length }} / {{ trafficMaxKeywords }})
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent class="p-0">
-                            <div v-if="props.traffic.keywords.length === 0" class="py-8 text-center text-xs text-muted-foreground">No keywords yet.</div>
-                            <ul v-else class="divide-y divide-border">
-                                <li
-                                    v-for="kw in props.traffic.keywords"
-                                    :key="kw.id"
-                                    role="button"
-                                    tabindex="0"
-                                    class="px-4 py-3 cursor-pointer transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                                    :class="trafficKeywordFilterActive(kw) ? 'bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'"
-                                    :aria-pressed="trafficKeywordFilterActive(kw)"
-                                    @click="toggleTrafficKeywordFilter(kw)"
-                                    @keydown.enter.prevent="toggleTrafficKeywordFilter(kw)"
-                                    @keydown.space.prevent="toggleTrafficKeywordFilter(kw)"
-                                >
-                                    <div class="flex items-start justify-between gap-2">
-                                        <div class="min-w-0 flex-1">
-                                            <p
-                                                class="text-sm font-medium truncate max-w-full"
-                                                :class="{
-                                                    'text-primary': trafficKeywordFilterActive(kw),
-                                                    'line-through opacity-60': !kw.is_active && !kw.mention_cap_reached,
-                                                    'text-amber-800 dark:text-amber-300': kw.mention_cap_reached && !trafficKeywordFilterActive(kw),
-                                                }"
-                                            >
-                                                {{ kw.name }}
-                                            </p>
-                                            <p class="text-xs text-muted-foreground mt-0.5">
-                                                {{ kw.mentions_count.toLocaleString() }} / {{ trafficMaxMentionsPerKeyword.toLocaleString() }} mentions
-                                                <span v-if="kw.mention_cap_reached" class="text-amber-600 dark:text-amber-400"> · auto-paused (limit reached)</span>
-                                                <span v-else-if="!kw.is_active" class="text-muted-foreground"> · paused</span>
-                                                <span v-if="trafficKeywordFilterActive(kw)" class="text-primary"> · filtering mentions</span>
-                                            </p>
-                                        </div>
-                                        <div class="flex items-center gap-1 shrink-0" @click.stop>
-                                            <TooltipProvider :delay-duration="120">
-                                                <Tooltip>
-                                                    <TooltipTrigger as-child>
-                                                        <span class="inline-flex">
-                                                            <button
-                                                                type="button"
-                                                                class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-40"
-                                                                :disabled="!canFetchTrafficKeyword(kw)"
-                                                                @click="fetchTrafficKeywordNow(kw)"
-                                                            >
-                                                                <Icon icon="heroicons:arrow-path" class="size-3.5" />
-                                                            </button>
-                                                        </span>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent v-if="kw.mention_cap_reached" side="top" class="max-w-xs text-xs">
-                                                        {{ trafficKeywordFetchCapTooltip }}
-                                                    </TooltipContent>
-                                                    <TooltipContent v-else side="top" class="text-xs">
-                                                        Fetch now from all platforms
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                                <Tooltip>
-                                                    <TooltipTrigger as-child>
-                                                        <span class="inline-flex">
-                                                            <button
-                                                                type="button"
-                                                                class="flex size-7 items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-40"
-                                                                :class="trafficKeywordIsFetching(kw) ? 'text-[#40E0D0]' : 'text-muted-foreground'"
-                                                                :disabled="trafficKeywordPlayPauseDisabled(kw)"
-                                                                @click="toggleTrafficKeywordActive(kw)"
-                                                            >
-                                                                <Icon
-                                                                    :icon="trafficKeywordIsFetching(kw) ? 'heroicons:pause' : 'heroicons:play'"
-                                                                    class="size-3.5"
-                                                                />
-                                                            </button>
-                                                        </span>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent
-                                                        v-if="kw.mention_cap_reached"
-                                                        side="top"
-                                                        class="max-w-xs text-xs"
-                                                    >
-                                                        {{ trafficKeywordCapTooltip }}
-                                                    </TooltipContent>
-                                                    <TooltipContent v-else-if="kw.is_active" side="top" class="text-xs">
-                                                        Pause scheduled fetching for this keyword
-                                                    </TooltipContent>
-                                                    <TooltipContent v-else side="top" class="text-xs">
-                                                        Resume scheduled fetching for this keyword
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                            <button class="flex size-7 items-center justify-center rounded-md" :class="kw.email_notifications ? 'text-[#FFAD00]' : 'text-muted-foreground'" @click="toggleTrafficKeywordNotifications(kw)"><Icon :icon="kw.email_notifications ? 'heroicons:bell' : 'heroicons:bell-slash'" class="size-3.5" /></button>
-                                            <button class="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive" @click="deleteTrafficKeyword(kw)"><Icon icon="heroicons:trash" class="size-3.5" /></button>
-                                        </div>
-                                    </div>
-                                </li>
-                            </ul>
-                        </CardContent>
-                    </Card>
-
-                    <div class="space-y-3">
-                        <Card class="border shadow-sm">
-                            <CardContent class="p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div class="flex flex-col gap-1.5 min-w-0">
-                                    <p v-if="trafficActiveKeyword" class="text-[0.65rem] text-muted-foreground">
-                                        Platform counts {{ trafficStatsScopeLabel }}
-                                    </p>
-                                    <div class="flex items-center gap-1 flex-wrap">
-                                    <button
-                                        v-for="tab in trafficPlatformTabs"
-                                        :key="tab.key"
-                                        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors"
-                                        :class="trafficPlatform === tab.key ? 'bg-primary/15 text-primary border border-primary/30' : 'text-muted-foreground hover:bg-muted/50 border border-transparent'"
-                                        @click="trafficPlatform = tab.key"
-                                    >
-                                        <Icon v-if="tab.key" :icon="trafficPlatformMeta(tab.key).icon" class="size-3" />
-                                        <Icon v-else icon="heroicons:squares-2x2" class="size-3" />
-                                        {{ tab.label }}
-                                        <span class="text-[0.6rem] text-muted-foreground">{{ tab.count }}</span>
-                                    </button>
-                                    </div>
-                                </div>
-                                <div class="relative shrink-0">
-                                    <Icon icon="heroicons:magnifying-glass" class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-                                    <Input v-model="trafficSearch" placeholder="Search mentions…" class="h-8 pl-8 text-xs w-full sm:w-52" />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card v-if="props.traffic.mentions.total === 0" class="border shadow-sm">
-                            <CardContent class="py-10 text-center text-sm text-muted-foreground">No traffic mentions found for this funnel.</CardContent>
-                        </Card>
-
-                        <div v-else class="flex flex-col gap-3">
-                            <Card v-for="mention in props.traffic.mentions.data" :key="mention.id" class="border shadow-sm">
-                                <CardContent class="p-4">
-                                    <div class="flex items-start gap-3">
-                                        <div class="flex size-9 shrink-0 items-center justify-center rounded-lg mt-0.5" :style="{ background: trafficPlatformMeta(mention.source_type).bg }">
-                                            <Icon :icon="trafficPlatformMeta(mention.source_type).icon" class="size-4.5" :style="{ color: trafficPlatformMeta(mention.source_type).color }" />
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center justify-between gap-2 mb-1">
-                                                <div class="flex items-center gap-2 min-w-0 flex-wrap">
-                                                    <Badge class="text-[0.6rem] px-1.5 py-0 border font-semibold">{{ mention.source_type }}</Badge>
-                                                    <Badge
-                                                        v-if="trafficReplyStatusMeta(mention.traffic_reply_attempt)"
-                                                        class="inline-flex items-center gap-0.5 text-[0.6rem] px-1.5 py-0 border font-semibold"
-                                                        :class="trafficReplyStatusMeta(mention.traffic_reply_attempt)!.class"
-                                                        :title="trafficReplyStatusHint(mention.traffic_reply_attempt) ?? undefined"
-                                                    >
-                                                        <Icon
-                                                            v-if="trafficMentionAutoReplied(mention.traffic_reply_attempt)"
-                                                            icon="heroicons:chat-bubble-left-ellipsis-solid"
-                                                            class="size-3"
-                                                        />
-                                                        {{ trafficReplyStatusMeta(mention.traffic_reply_attempt)!.label }}
-                                                    </Badge>
-                                                    <span v-if="mention.keyword" class="text-[0.65rem] text-muted-foreground truncate">#{{ mention.keyword.name }}</span>
-                                                </div>
-                                                <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                                                    <Button
-                                                        v-if="trafficMentionCanDraftReply(mention)"
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        class="h-7 px-2 text-[0.65rem]"
-                                                        :disabled="trafficReplyDraftLoading && trafficReplyDraftMention?.id === mention.id"
-                                                        @click.stop="openTrafficReplyDraftModal(mention)"
-                                                    >
-                                                        <Icon
-                                                            icon="heroicons:sparkles"
-                                                            class="size-3.5 mr-1"
-                                                            :class="{ 'animate-pulse': trafficReplyDraftLoading && trafficReplyDraftMention?.id === mention.id }"
-                                                        />
-                                                        Draft reply
-                                                    </Button>
-                                                    <a
-                                                        v-if="mention.permalink"
-                                                        :href="mention.permalink"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        class="inline-flex items-center gap-1 text-[0.65rem] font-medium text-primary hover:underline"
-                                                    >
-                                                        <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
-                                                        Open
-                                                    </a>
-                                                    <span class="text-[0.65rem] text-muted-foreground">{{ fmtTrafficDate(mention.posted_at) }}</span>
-                                                </div>
-                                            </div>
-                                            <a
-                                                v-if="mention.title && mention.permalink"
-                                                :href="mention.permalink"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                class="text-sm font-semibold leading-snug mb-1 text-primary hover:underline block"
-                                            >
-                                                {{ trunc(mention.title, 140) }}
-                                            </a>
-                                            <p v-else-if="mention.title" class="text-sm font-semibold leading-snug mb-1">{{ trunc(mention.title, 140) }}</p>
-                                            <p v-if="mention.content && mention.content !== mention.title" class="text-xs text-muted-foreground leading-relaxed">{{ trunc(mention.content, 220) }}</p>
-                                            <p
-                                                v-if="trafficMentionAutoReplied(mention.traffic_reply_attempt)"
-                                                class="mt-1.5 text-[0.65rem] text-green-700 dark:text-green-400"
-                                            >
-                                                Your app posted an auto-reply
-                                                <template v-if="mention.traffic_reply_attempt?.posted_at">
-                                                    · {{ fmtTrafficDate(mention.traffic_reply_attempt.posted_at) }}
-                                                </template>
-                                            </p>
-                                            <p
-                                                v-else-if="trafficReplyStatusHint(mention.traffic_reply_attempt)"
-                                                class="mt-1.5 text-[0.65rem] text-muted-foreground"
-                                            >
-                                                {{ trafficReplyStatusHint(mention.traffic_reply_attempt) }}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <div
-                                v-if="props.traffic.mentions.last_page > 1"
-                                class="flex flex-col gap-2 rounded-lg border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                                <p class="text-xs text-muted-foreground">
-                                    <template v-if="props.traffic.mentions.from && props.traffic.mentions.to">
-                                        {{ props.traffic.mentions.from }}–{{ props.traffic.mentions.to }} of
-                                    </template>
-                                    {{ props.traffic.mentions.total.toLocaleString() }} mentions
-                                    <span class="text-muted-foreground/80">(page {{ props.traffic.mentions.current_page }} / {{ props.traffic.mentions.last_page }})</span>
-                                </p>
-                                <div class="flex flex-wrap items-center gap-1">
-                                    <button
-                                        v-for="link in props.traffic.mentions.links"
-                                        :key="`${link.label}-${link.url ?? 'disabled'}`"
-                                        type="button"
-                                        :disabled="!link.url"
-                                        class="inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                                        :class="link.active
-                                            ? 'border-primary bg-primary text-primary-foreground'
-                                            : 'border-border bg-background text-foreground hover:bg-muted'"
-                                        @click="goToTrafficMentionsPage(link.url)"
-                                        v-html="link.label"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </TabsContent>
+            <TabsContent v-if="showFunnelTrafficTools" value="traffic" class="space-y-4">
+                <FreeTrafficPanel
+                    :traffic="traffic"
+                    :settings="funnel.settings"
+                    :routes="freeTrafficRoutes"
+                    title="Funnel Traffic Settings"
+                    description="Track mentions and conversations per funnel keyword"
+                />
+</TabsContent>
 
         </Tabs>
 
@@ -4100,7 +2993,7 @@ onUnmounted(() => {
                                 class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition"
                                 :class="shareLinkCopied
                                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                    : 'bg-primary/10 text-primary hover:bg-primary/20'"
+                                    : 'bg-teal-500/10 text-teal-600 hover:bg-teal-500/20'"
                                 @click="copyShareLink"
                             >
                                 <span v-if="shareLinkCopied" class="flex items-center gap-1">

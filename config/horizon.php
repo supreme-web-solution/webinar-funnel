@@ -244,7 +244,7 @@ return [
         ],
         'supervisor-ai' => [
             'connection' => 'redis',
-            'queue' => ['webinar-ai'],
+            'queue' => ['webinar-ai', 'campaign-generate'],
             'balance' => 'simple',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,
@@ -252,7 +252,7 @@ return [
             'maxJobs' => 100,
             'memory' => 256,
             'tries' => 2,
-            'timeout' => 300,
+            'timeout' => 900,
             'nice' => 0,
         ],
     ],

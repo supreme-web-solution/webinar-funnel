@@ -1,27 +1,34 @@
 <?php
 
-use App\Http\Controllers\JVZooWebhookController;
-use Illuminate\Support\Facades\Route;
-use Laravel\Fortify\Features;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\TutorialController;
+use App\Http\Controllers\BonusLibraryController;
+use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\CampaignTrafficController;
 use App\Http\Controllers\ChatController;
-use App\Http\Controllers\FunnelController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FunnelAdCampaignController;
 use App\Http\Controllers\FunnelAiSourceController;
-use App\Http\Controllers\IntegrationCoachingController;
-use App\Http\Controllers\IntegrationController;
-use App\Http\Controllers\LeadController;
-use App\Http\Controllers\PublicFunnelController;
-use App\Http\Controllers\TemplateController;
-use App\Http\Controllers\MentionController;
-use App\Http\Controllers\UserManagementController;
-use App\Http\Controllers\FunnelTrafficController;
+use App\Http\Controllers\FunnelController;
 use App\Http\Controllers\FunnelPromotionCalendarController;
 use App\Http\Controllers\FunnelPromotionController;
 use App\Http\Controllers\FunnelPromotionTopicController;
-use App\Http\Controllers\FunnelAdCampaignController;
+use App\Http\Controllers\FunnelTrafficController;
+use App\Http\Controllers\GrowthToolsController;
+use App\Http\Controllers\IntegrationCoachingController;
+use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\JVZooWebhookController;
+use App\Http\Controllers\LeadController;
+use App\Http\Controllers\MentionController;
 use App\Http\Controllers\PromotionCalendarController;
+use App\Http\Controllers\PublicCampaignController;
+use App\Http\Controllers\PublicFunnelController;
+use App\Http\Controllers\TemplateController;
+use App\Http\Controllers\TrackedLinkController;
+use App\Http\Controllers\TrafficHubController;
+use App\Http\Controllers\TutorialController;
+use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
+use Laravel\Fortify\Features;
 
 Route::post('/ipn/jvzoo', [JVZooWebhookController::class, 'handle'])->name('ipn.jvzoo');
 
@@ -31,7 +38,7 @@ Route::get('/', function () {
         : redirect()->route('login');
 })->name('home');
 
-$reservedPublicPrefix = '^(?!(tutorial|dashboard|templates|funnels|integrations|settings|users|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads)$)[A-Za-z0-9_-]+';
+$reservedPublicPrefix = '^(?!(tutorial|dashboard|templates|funnels|campaigns|bonuses|tracked-links|growth|r|integrations|settings|users|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads)$)[A-Za-z0-9_-]+';
 
 // Route::inertia('/', 'Welcome', [
 //     'canRegister' => Features::enabled(Features::registration()),
@@ -43,8 +50,68 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('templates', [TemplateController::class, 'index'])->name('templates.index');
 
+    // AffiliateOS campaigns
+    Route::prefix('campaigns')->name('campaigns.')->group(function () {
+        Route::get('/', [CampaignController::class, 'index'])->name('index');
+        Route::get('create', [CampaignController::class, 'create'])->name('create');
+        Route::post('/', [CampaignController::class, 'store'])->name('store');
+        Route::post('quick-start', [CampaignController::class, 'quickStart'])->name('quick-start');
+        Route::post('extract-offer', [CampaignController::class, 'extractOffer'])->name('extract-offer');
+        Route::post('search-offers', [CampaignController::class, 'searchOffers'])->name('search-offers');
+        Route::get('{campaign}/edit', [CampaignController::class, 'edit'])->name('edit');
+        Route::patch('{campaign}', [CampaignController::class, 'update'])->name('update');
+        Route::get('{campaign}/generation-status', [CampaignController::class, 'generationStatus'])->name('generation-status');
+        Route::post('{campaign}/analyse', [CampaignController::class, 'analyse'])->name('analyse');
+        Route::post('{campaign}/build-knowledge', [CampaignController::class, 'buildKnowledge'])->name('build-knowledge');
+        Route::post('{campaign}/lead-magnet/suggest', [CampaignController::class, 'suggestLeadMagnets'])->name('lead-magnet.suggest');
+        Route::post('{campaign}/lead-magnet/generate', [CampaignController::class, 'generateLeadMagnet'])->name('lead-magnet.generate');
+        Route::post('{campaign}/lead-magnet/skip', [CampaignController::class, 'skipLeadMagnet'])->name('lead-magnet.skip');
+        Route::post('{campaign}/build-pages', [CampaignController::class, 'buildPages'])->name('build-pages');
+        Route::patch('{campaign}/pages/{pageType}', [CampaignController::class, 'updatePage'])->name('pages.update');
+        Route::post('{campaign}/bonuses/suggest', [CampaignController::class, 'suggestBonuses'])->name('bonuses.suggest');
+        Route::post('{campaign}/bonuses/generate', [CampaignController::class, 'generateBonuses'])->name('bonuses.generate');
+        Route::post('{campaign}/bonuses/reset', [CampaignController::class, 'resetBonuses'])->name('bonuses.reset');
+        Route::post('{campaign}/generate-emails', [CampaignController::class, 'generateEmails'])->name('generate-emails');
+        Route::post('{campaign}/generate-webinar-funnels', [CampaignController::class, 'generateWebinarFunnels'])->name('generate-webinar-funnels');
+        Route::delete('{campaign}', [CampaignController::class, 'destroy'])->name('destroy');
+        Route::post('{campaign}/publish', [CampaignController::class, 'publish'])->name('publish');
+
+        Route::prefix('{campaign}/traffic')->name('traffic.')->group(function () {
+            Route::get('/', [CampaignTrafficController::class, 'index'])->name('index');
+            Route::get('free', [CampaignTrafficController::class, 'freeTraffic'])->name('free');
+            Route::get('promotion/posts', [CampaignTrafficController::class, 'promotionPosts'])->name('promotion.posts');
+            Route::get('promotion/calendar', [CampaignTrafficController::class, 'promotionCalendar'])->name('promotion.calendar');
+            Route::get('ads', [CampaignTrafficController::class, 'ads'])->middleware('paid-ads')->name('ads');
+        });
+    });
+
+    Route::get('traffic', [TrafficHubController::class, 'index'])->name('traffic.index');
+
+    Route::get('campaign-download/{token}', [CampaignController::class, 'downloadLeadMagnet'])
+        ->name('campaigns.lead-magnet.download');
+
+    Route::get('bonuses/search', [BonusLibraryController::class, 'search'])->name('bonuses.search');
+    Route::get('bonuses', [BonusLibraryController::class, 'index'])->name('bonuses.index');
+
+    Route::prefix('tracked-links')->name('tracked-links.')->group(function () {
+        Route::get('/', [TrackedLinkController::class, 'index'])->name('index');
+        Route::post('/', [TrackedLinkController::class, 'store'])->name('store');
+        Route::get('{trackedLink}', [TrackedLinkController::class, 'show'])->name('show');
+        Route::patch('{trackedLink}', [TrackedLinkController::class, 'update'])->name('update');
+        Route::delete('{trackedLink}', [TrackedLinkController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::prefix('growth')->name('growth.')->group(function () {
+        Route::get('domains', [GrowthToolsController::class, 'domains'])->name('domains');
+        Route::post('domains', [GrowthToolsController::class, 'storeDomain'])->name('domains.store');
+        Route::get('opportunities', [GrowthToolsController::class, 'opportunities'])->name('opportunities');
+        Route::post('opportunities/search', [GrowthToolsController::class, 'searchOpportunities'])->name('opportunities.search');
+        Route::get('content-employee', [GrowthToolsController::class, 'contentEmployee'])->name('content-employee');
+    });
+
     Route::prefix('funnels')->group(function () {
         Route::get('/', [FunnelController::class, 'index'])->name('funnels.index');
+        // Legacy DFY template create kept; primary create path is /campaigns/create
         Route::get('create', [FunnelController::class, 'create'])->name('funnels.create');
         Route::post('/', [FunnelController::class, 'store'])->name('funnels.store');
         Route::get('{funnel}/edit', [FunnelController::class, 'edit'])->name('funnels.edit');
@@ -121,8 +188,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('promotion/calendar', [PromotionCalendarController::class, 'index'])->name('promotion.calendar.index');
     Route::patch('promotion/calendar/posts/{post}/move', [PromotionCalendarController::class, 'move'])->name('promotion.calendar.move');
 
+    // Global Mentions UI deprecated — traffic lives on funnel Traffic Settings.
+    // Keep POST endpoints briefly for any old clients; index redirects away.
+    Route::redirect('mentions', '/funnels', 302)->name('mentions.index');
     Route::prefix('mentions')->name('mentions.')->group(function () {
-        Route::get('/', [MentionController::class, 'index'])->name('index');
         Route::post('keywords', [MentionController::class, 'storeKeyword'])->name('keywords.store');
         Route::patch('keywords/{keyword}', [MentionController::class, 'updateKeyword'])->name('keywords.update');
         Route::delete('keywords/{keyword}', [MentionController::class, 'destroyKeyword'])->name('keywords.destroy');
@@ -143,6 +212,35 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+
+Route::get('/r/{code}', [TrackedLinkController::class, 'redirect'])
+    ->where('code', '[A-Za-z0-9]+')
+    ->middleware('throttle:120,1')
+    ->name('tracked-links.redirect');
+
+Route::get('/{username}/{slug}/bonus/{bonusUuid}', [PublicCampaignController::class, 'bonusViewer'])
+    ->where('username', $reservedPublicPrefix)
+    ->where('slug', '[A-Za-z0-9-]+')
+    ->where('bonusUuid', '[0-9a-f-]{36}')
+    ->name('public.campaign.bonus.viewer');
+
+Route::get('/{username}/{slug}/bonus/{bonusUuid}/download', [PublicCampaignController::class, 'bonusDownload'])
+    ->where('username', $reservedPublicPrefix)
+    ->where('slug', '[A-Za-z0-9-]+')
+    ->where('bonusUuid', '[0-9a-f-]{36}')
+    ->name('public.campaign.bonus.download');
+
+Route::get('/{username}/{slug}/p/{page}', [PublicCampaignController::class, 'page'])
+    ->where('username', $reservedPublicPrefix)
+    ->where('slug', '[A-Za-z0-9-]+')
+    ->where('page', 'squeeze|thankyou|quiz|bonus')
+    ->name('public.campaign.page');
+
+Route::post('/{username}/{slug}/campaign-optin', [PublicCampaignController::class, 'optin'])
+    ->where('username', $reservedPublicPrefix)
+    ->where('slug', '[A-Za-z0-9-]+')
+    ->middleware('throttle:public-optin')
+    ->name('public.campaign.optin');
 
 Route::post('/{username}/{slug}/optin', [LeadController::class, 'capture'])
     ->where('username', $reservedPublicPrefix)

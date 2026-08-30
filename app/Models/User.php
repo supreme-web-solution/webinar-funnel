@@ -43,6 +43,26 @@ class User extends Authenticatable
         return $this->hasMany(Funnel::class);
     }
 
+    public function campaigns(): HasMany
+    {
+        return $this->hasMany(Campaign::class);
+    }
+
+    public function trackedLinks(): HasMany
+    {
+        return $this->hasMany(TrackedLink::class);
+    }
+
+    public function customDomains(): HasMany
+    {
+        return $this->hasMany(CustomDomain::class);
+    }
+
+    public function campaignBonuses(): HasMany
+    {
+        return $this->hasMany(CampaignBonus::class);
+    }
+
     public function integrationAccounts(): HasMany
     {
         return $this->hasMany(IntegrationAccount::class);
@@ -93,7 +113,7 @@ class User extends Authenticatable
         }
 
         if ($saved === []) {
-            $latest = \App\Models\FunnelAdCampaign::query()
+            $latest = FunnelAdCampaign::query()
                 ->where('user_id', $this->id)
                 ->whereNotNull('platform_ad_account_ids')
                 ->latest()

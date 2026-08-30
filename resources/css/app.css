@@ -90,13 +90,13 @@
 }
 
 :root {
-    /* ── Base ── */
-    --background: hsl(210 20% 98%);
-    --foreground: hsl(222 47% 11%);
+    /* ── Base — soft grey canvas (not plain white), readable muted text ── */
+    --background: hsl(210 22% 96%);
+    --foreground: hsl(222 47% 9%);
     --card: hsl(0 0% 100%);
-    --card-foreground: hsl(222 47% 11%);
+    --card-foreground: hsl(222 47% 9%);
     --popover: hsl(0 0% 100%);
-    --popover-foreground: hsl(222 47% 11%);
+    --popover-foreground: hsl(222 47% 9%);
 
     /* ── Brand primary: Turquoise #40E0D0 → hsl(174 72% 56%) ── */
     --primary: hsl(174 72% 56%);
@@ -106,10 +106,10 @@
     --accent: hsl(41 100% 50%);
     --accent-foreground: hsl(222 47% 11%);
 
-    --secondary: hsl(210 20% 94%);
-    --secondary-foreground: hsl(222 47% 20%);
-    --muted: hsl(210 20% 95%);
-    --muted-foreground: hsl(215 16% 47%);
+    --secondary: hsl(210 20% 96%);
+    --secondary-foreground: hsl(222 47% 15%);
+    --muted: hsl(210 18% 96%);
+    --muted-foreground: hsl(215 18% 38%);
     --destructive: hsl(0 84.2% 60.2%);
     --destructive-foreground: hsl(0 0% 98%);
     --border: hsl(214 32% 91%);
@@ -122,59 +122,57 @@
     --chart-5: hsl(340 75% 55%);
     --radius: 0.625rem;
 
-    /* ── Sidebar: Light mint gradient palette ── */
-    --sidebar-background: hsl(162 38% 96%);
-    --sidebar-foreground: hsl(214 28% 22%);
-    --sidebar-primary: hsl(167 68% 43%);
-    --sidebar-primary-foreground: hsl(0 0% 100%);
-    --sidebar-accent: hsl(0 0% 100%);
-    --sidebar-accent-foreground: hsl(214 28% 20%);
-    --sidebar-border: hsl(162 25% 86%);
+    /* ── Sidebar: Dark teal (always-on dark nav) ── */
+    --sidebar-background: hsl(192 42% 7%);
+    --sidebar-foreground: hsl(186 20% 78%);
+    --sidebar-primary: hsl(174 72% 56%);
+    --sidebar-primary-foreground: hsl(192 42% 7%);
+    --sidebar-accent: hsl(192 32% 12%);
+    --sidebar-accent-foreground: hsl(186 30% 95%);
+    --sidebar-border: hsl(192 28% 14%);
     --sidebar-ring: hsl(174 72% 56%);
-    --sidebar: hsl(162 38% 96%);
+    --sidebar: hsl(192 42% 7%);
+
+    /* Brand teal tokens */
+    --brand-teal: hsl(174 72% 56%);
+    --brand-teal-dark: hsl(192 55% 22%);
+    --brand-teal-glow: hsl(174 80% 45%);
 }
 
-.dark {
-    --background: hsl(0 0% 3.9%);
-    --foreground: hsl(0 0% 98%);
-    --card: hsl(0 0% 3.9%);
-    --card-foreground: hsl(0 0% 98%);
-    --popover: hsl(0 0% 3.9%);
-    --popover-foreground: hsl(0 0% 98%);
-    --primary: hsl(0 0% 98%);
-    --primary-foreground: hsl(0 0% 9%);
-    --secondary: hsl(0 0% 14.9%);
-    --secondary-foreground: hsl(0 0% 98%);
-    --muted: hsl(0 0% 16.08%);
-    --muted-foreground: hsl(0 0% 63.9%);
-    --accent: hsl(0 0% 14.9%);
-    --accent-foreground: hsl(0 0% 98%);
-    --destructive: hsl(0 84% 60%);
-    --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(0 0% 14.9%);
-    --input: hsl(0 0% 14.9%);
-    --ring: hsl(0 0% 83.1%);
-    --chart-1: hsl(220 70% 50%);
-    --chart-2: hsl(160 60% 45%);
-    --chart-3: hsl(30 80% 55%);
-    --chart-4: hsl(280 65% 60%);
-    --chart-5: hsl(340 75% 55%);
-    --sidebar-background: hsl(215 28% 14%);
-    --sidebar-foreground: hsl(210 24% 90%);
-    --sidebar-primary: hsl(174 72% 56%);
-    --sidebar-primary-foreground: hsl(215 28% 14%);
-    --sidebar-accent: hsl(215 24% 18%);
-    --sidebar-accent-foreground: hsl(210 24% 95%);
-    --sidebar-border: hsl(215 22% 23%);
-    --sidebar-ring: hsl(174 72% 56%);
-    --sidebar: hsl(215 28% 14%);
-}
+/* Single theme — no .dark overrides. Sidebar stays dark teal; content stays light. */
 
 @layer base {
     * {
         @apply border-border outline-ring/50;
     }
+    html {
+        color-scheme: light;
+    }
     body {
         @apply bg-background text-foreground;
+    }
+}
+
+@layer utilities {
+    /* Glossy dark-teal CTA — reference-style rounded gradient button */
+    .btn-brand {
+        @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl border border-teal-400/25 px-4 py-2 text-sm font-semibold text-white shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),0_4px_16px_rgba(13,148,136,0.35)] transition-all duration-200;
+        background: linear-gradient(180deg, hsl(174 55% 38%) 0%, hsl(192 48% 18%) 55%, hsl(192 52% 12%) 100%);
+    }
+    .btn-brand:hover {
+        @apply border-teal-300/40 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.18),0_6px_20px_rgba(13,148,136,0.45)];
+        background: linear-gradient(180deg, hsl(174 60% 44%) 0%, hsl(192 50% 22%) 55%, hsl(192 52% 14%) 100%);
+    }
+    .btn-brand:active {
+        @apply scale-[0.98];
+    }
+    .btn-brand-outline {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl border border-teal-300/55 bg-teal-50/90 px-4 py-2 text-sm font-medium text-teal-800 transition-all hover:border-teal-400 hover:bg-teal-100;
+    }
+    .btn-brand-outline-on-dark {
+        @apply inline-flex items-center justify-center gap-2 rounded-xl border border-teal-400/30 bg-teal-950/30 px-4 py-2 text-sm font-medium text-teal-100 transition-all hover:border-teal-400/50 hover:bg-teal-900/40;
+    }
+    .sidebar-nav-active {
+        @apply border-teal-500/30 bg-linear-to-r from-teal-600/25 via-teal-700/15 to-transparent text-teal-50 shadow-[inset_0_1px_0_0_rgba(64,224,208,0.12)];
     }
 }

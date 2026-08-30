@@ -36,9 +36,10 @@ class PromotionTopicSuggestionService
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => 'You generate social media post topics for promoting a specific webinar funnel and affiliate offer. '
+                            'content' => 'You generate social media post topics for promoting a specific affiliate offer using the campaign knowledge dossier provided. '
                                 .'Each topic must be a standalone, specific post idea tied to the product benefits — never paste the product name into a generic template. '
                                 .'Do NOT use boilerplate webinar titles like "Watch this training completely to be our next success story". '
+                                .'Do NOT reference the AffiliateOS platform unless it is the actual offer being promoted. '
                                 .'Output strict JSON: {"topics":[{"topic":"...","angle":"problem|proof|how-to|objection|cta","score":0-100}]}.',
                         ],
                         [
@@ -116,10 +117,14 @@ class PromotionTopicSuggestionService
      *   traffic_keywords: list<string>,
      *   audience: string|null,
      *   cta_label: string|null,
+     *   knowledge_pass1: array<string, mixed>,
+     *   knowledge_pass2: array<string, mixed>,
      * }  $context
      */
     private function topicPrompt(array $context, int $count, ?string $extraContext): string
     {
+        $pass1 = is_array($context['knowledge_pass1'] ?? null) ? $context['knowledge_pass1'] : [];
+
         return json_encode([
             'product_or_offer' => $context['product_name'],
             'category' => $context['category'],
@@ -133,12 +138,23 @@ class PromotionTopicSuggestionService
                 $context['traffic_keywords'],
             ))),
             'cta_label' => $context['cta_label'],
+            'knowledge_research' => [
+                'product_summary' => $pass1['product_summary'] ?? null,
+                'unique_mechanism' => $pass1['unique_mechanism'] ?? null,
+                'core_pain_points' => array_slice($pass1['core_pain_points'] ?? [], 0, 8),
+                'desired_outcomes' => array_slice($pass1['desired_outcomes'] ?? [], 0, 8),
+                'hook_angles' => array_slice($pass1['hook_angles'] ?? [], 0, 8),
+                'objections' => array_slice($pass1['objections'] ?? [], 0, 6),
+                'proof_elements' => array_slice($pass1['proof_elements'] ?? [], 0, 6),
+            ],
             'additional_context' => $extraContext,
             'required_count' => $count,
             'rules' => [
                 'Each topic must be a specific social post angle about THIS product/offer and its benefits.',
+                'Use the knowledge_research hooks, pain points, and training benefits — NOT generic platform or template names.',
                 'Turn training bullets into hooks, myths, mistakes, proof angles, or how-to posts — do not repeat bullets verbatim unless they already read like a post title.',
                 'Never start topics with generic webinar CTA copy.',
+                'Never use the app platform name (AffiliateOS) unless it is the actual product being promoted.',
                 'Never concatenate the product name into filler patterns like "quick win most people miss".',
                 'Mix awareness, consideration, objection-handling, proof, and conversion posts.',
                 'Topics should be short enough to use as a video/image post headline (under 120 characters when possible).',

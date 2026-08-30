@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import TrafficFeatureShell from '@/components/campaign-traffic/TrafficFeatureShell.vue';
+import type { CampaignHubContext } from '@/components/campaign-traffic/CampaignTrafficLayout.vue';
 
 type CalendarEvent = {
     id: number;
@@ -36,7 +38,12 @@ const props = defineProps<{
     currentMonth: number;
     currentYear: number;
     routes: { posts: string; move: string };
+    campaignHub?: CampaignHubContext | null;
 }>();
+
+const calendarBaseUrl = computed(() =>
+    props.campaignHub?.routes.promotion_calendar ?? `/funnels/${props.funnel.id}/promotion/calendar`,
+);
 
 // ─── Navigation ─────────────────────────────────────────────────────────────
 function navMonth(delta: number): void {
@@ -44,12 +51,12 @@ function navMonth(delta: number): void {
     let y = props.currentYear;
     if (m > 12) { m = 1; y++; }
     if (m < 1) { m = 12; y--; }
-    router.get(`/funnels/${props.funnel.id}/promotion/calendar`, { month: m, year: y }, { preserveScroll: false });
+    router.get(calendarBaseUrl.value, { month: m, year: y }, { preserveScroll: false });
 }
 
 function goToday(): void {
     const now = new Date();
-    router.get(`/funnels/${props.funnel.id}/promotion/calendar`, { month: now.getMonth() + 1, year: now.getFullYear() }, { preserveScroll: false });
+    router.get(calendarBaseUrl.value, { month: now.getMonth() + 1, year: now.getFullYear() }, { preserveScroll: false });
 }
 
 // ─── Calendar grid ──────────────────────────────────────────────────────────
@@ -221,12 +228,16 @@ const isCurrentMonth = computed(() => {
 <template>
     <Head :title="`Calendar – ${funnel.name}`" />
 
-    <div class="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 md:px-6">
+    <TrafficFeatureShell
+        :campaign-hub="campaignHub"
+        active="calendar"
+        standalone-class="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 md:px-6"
+    >
 
         <!-- ── Header ─────────────────────────────────────────────────── -->
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <div class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div v-if="!campaignHub" class="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Link :href="`/funnels/${funnel.id}/edit`" class="hover:text-foreground transition-colors">Funnels</Link>
                     <Icon icon="heroicons:chevron-right" class="size-3" />
                     <Link :href="`/funnels/${funnel.id}/edit`" class="hover:text-foreground transition-colors truncate max-w-[160px]">{{ funnel.name }}</Link>
@@ -358,7 +369,7 @@ const isCurrentMonth = computed(() => {
                 </Link>
             </Button>
         </div>
-    </div>
+    </TrafficFeatureShell>
 
     <!-- ── Event detail modal ──────────────────────────────────────────────── -->
     <Dialog :open="selectedEvent !== null" @update:open="(v) => { if (!v) closeModal(); }">

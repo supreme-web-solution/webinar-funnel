@@ -75,6 +75,25 @@ class DashboardController extends Controller
             ->limit(8)
             ->get(['id', 'template_id', 'name', 'slug', 'status', 'created_at']);
 
+        $chartDays = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $start = now()->subDays($i)->startOfDay();
+            $end = $start->copy()->endOfDay();
+
+            $chartDays[] = [
+                'label' => $start->format('D'),
+                'date' => $start->toDateString(),
+                'leads' => Lead::query()
+                    ->whereHas('funnel', fn ($q) => $q->where('user_id', $userId))
+                    ->whereBetween('created_at', [$start, $end])
+                    ->count(),
+                'views' => FunnelPageView::query()
+                    ->whereHas('funnel', fn ($q) => $q->where('user_id', $userId))
+                    ->whereBetween('viewed_at', [$start, $end])
+                    ->count(),
+            ];
+        }
+
         return Inertia::render('dashboard/Index', [
             'metrics' => [
                 'funnelCount'           => $funnelCount,
@@ -89,6 +108,7 @@ class DashboardController extends Controller
             ],
             'topFunnels'    => $topFunnels,
             'recentFunnels' => $recentFunnels,
+            'chartDays'     => $chartDays,
         ]);
     }
 }

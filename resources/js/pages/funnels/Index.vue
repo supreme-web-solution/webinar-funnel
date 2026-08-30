@@ -4,7 +4,6 @@ import { Head, Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 
 interface FunnelItem {
@@ -16,6 +15,8 @@ interface FunnelItem {
     published_at: string | null;
     created_at: string;
     leads_count: number;
+    kind?: 'webinar' | 'funnel';
+    campaign_name?: string | null;
     template?: { name: string; category: string } | null;
 }
 
@@ -41,277 +42,239 @@ const filtered = computed(() => {
 
     if (search.value.trim()) {
         const q = search.value.toLowerCase();
-
         list = list.filter(
             (f) =>
-                f.name.toLowerCase().includes(q) ||
-                f.slug.toLowerCase().includes(q) ||
-                (f.template?.name ?? '').toLowerCase().includes(q),
+                f.name.toLowerCase().includes(q)
+                || f.slug.toLowerCase().includes(q)
+                || (f.template?.name ?? '').toLowerCase().includes(q)
+                || (f.campaign_name ?? '').toLowerCase().includes(q),
         );
     }
 
     return list;
 });
 
+const totalLeads = computed(() => props.funnels.reduce((sum, f) => sum + f.leads_count, 0));
+const webinarCount = computed(() => props.funnels.filter((f) => f.kind === 'webinar').length);
+
+const statCards = computed(() => [
+    { label: 'Total', value: props.stats.total, sub: 'funnels', icon: 'heroicons:video-camera' },
+    { label: 'Published', value: props.stats.published, sub: 'live', icon: 'heroicons:globe-alt' },
+    { label: 'Drafts', value: props.stats.draft, sub: 'in progress', icon: 'heroicons:pencil-square' },
+    { label: 'Leads', value: totalLeads.value, sub: 'captured', icon: 'heroicons:users' },
+]);
+
+const filterTabs: Array<{ key: 'all' | 'published' | 'draft' | 'archived'; label: string }> = [
+    { key: 'all', label: 'All' },
+    { key: 'published', label: 'Published' },
+    { key: 'draft', label: 'Draft' },
+    { key: 'archived', label: 'Archived' },
+];
+
 function fmtDate(iso: string): string {
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-const filterTabs: Array<{ key: 'all' | 'published' | 'draft' | 'archived'; label: string; count: number }> = [
-    { key: 'all', label: 'All', count: props.stats.total },
-    { key: 'published', label: 'Published', count: props.stats.published },
-    { key: 'draft', label: 'Draft', count: props.stats.draft },
-    { key: 'archived', label: 'Archived', count: props.stats.archived },
-];
+function statusBadgeClass(status: string): string {
+    if (status === 'published') return 'border-teal-200 bg-teal-50 text-teal-700';
+    if (status === 'archived') return 'border-slate-200 bg-slate-50 text-slate-700';
+    return 'border-amber-200 bg-amber-50 text-amber-700';
+}
+
+function funnelIcon(funnel: FunnelItem): string {
+    if (funnel.kind === 'webinar') return 'heroicons:video-camera';
+    if (funnel.status === 'published') return 'heroicons:globe-alt';
+    if (funnel.status === 'archived') return 'heroicons:archive-box';
+    return 'heroicons:pencil-square';
+}
 </script>
 
 <template>
-    <Head title="My Funnels" />
+    <Head title="Webinars" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
-
-        <!-- ── Page header ── -->
-        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h1 class="text-xl font-bold tracking-tight text-foreground">My Funnels</h1>
-                <p class="text-sm text-muted-foreground mt-0.5">
-                    {{ stats.total }} funnel{{ stats.total !== 1 ? 's' : '' }} ·
-                    {{ stats.published }} published ·
-                    {{ stats.draft }} draft ·
-                    {{ stats.archived }} archived
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+        <!-- Header -->
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
+                <h1 class="text-xl font-bold tracking-tight text-foreground md:text-2xl">Webinars & funnels</h1>
+                <p class="mt-0.5 text-sm text-muted-foreground">
+                    Campaign webinar rooms and legacy builds · {{ stats.published }} published · {{ webinarCount }} webinar{{ webinarCount === 1 ? '' : 's' }}
                 </p>
             </div>
-            <div class="flex items-center gap-2 self-start sm:self-auto">
-                <Button as-child size="sm" variant="outline" class="gap-1.5 border-emerald-200 bg-white/85 text-emerald-700 hover:bg-emerald-50">
+            <div class="flex shrink-0 flex-wrap gap-2">
+                <Button as-child variant="brand-outline" size="sm">
                     <Link href="/funnels/create?scratch=1">
-                        <Icon icon="heroicons:sparkles" class="size-4" />
-                        Create From Scratch
+                        <Icon icon="heroicons:sparkles" class="size-3.5" />
+                        Legacy scratch
                     </Link>
                 </Button>
-                <Button as-child size="sm" class="gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shadow-sm">
-                    <Link href="/funnels/create">
-                        <Icon icon="heroicons:plus" class="size-4" />
-                        New Funnel
+                <Button as-child variant="brand" size="sm">
+                    <Link href="/campaigns/create">
+                        <Icon icon="heroicons:plus" class="size-3.5" />
+                        New campaign
                     </Link>
                 </Button>
             </div>
         </div>
 
-        <!-- ── Stat cards ── -->
-        <div class="grid gap-3 grid-cols-3">
-            <Card class="border shadow-sm">
-                <CardContent class="flex items-center gap-3 p-4">
-                    <div class="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                        <Icon icon="heroicons:funnel" class="size-4 text-primary" />
+        <!-- Stats -->
+        <div class="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
+            <div
+                v-for="stat in statCards"
+                :key="stat.label"
+                class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
+            >
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
+                    <div class="flex items-baseline gap-1.5">
+                        <span class="text-xl font-bold leading-none tabular-nums">{{ stat.value }}</span>
+                        <span class="text-[0.65rem] text-muted-foreground">{{ stat.sub }}</span>
                     </div>
-                    <div>
-                        <p class="text-2xl font-bold text-foreground leading-none">{{ stats.total }}</p>
-                        <p class="text-xs text-muted-foreground mt-0.5">Total</p>
-                    </div>
-                </CardContent>
-            </Card>
-            <Card class="border shadow-sm">
-                <CardContent class="flex items-center gap-3 p-4">
-                    <div class="flex size-9 items-center justify-center rounded-lg bg-emerald-50">
-                        <Icon icon="heroicons:globe-alt" class="size-4 text-emerald-600" />
-                    </div>
-                    <div>
-                        <p class="text-2xl font-bold text-foreground leading-none">{{ stats.published }}</p>
-                        <p class="text-xs text-muted-foreground mt-0.5">Published</p>
-                    </div>
-                </CardContent>
-            </Card>
-            <Card class="border shadow-sm">
-                <CardContent class="flex items-center gap-3 p-4">
-                    <div class="flex size-9 items-center justify-center rounded-lg bg-amber-50">
-                        <Icon icon="heroicons:pencil-square" class="size-4 text-amber-600" />
-                    </div>
-                    <div>
-                        <p class="text-2xl font-bold text-foreground leading-none">{{ stats.draft }}</p>
-                        <p class="text-xs text-muted-foreground mt-0.5">Draft</p>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
 
-        <!-- ── Filters + search ── -->
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <!-- Filter tabs -->
-            <div class="flex gap-1 rounded-lg border bg-muted/40 p-0.5">
+        <!-- Search + filters -->
+        <div class="flex flex-col gap-3 rounded-xl border border-border/60 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between md:p-4">
+            <div class="relative max-w-md flex-1">
+                <Icon icon="heroicons:magnifying-glass" class="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input v-model="search" placeholder="Search webinars & funnels…" class="pl-9" />
+            </div>
+            <div class="flex gap-1.5">
                 <button
                     v-for="tab in filterTabs"
                     :key="tab.key"
-                    class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                    type="button"
+                    class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
                     :class="activeFilter === tab.key
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'"
+                        ? 'bg-teal-600 text-white shadow-sm'
+                        : 'border border-border/60 bg-muted/20 text-muted-foreground hover:bg-teal-50 hover:text-teal-800'"
                     @click="activeFilter = tab.key"
                 >
                     {{ tab.label }}
-                    <span
-                        class="rounded-full px-1.5 py-0.5 text-[0.6rem] font-bold leading-none"
-                        :class="activeFilter === tab.key ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'"
-                    >
-                        {{ tab.count }}
-                    </span>
                 </button>
             </div>
-
-            <!-- Search -->
-            <div class="relative sm:ml-auto sm:w-64">
-                <Icon icon="heroicons:magnifying-glass" class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-                <Input v-model="search" placeholder="Search funnels…" class="pl-9 h-9 text-sm" />
-            </div>
         </div>
 
-        <!-- ── Funnels list ── -->
-        <div v-if="filtered.length > 0" class="flex flex-col gap-2">
-            <div
-                v-for="funnel in filtered"
-                :key="funnel.id"
-                class="group flex items-center gap-4 rounded-xl border bg-card px-4 py-3.5 shadow-sm hover:shadow-md hover:border-primary/20 transition-all"
-            >
-                <!-- Icon -->
-                <div
-                    class="flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors"
-                        :class="funnel.status === 'published'
-                            ? 'bg-emerald-50'
-                            : funnel.status === 'archived'
-                                ? 'bg-slate-100'
-                                : 'bg-amber-50'"
-                >
-                    <Icon
-                        :icon="funnel.status === 'published'
-                            ? 'heroicons:globe-alt'
-                            : funnel.status === 'archived'
-                                ? 'heroicons:archive-box'
-                                : 'heroicons:pencil-square'"
-                        class="size-5"
-                        :class="funnel.status === 'published'
-                            ? 'text-emerald-600'
-                            : funnel.status === 'archived'
-                                ? 'text-slate-600'
-                                : 'text-amber-600'"
-                    />
-                </div>
-
-                <!-- Main info -->
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <p class="text-sm font-semibold text-foreground truncate">{{ funnel.name }}</p>
-                        <Badge
-                            class="capitalize text-[0.6rem] px-2 py-0.5 shrink-0"
-                            :class="funnel.status === 'published'
-                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                                : funnel.status === 'archived'
-                                    ? 'bg-slate-100 text-slate-700 border-slate-200'
-                                    : 'bg-amber-50 text-amber-700 border-amber-200'"
-                        >
-                            <span
-                                v-if="funnel.status === 'published'"
-                                class="mr-1 inline-block size-1.5 rounded-full bg-emerald-500"
-                            />
-                            {{ funnel.status }}
-                        </Badge>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap mt-0.5">
-                        <p class="text-xs text-muted-foreground font-mono">/{{ funnel.slug }}</p>
-                        <span v-if="funnel.template" class="text-muted-foreground/50">·</span>
-                        <p v-if="funnel.template" class="text-xs text-muted-foreground capitalize">
-                            {{ funnel.template.name }}
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Stats -->
-                <div class="hidden md:flex items-center gap-6 shrink-0">
-                    <!-- Lead count -->
-                    <div class="text-center">
-                        <p class="text-sm font-bold text-foreground">{{ funnel.leads_count }}</p>
-                        <p class="text-[0.6rem] text-muted-foreground">Leads</p>
-                    </div>
-                    <!-- Date -->
-                    <div class="text-right">
-                        <p class="text-xs text-muted-foreground">
-                            {{ funnel.published_at ? 'Published' : 'Created' }}
-                        </p>
-                        <p class="text-xs font-medium text-foreground">
-                            {{ fmtDate(funnel.published_at ?? funnel.created_at) }}
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Actions -->
-                <div class="flex items-center gap-1.5 shrink-0">
-                    <Button
-                        v-if="funnel.public_url"
-                        as-child
-                        variant="outline"
-                        size="sm"
-                        class="h-8 px-3 text-xs gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                        title="View public page"
-                    >
-                        <a :href="funnel.public_url" target="_blank" rel="noopener noreferrer">
-                            <Icon icon="heroicons:globe-alt" class="size-3.5" />
-                            View
-                        </a>
-                    </Button>
-                    <Button
-                        as-child
-                        size="sm"
-                        class="h-8 px-3 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90 opacity-80 group-hover:opacity-100 transition-opacity"
-                    >
-                        <Link :href="`/funnels/${funnel.id}/edit`">
-                            <Icon icon="heroicons:pencil-square" class="size-3.5" />
-                            Edit
-                        </Link>
-                    </Button>
-                    <Button
-                        as-child
-                        variant="outline"
-                        size="sm"
-                        class="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="View chat"
-                    >
-                        <a :href="`/funnels/${funnel.id}/chat`">
-                            <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-3.5" />
-                        </a>
-                    </Button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Empty state — no funnels at all -->
+        <!-- Empty: no funnels -->
         <div
-            v-else-if="stats.total === 0"
-            class="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary/25 bg-primary/5 py-20 gap-4 text-muted-foreground"
+            v-if="stats.total === 0"
+            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-teal-200/60 bg-white px-6 py-14 text-center shadow-sm"
         >
-            <div class="flex size-16 items-center justify-center rounded-2xl bg-primary/10">
-                <Icon icon="heroicons:funnel" class="size-8 text-primary" />
+            <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
+                <Icon icon="heroicons:video-camera" class="size-7 text-teal-600/60" />
             </div>
-            <div class="text-center">
-                <p class="font-semibold text-foreground">No funnels yet</p>
-                <p class="text-sm mt-0.5">Create your first webinar funnel from a template and start collecting leads.</p>
+            <div>
+                <p class="font-semibold text-foreground">No webinars yet</p>
+                <p class="mt-1 max-w-sm text-sm text-muted-foreground">
+                    Create a campaign to get a webinar room, or build one from a legacy template.
+                </p>
             </div>
-            <Button as-child class="mt-1 gap-1.5 bg-primary text-primary-foreground hover:opacity-90 shadow-sm">
-                <Link href="/templates">
-                    <Icon icon="heroicons:rectangle-stack" class="size-4" />
-                    Browse Templates
-                </Link>
-            </Button>
+            <div class="flex flex-wrap justify-center gap-2">
+                <Button as-child variant="brand" size="sm">
+                    <Link href="/campaigns/create">New campaign</Link>
+                </Button>
+                <Button as-child variant="brand-outline" size="sm">
+                    <Link href="/templates">Browse templates</Link>
+                </Button>
+            </div>
         </div>
 
-        <!-- Empty state — filtered / no results -->
+        <!-- Empty: filtered -->
         <div
-            v-else
-            class="flex flex-col items-center justify-center rounded-xl border border-dashed py-14 gap-3 text-muted-foreground"
+            v-else-if="filtered.length === 0"
+            class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 bg-white px-6 py-12 text-center shadow-sm"
         >
-            <Icon icon="heroicons:magnifying-glass" class="size-8 opacity-30" />
-            <p class="text-sm">No funnels match your filter.</p>
-            <Button variant="ghost" size="sm" class="text-xs" @click="search = ''; activeFilter = 'all'">
+            <Icon icon="heroicons:magnifying-glass" class="size-8 text-muted-foreground/40" />
+            <p class="text-sm text-muted-foreground">No funnels match your filter.</p>
+            <Button variant="ghost" size="sm" class="text-teal-700" @click="search = ''; activeFilter = 'all'">
                 Clear filters
             </Button>
         </div>
 
+        <!-- List -->
+        <div v-else class="grid gap-3">
+            <article
+                v-for="funnel in filtered"
+                :key="funnel.id"
+                class="group overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-teal-200/60 hover:shadow-md"
+            >
+                <div class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex min-w-0 flex-1 items-start gap-3">
+                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
+                            <Icon :icon="funnelIcon(funnel)" class="size-5 text-teal-600" />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <Link
+                                    :href="`/funnels/${funnel.id}/edit`"
+                                    class="truncate text-sm font-semibold text-foreground hover:text-teal-800 hover:underline"
+                                >
+                                    {{ funnel.name }}
+                                </Link>
+                                <Badge
+                                    v-if="funnel.kind === 'webinar'"
+                                    variant="outline"
+                                    class="border-violet-200 bg-violet-50 text-[0.6rem] text-violet-700"
+                                >
+                                    Webinar
+                                </Badge>
+                                <Badge variant="outline" class="capitalize text-[0.6rem]" :class="statusBadgeClass(funnel.status)">
+                                    {{ funnel.status }}
+                                </Badge>
+                            </div>
+                            <p class="mt-0.5 truncate font-mono text-[0.65rem] text-muted-foreground">/{{ funnel.slug }}</p>
+                            <div class="mt-2 flex flex-wrap gap-1.5">
+                                <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
+                                    <Icon icon="heroicons:users" class="size-3 text-teal-600" />
+                                    {{ funnel.leads_count }} leads
+                                </span>
+                                <span v-if="funnel.campaign_name" class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
+                                    <Icon icon="heroicons:rocket-launch" class="size-3 text-teal-600" />
+                                    {{ funnel.campaign_name }}
+                                </span>
+                                <span v-if="funnel.template" class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] capitalize text-muted-foreground">
+                                    <Icon icon="heroicons:rectangle-stack" class="size-3 text-teal-600" />
+                                    {{ funnel.template.name }}
+                                </span>
+                                <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
+                                    <Icon icon="heroicons:calendar" class="size-3" />
+                                    {{ fmtDate(funnel.published_at ?? funnel.created_at) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex shrink-0 flex-wrap gap-2 lg:flex-col lg:items-stretch xl:flex-row">
+                        <Button
+                            v-if="funnel.public_url"
+                            as-child
+                            size="sm"
+                            variant="brand-outline"
+                            class="min-w-[7rem]"
+                        >
+                            <a :href="funnel.public_url" target="_blank" rel="noopener noreferrer">
+                                <Icon icon="heroicons:globe-alt" class="size-3.5" />
+                                View live
+                            </a>
+                        </Button>
+                        <Button as-child size="sm" variant="brand" class="min-w-[7rem]">
+                            <Link :href="`/funnels/${funnel.id}/edit`">
+                                <Icon icon="heroicons:pencil-square" class="size-3.5" />
+                                Edit
+                            </Link>
+                        </Button>
+                        <Button as-child size="sm" variant="ghost" class="text-muted-foreground hover:text-teal-700">
+                            <Link :href="`/funnels/${funnel.id}/chat`">
+                                <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-3.5" />
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
+            </article>
+        </div>
     </div>
 </template>

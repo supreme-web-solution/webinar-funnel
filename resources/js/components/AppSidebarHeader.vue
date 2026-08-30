@@ -2,6 +2,7 @@
 import { Icon } from '@iconify/vue';
 import { Link } from '@inertiajs/vue3';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItem } from '@/types';
 
@@ -17,43 +18,38 @@ withDefaults(
 
 <template>
     <header
-        class="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border/60 bg-background/95 backdrop-blur-sm px-4 md:px-6 transition-[height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
+        class="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border/50 bg-white/80 px-4 backdrop-blur-md md:px-6 transition-[height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12"
     >
-        <!-- Left: trigger + breadcrumbs -->
-        <div class="flex items-center gap-3 min-w-0">
+        <div class="flex min-w-0 items-center gap-3">
             <SidebarTrigger
-                class="-ml-1 size-8 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                class="-ml-1 size-8 rounded-xl text-muted-foreground transition-colors hover:bg-teal-50 hover:text-teal-800"
             />
             <template v-if="breadcrumbs && breadcrumbs.length > 0">
-                <div class="hidden sm:block h-4 w-px bg-border/60" />
+                <div class="hidden h-4 w-px bg-border/60 sm:block" />
                 <Breadcrumbs :breadcrumbs="breadcrumbs" />
             </template>
         </div>
 
-        <!-- Right: action area -->
-        <div class="flex items-center gap-2 shrink-0">
-            <Link
-                href="/funnels/create"
-                class="hidden md:flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
-                style="background:#40E0D0; color:#0f172a"
-            >
-                <Icon icon="heroicons:plus" class="size-3.5" />
-                New Funnel
-            </Link>
-            <Link
-                href="/integrations/coaching"
-                class="hidden md:flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100 transition-colors"
-            >
-                <Icon icon="heroicons:user-group" class="size-3.5" />
-                1-on-1 Coaching
-            </Link>
-            <a
-                href="#"
-                class="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        <div class="flex shrink-0 items-center gap-2">
+            <Button as-child variant="brand-outline" size="sm" class="hidden md:inline-flex">
+                <Link href="/integrations/coaching">
+                    <Icon icon="heroicons:user-group" class="size-3.5" />
+                    Support
+                </Link>
+            </Button>
+            <Button as-child variant="brand" size="sm">
+                <Link href="/campaigns/create">
+                    <Icon icon="heroicons:plus" class="size-3.5" />
+                    New Campaign
+                </Link>
+            </Button>
+            <button
+                type="button"
+                class="flex size-8 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-teal-50 hover:text-teal-800"
                 title="Notifications"
             >
-                <Icon icon="heroicons:bell" class="size-4.5" />
-            </a>
+                <Icon icon="heroicons:bell" class="size-4" />
+            </button>
         </div>
     </header>
 </template>

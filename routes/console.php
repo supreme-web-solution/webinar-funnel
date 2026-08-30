@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\FetchMentionsCommand;
+use App\Console\Commands\RefreshMarketplaceTrendingCommand;
 use App\Jobs\DispatchDuePromotionPostsJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -15,3 +16,6 @@ Schedule::command(FetchMentionsCommand::class)->everyFifteenMinutes();
 
 // Dispatch scheduled promotion posts every minute.
 Schedule::job(new DispatchDuePromotionPostsJob())->everyMinute();
+
+// Refresh Opportunity Finder trending cache daily (ClickBank + marketplace keywords).
+Schedule::command(RefreshMarketplaceTrendingCommand::class)->dailyAt('06:00');

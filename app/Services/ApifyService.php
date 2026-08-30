@@ -39,15 +39,22 @@ class ApifyService
     }
 
     /**
-     * Run an Apify actor synchronously and return the dataset items.
-     * Uses the run-sync-get-dataset-items endpoint (blocks until actor finishes).
+     * @return list<array<string, mixed>>
      */
     public function runSync(string $actorId, array $input, int $timeoutSecs = 120): array
+    {
+        return $this->runSyncWithMeta($actorId, $input, $timeoutSecs)['items'];
+    }
+
+    /**
+     * @return array{items: list<array<string, mixed>>, error: string|null}
+     */
+    public function runSyncWithMeta(string $actorId, array $input, int $timeoutSecs = 120): array
     {
         if (empty($this->token)) {
             Log::warning('ApifyService: No API token configured');
 
-            return [];
+            return ['items' => [], 'error' => 'Apify API token not configured.'];
         }
 
         $apiActorId = self::normalizeActorIdForApi($actorId);
@@ -68,6 +75,8 @@ class ApifyService
                 ->post($requestUrl, $input);
 
             if ($response->failed()) {
+                $message = $this->parseErrorMessage($response->body()) ?? 'Apify request failed ('.$response->status().').';
+
                 Log::error('ApifyService: Actor run failed', [
                     'actor_id' => $actorId,
                     'api_actor_id' => $apiActorId,
@@ -75,7 +84,7 @@ class ApifyService
                     'body' => $response->body(),
                 ]);
 
-                return [];
+                return ['items' => [], 'error' => $message];
             }
 
             $items = self::flattenDatasetItems($response->json());
@@ -85,15 +94,28 @@ class ApifyService
                 'items_count' => count($items),
             ]);
 
-            return $items;
+            return ['items' => $items, 'error' => null];
         } catch (\Exception $e) {
             Log::error('ApifyService: Exception during actor run', [
                 'actor_id' => $actorId,
                 'error' => $e->getMessage(),
             ]);
 
-            return [];
+            return ['items' => [], 'error' => $e->getMessage()];
         }
+    }
+
+    protected function parseErrorMessage(string $body): ?string
+    {
+        $json = json_decode($body, true);
+        if (is_array($json)) {
+            $message = $json['error']['message'] ?? $json['message'] ?? null;
+            if (is_string($message) && $message !== '') {
+                return $message;
+            }
+        }
+
+        return null;
     }
 
     /**
