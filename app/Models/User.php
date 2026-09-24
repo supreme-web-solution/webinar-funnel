@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Ai\Concerns\HasConversations;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -20,7 +22,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasPublicUuid, HasRoles, Notifiable, TwoFactorAuthenticatable;
+    use HasConversations, HasFactory, HasPublicUuid, HasRoles, Notifiable, TwoFactorAuthenticatable;
 
     /**
      * Get the attributes that should be cast.
@@ -76,6 +78,21 @@ class User extends Authenticatable
     public function socialAccounts(): HasMany
     {
         return $this->hasMany(SocialAccount::class);
+    }
+
+    public function aiEmployeeSetting(): HasOne
+    {
+        return $this->hasOne(AiEmployeeSetting::class);
+    }
+
+    public function aiEmployeeSession(): HasOne
+    {
+        return $this->hasOne(AiEmployeeSession::class);
+    }
+
+    public function aiActionApprovals(): HasMany
+    {
+        return $this->hasMany(AiActionApproval::class);
     }
 
     public function promotionPosts(): HasMany

@@ -29,7 +29,7 @@ const isSidebar = computed(() => props.variant === 'sidebar');
         <AvatarImage v-if="showAvatar" :src="user.avatar!" :alt="user.name" />
         <AvatarFallback
             class="rounded-lg"
-            :class="isSidebar ? 'bg-teal-600/30 text-teal-50' : 'bg-teal-100 text-teal-800'"
+            :class="isSidebar ? 'bg-[#2563EB]/35 text-blue-50' : 'bg-[#DBEAFE] text-[#1D4ED8]'"
         >
             {{ getInitials(user.name) }}
         </AvatarFallback>
@@ -38,14 +38,14 @@ const isSidebar = computed(() => props.variant === 'sidebar');
     <div class="grid flex-1 text-left text-sm leading-tight">
         <span
             class="truncate font-medium"
-            :class="isSidebar ? 'text-teal-50' : 'text-foreground'"
+            :class="isSidebar ? 'text-blue-50' : 'text-foreground'"
         >
             {{ user.name }}
         </span>
         <span
             v-if="showEmail"
             class="truncate text-xs"
-            :class="isSidebar ? 'text-teal-200/55' : 'text-muted-foreground'"
+            :class="isSidebar ? 'text-blue-200/55' : 'text-muted-foreground'"
         >
             {{ user.email }}
         </span>

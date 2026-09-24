@@ -19,6 +19,15 @@ use Illuminate\Http\Request;
 
 class FunnelTrafficController extends Controller
 {
+    public function redirectToCampaignHub(Funnel $funnel): RedirectResponse
+    {
+        $this->authorizeFunnel($funnel);
+
+        abort_unless($funnel->campaign_id, 404);
+
+        return redirect()->route('campaigns.traffic.index', $funnel->campaign_id);
+    }
+
     public function storeKeyword(Request $request, Funnel $funnel): RedirectResponse
     {
         $this->authorizeFunnel($funnel);
@@ -130,7 +139,7 @@ class FunnelTrafficController extends Controller
 
         if ($generated['text'] === '') {
             return response()->json([
-                'message' => 'Could not generate a reply. Check your OpenAI key or try again.',
+                'message' => 'Could not generate a reply. Check your OpenRouter API key or try again.',
             ], 422);
         }
 

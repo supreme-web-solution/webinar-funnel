@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Middleware\EnsureCustomDomainRequest;
 use App\Http\Middleware\EnsurePaidAdsEnabled;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\ResolveCustomDomain;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,6 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        $middleware->web(prepend: [
+            ResolveCustomDomain::class,
+        ]);
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
@@ -27,10 +33,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'paid-ads' => EnsurePaidAdsEnabled::class,
+            'custom-domain' => EnsureCustomDomainRequest::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [
             'ipn/*',
+            'webhooks/zernio/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

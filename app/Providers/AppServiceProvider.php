@@ -2,16 +2,20 @@
 
 namespace App\Providers;
 
+use App\Listeners\RecordAiEmployeeToolProgress;
 use App\Models\Mention;
 use App\Observers\MentionObserver;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Ai\Events\InvokingTool;
+use Laravel\Ai\Events\ToolInvoked;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -29,6 +33,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Mention::observe(MentionObserver::class);
+
+        Event::listen(InvokingTool::class, [RecordAiEmployeeToolProgress::class, 'handleInvoking']);
+        Event::listen(ToolInvoked::class, [RecordAiEmployeeToolProgress::class, 'handleInvoked']);
 
         $this->configureDefaults();
     }
@@ -63,6 +70,10 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(30)->by(
                 sprintf('%s|%s', $request->ip(), $request->path())
             );
+        });
+
+        RateLimiter::for('command-center-chat', function ($request) {
+            return Limit::perMinute(30)->by((string) optional($request->user())->id ?: $request->ip());
         });
     }
 }

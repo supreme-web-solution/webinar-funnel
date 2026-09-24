@@ -146,7 +146,11 @@ class CampaignGenerationStateService
 
     public function funnelPagesReady(Campaign $campaign): bool
     {
-        foreach (['squeeze', 'thankyou'] as $type) {
+        $types = $campaign->type === Campaign::TYPE_WEBINAR
+            ? ['squeeze']
+            : ['squeeze', 'thankyou'];
+
+        foreach ($types as $type) {
             $page = $campaign->pages->firstWhere('page_type', $type);
             $content = is_array($page?->content) ? $page->content : [];
             if (empty($content['headline']) && empty($content['title']) && empty($content['subheadline'])) {

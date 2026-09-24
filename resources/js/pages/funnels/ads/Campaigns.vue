@@ -80,7 +80,17 @@ const props = defineProps<{
     adGoals: Record<string, string>;
     ctaButtons: Record<string, string>;
     adsEnabled: boolean;
-    routes: { store: string; posts: string };
+    routes: {
+        store: string;
+        posts: string;
+        update?: string;
+        duplicate?: string;
+        destroy?: string;
+        research?: string;
+        creatives_generate?: string;
+        launch?: string;
+        sync?: string;
+    };
     savedAdAccountIds?: Record<string, string>;
     adAccountsSettingsUrl?: string;
     minBudgetAmount?: number;
@@ -89,6 +99,17 @@ const props = defineProps<{
     defaultBudgetCurrency?: string;
     campaignHub?: CampaignHubContext | null;
 }>();
+
+function adRoute(key: keyof typeof props.routes, adCampaignId: number, creativeId?: number): string {
+    const template = props.routes[key];
+    if (!template) {
+        return `/funnels/${props.funnel.id}/ads/${adCampaignId}`;
+    }
+
+    return template
+        .replace('__ID__', String(adCampaignId))
+        .replace('__CID__', creativeId !== undefined ? String(creativeId) : '__CID__');
+}
 
 // ─── Wizard state ────────────────────────────────────────────────────────────
 type WizardStep = 1 | 2 | 3 | 4 | 5;
@@ -266,7 +287,7 @@ function saveEditCampaign(): void {
     }
 
     editSaving.value = true;
-    router.patch(`/funnels/${props.funnel.id}/ads/${editingCampaignId.value}`, {
+    router.patch(adRoute('update', editingCampaignId.value), {
         name: editName.value.trim(),
         goal: editGoal.value,
         platforms: editPlatforms.value,
@@ -302,7 +323,7 @@ function saveEditCampaign(): void {
 
 function duplicateCampaign(campaign: Campaign): void {
     const copyName = `${campaign.name} (copy)`;
-    router.post(`/funnels/${props.funnel.id}/ads/${campaign.id}/duplicate`, {}, {
+    router.post(adRoute('duplicate', campaign.id), {}, {
         preserveScroll: true,
         onSuccess: (page) => {
             toast.success('Campaign duplicated.');
@@ -480,7 +501,7 @@ async function saveCampaignAndAdvance(): Promise<void> {
 async function runResearch(campaign: Campaign): Promise<void> {
     researchLoading.value = true;
     try {
-        const url = `/funnels/${props.funnel.id}/ads/${campaign.id}/research`;
+        const url = adRoute('research', campaign.id);
         const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '' },
@@ -502,7 +523,7 @@ async function generateCreativesStep(): Promise<void> {
     if (!creatingCampaignId.value) return;
     generatingCreatives.value = true;
     try {
-        const url = `/funnels/${props.funnel.id}/ads/${creatingCampaignId.value}/creatives/generate`;
+        const url = adRoute('creatives_generate', creatingCampaignId.value);
         const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content ?? '' },
@@ -523,7 +544,7 @@ async function generateCreativesStep(): Promise<void> {
 function launchCampaign(campaign: Campaign): void {
     if (launchingCampaignId.value) return;
     launchingCampaignId.value = campaign.id;
-    router.post(`/funnels/${props.funnel.id}/ads/${campaign.id}/launch`, {}, {
+    router.post(adRoute('launch', campaign.id), {}, {
         preserveScroll: true,
         onSuccess: () => { toast.success('Campaign is launching!'); },
         onError: (e) => { toast.error(Object.values(e)[0] as string || 'Launch failed.'); },
@@ -532,7 +553,7 @@ function launchCampaign(campaign: Campaign): void {
 }
 
 function syncCampaign(campaign: Campaign): void {
-    router.post(`/funnels/${props.funnel.id}/ads/${campaign.id}/sync`, {}, {
+    router.post(adRoute('sync', campaign.id), {}, {
         preserveScroll: true,
         onSuccess: () => toast.success('Performance sync queued.'),
     });
@@ -540,7 +561,7 @@ function syncCampaign(campaign: Campaign): void {
 
 function deleteCampaign(campaign: Campaign): void {
     if (!confirm(`Delete "${campaign.name}"?`)) return;
-    router.delete(`/funnels/${props.funnel.id}/ads/${campaign.id}`, {
+    router.delete(adRoute('destroy', campaign.id), {
         preserveScroll: true,
         onSuccess: () => toast.success('Campaign deleted.'),
     });
@@ -558,7 +579,7 @@ const STATUS_META: Record<string, { label: string; dot: string; text: string; bg
     generating: { label: 'Generating', dot: 'bg-amber-500 animate-pulse', text: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/20' },
     ready:      { label: 'Ready',      dot: 'bg-blue-500', text: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/20' },
     launching:  { label: 'Launching',  dot: 'bg-primary animate-pulse', text: 'text-primary', bg: 'bg-primary/5' },
-    active:     { label: 'Active',     dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
+    active:     { label: 'Active',     dot: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/20' },
     paused:     { label: 'Paused',     dot: 'bg-orange-500', text: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/20' },
     completed:  { label: 'Completed',  dot: 'bg-slate-500', text: 'text-slate-600', bg: 'bg-muted/30' },
     failed:     { label: 'Failed',     dot: 'bg-rose-500', text: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/20' },
@@ -566,7 +587,7 @@ const STATUS_META: Record<string, { label: string; dot: string; text: string; bg
 function sm(s: string) { return STATUS_META[s] ?? STATUS_META['draft']; }
 
 const CREATIVE_STATUS: Record<string, string> = {
-    draft: 'text-muted-foreground', active: 'text-emerald-600', paused: 'text-orange-500',
+    draft: 'text-muted-foreground', active: 'text-blue-600', paused: 'text-orange-500',
     winner: 'text-yellow-600', loser: 'text-rose-500',
 };
 
@@ -710,7 +731,7 @@ function launchStats(campaign: Campaign): { total: number; live: number } {
             </CardContent></Card>
             <Card class="border shadow-sm"><CardContent class="p-4">
                 <p class="text-xs text-muted-foreground">Conversions</p>
-                <p class="text-2xl font-bold mt-1 text-emerald-600">{{ fmtNum(totalConversions) }}</p>
+                <p class="text-2xl font-bold mt-1 text-blue-600">{{ fmtNum(totalConversions) }}</p>
             </CardContent></Card>
         </div>
 
@@ -832,7 +853,7 @@ function launchStats(campaign: Campaign): { total: number; live: number } {
                     </div>
                     <p class="mt-1 text-muted-foreground">
                         {{ launchStats(campaign).live }} of {{ launchStats(campaign).total }} creatives live.
-                        Status becomes <span class="font-medium text-emerald-600">Active</span> when at least one creative is published.
+                        Status becomes <span class="font-medium text-blue-600">Active</span> when at least one creative is published.
                         This page refreshes every few seconds.
                     </p>
                 </div>
@@ -917,7 +938,7 @@ function launchStats(campaign: Campaign): { total: number; live: number } {
                                     </span>
                                     <!-- Status badge -->
                                     <span class="absolute top-1.5 left-1.5 rounded-full border px-1.5 py-0.5 text-[0.6rem] font-medium"
-                                        :class="creative.status === 'active' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600' : creative.status === 'paused' ? 'bg-orange-500/10 border-orange-500/20 text-orange-600' : 'bg-muted text-muted-foreground border-border'">
+                                        :class="creative.status === 'active' ? 'bg-blue-500/10 border-blue-500/20 text-blue-600' : creative.status === 'paused' ? 'bg-orange-500/10 border-orange-500/20 text-orange-600' : 'bg-muted text-muted-foreground border-border'">
                                         {{ creative.status }}
                                     </span>
                                     <!-- Format badge -->
@@ -1228,7 +1249,7 @@ function launchStats(campaign: Campaign): { total: number; live: number } {
                                 <p class="text-[0.65rem] font-semibold text-muted-foreground uppercase tracking-wide">Value props</p>
                                 <ul class="space-y-1">
                                     <li v-for="vp in aiResearch.value_props" :key="vp" class="text-xs text-muted-foreground flex items-start gap-1.5">
-                                        <Icon icon="heroicons:check" class="size-3 text-emerald-500 shrink-0 mt-0.5" />
+                                        <Icon icon="heroicons:check" class="size-3 text-blue-500 shrink-0 mt-0.5" />
                                         {{ vp }}
                                     </li>
                                 </ul>
@@ -1305,10 +1326,10 @@ function launchStats(campaign: Campaign): { total: number; live: number } {
 
                 <!-- ── Step 4: Review & Launch ── -->
                 <div v-else-if="wizardStep === 4" class="px-5 py-5 space-y-5">
-                    <div class="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
-                        <Icon icon="heroicons:check-circle" class="size-5 text-emerald-500 shrink-0" />
+                    <div class="flex items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
+                        <Icon icon="heroicons:check-circle" class="size-5 text-blue-500 shrink-0" />
                         <div>
-                            <p class="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{{ wizardCreatives.length }} creative{{ wizardCreatives.length !== 1 ? 's' : '' }} generated!</p>
+                            <p class="text-sm font-semibold text-blue-700 dark:text-blue-400">{{ wizardCreatives.length }} creative{{ wizardCreatives.length !== 1 ? 's' : '' }} generated!</p>
                             <p class="text-xs text-muted-foreground mt-0.5">Review them in the campaign card, then hit Launch to deploy.</p>
                         </div>
                     </div>

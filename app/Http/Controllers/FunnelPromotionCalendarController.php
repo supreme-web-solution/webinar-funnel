@@ -7,7 +7,9 @@ use App\Models\Campaign;
 use App\Models\Funnel;
 use App\Models\FunnelPromotionPost;
 use App\Models\FunnelPromotionScheduleEvent;
-use App\Services\Campaigns\CampaignTrafficHubService;
+use App\Models\User;
+use App\Services\Traffic\TrafficHubResolver;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,10 +22,10 @@ class FunnelPromotionCalendarController extends Controller
         $this->authorizeFunnel($funnel);
 
         $month = max(1, min(12, (int) $request->query('month', now()->month)));
-        $year  = max(2020, min(2035, (int) $request->query('year', now()->year)));
+        $year = max(2020, min(2035, (int) $request->query('year', now()->year)));
 
-        $start = \Carbon\Carbon::createFromDate($year, $month, 1)->startOfDay();
-        $end   = $start->copy()->endOfMonth()->endOfDay();
+        $start = Carbon::createFromDate($year, $month, 1)->startOfDay();
+        $end = $start->copy()->endOfMonth()->endOfDay();
 
         $events = FunnelPromotionPost::query()
             ->where('funnel_id', $funnel->id)
@@ -54,6 +56,8 @@ class FunnelPromotionCalendarController extends Controller
                 'last_error',
             ]);
 
+        $hubResolver = app(TrafficHubResolver::class);
+
         return Inertia::render('funnels/promotion/Calendar', [
             'funnel' => [
                 'id' => $funnel->id,
@@ -66,10 +70,12 @@ class FunnelPromotionCalendarController extends Controller
             'routes' => [
                 'posts' => $campaign
                     ? route('campaigns.traffic.promotion.posts', $campaign)
-                    : route('funnels.promotion.posts.index', $funnel),
+                    : ($hubResolver->isStandaloneContext($funnel, $campaign)
+                        ? route('traffic.workspace.promotion.posts')
+                        : route('funnels.promotion.posts.index', $funnel)),
                 'move' => route('funnels.promotion.calendar.move', [$funnel, '__POST__']),
             ],
-            'campaignHub' => $campaign ? app(CampaignTrafficHubService::class)->hubPayload($campaign) : null,
+            'campaignHub' => $hubResolver->payload($funnel, $campaign),
         ]);
     }
 
@@ -88,7 +94,7 @@ class FunnelPromotionCalendarController extends Controller
             'status' => FunnelPromotionPost::STATUS_SCHEDULED,
         ]);
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         FunnelPromotionScheduleEvent::query()->create([
@@ -105,7 +111,7 @@ class FunnelPromotionCalendarController extends Controller
 
     private function authorizeFunnel(Funnel $funnel): void
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
 
         abort_unless((int) $user->id === (int) $funnel->user_id, 403);
@@ -113,7 +119,7 @@ class FunnelPromotionCalendarController extends Controller
 
     private function authorizePost(Request $request, Funnel $funnel, FunnelPromotionPost $post): void
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         abort_unless(

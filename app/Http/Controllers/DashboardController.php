@@ -5,14 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Funnel;
 use App\Models\FunnelPageView;
 use App\Models\Lead;
+use App\Services\Campaigns\MarketplaceOfferSearchService;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __invoke(): Response
+    public function __invoke(MarketplaceOfferSearchService $marketplaceSearch): Response
     {
         $userId = auth()->id();
+        $weeklyPick = $marketplaceSearch->weeklyPromotePick();
 
         $funnelCount = Funnel::query()
             ->where('user_id', $userId)
@@ -96,19 +98,31 @@ class DashboardController extends Controller
 
         return Inertia::render('dashboard/Index', [
             'metrics' => [
-                'funnelCount'           => $funnelCount,
-                'publishedCount'        => $publishedCount,
-                'draftCount'            => $draftCount,
-                'leadCount'             => $leadCount,
-                'recentLeads'           => $recentLeads,
-                'previousWeekLeads'     => $previousWeekLeads,
-                'totalViewCount'        => $totalViewCount,
-                'recentViewCount'       => $recentViewCount,
+                'funnelCount' => $funnelCount,
+                'publishedCount' => $publishedCount,
+                'draftCount' => $draftCount,
+                'leadCount' => $leadCount,
+                'recentLeads' => $recentLeads,
+                'previousWeekLeads' => $previousWeekLeads,
+                'totalViewCount' => $totalViewCount,
+                'recentViewCount' => $recentViewCount,
                 'previousWeekViewCount' => $previousWeekViewCount,
             ],
-            'topFunnels'    => $topFunnels,
+            'topFunnels' => $topFunnels,
             'recentFunnels' => $recentFunnels,
-            'chartDays'     => $chartDays,
+            'chartDays' => $chartDays,
+            'promoteThisWeek' => [
+                'top_pick' => $weeklyPick['top_pick'],
+                'refreshed_at' => $weeklyPick['refreshed_at'],
+                'alternates' => array_slice(
+                    array_values(array_filter(
+                        $weeklyPick['results'],
+                        fn ($row) => is_array($row) && ($weeklyPick['top_pick'] === null || ($row['title'] ?? '') !== ($weeklyPick['top_pick']['title'] ?? ''))
+                    )),
+                    0,
+                    2,
+                ),
+            ],
         ]);
     }
 }

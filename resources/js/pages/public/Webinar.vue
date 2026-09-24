@@ -585,10 +585,10 @@ onUnmounted(() => {
     <Head :title="webinarTitle" />
 
     <!-- Locked to viewport — no page scroll -->
-    <div class="flex h-screen flex-col overflow-hidden bg-linear-to-br from-emerald-50 via-cyan-50/70 to-white text-slate-900">
+    <div class="flex h-screen flex-col overflow-hidden bg-linear-to-br from-blue-50 via-blue-50/70 to-white text-slate-900">
 
         <!-- ── Top bar ── -->
-        <header class="flex shrink-0 items-center justify-between border-b border-emerald-200/70 bg-white/85 px-4 py-2 backdrop-blur">
+        <header class="flex shrink-0 items-center justify-between border-b border-blue-200/70 bg-white/85 px-4 py-2 backdrop-blur">
 
             <!-- Left: icon + title -->
             <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -756,9 +756,9 @@ onUnmounted(() => {
             </main>
 
             <!-- ── Chat sidebar ── -->
-            <aside class="flex min-h-0 flex-col overflow-hidden border-t border-emerald-200/70 bg-white/70 lg:w-[360px] lg:border-l lg:border-t-0">
+            <aside class="flex min-h-0 flex-col overflow-hidden border-t border-blue-200/70 bg-white/70 lg:w-[360px] lg:border-l lg:border-t-0">
                 <!-- Chat header -->
-                <div class="flex shrink-0 items-center justify-between border-b border-emerald-200/70 bg-white/90 px-4 py-3">
+                <div class="flex shrink-0 items-center justify-between border-b border-blue-200/70 bg-white/90 px-4 py-3">
                     <div class="flex items-center gap-2">
                         <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-4 text-slate-500" />
                         <span class="text-sm font-semibold text-slate-800">Webinar Chat</span>
@@ -767,14 +767,14 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Pinned offers in chat -->
-                <div v-if="pinnedOffers.length > 0 || hasWebinarCta" class="shrink-0 space-y-2 border-b border-emerald-200/70 bg-emerald-50/70 px-3 py-2">
+                <div v-if="pinnedOffers.length > 0 || hasWebinarCta" class="shrink-0 space-y-2 border-b border-blue-200/70 bg-blue-50/70 px-3 py-2">
                     <a
                         v-for="offer in pinnedOffers"
                         :key="`pinned-${offer.id}`"
                         :href="offer.cta_url"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/70 bg-white px-3 py-2 text-xs"
+                        class="flex items-center justify-between gap-2 rounded-lg border border-blue-200/70 bg-white px-3 py-2 text-xs"
                     >
                         <span class="flex min-w-0 items-center gap-1.5 text-slate-700">
                             <Icon icon="heroicons:megaphone" class="size-3.5" style="color:#40E0D0" />
@@ -790,7 +790,7 @@ onUnmounted(() => {
                         :href="webinarCtaUrl"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/70 bg-white px-3 py-2 text-xs"
+                        class="flex items-center justify-between gap-2 rounded-lg border border-blue-200/70 bg-white px-3 py-2 text-xs"
                     >
                         <span class="flex items-center gap-1.5 text-slate-700">
                             <Icon icon="heroicons:megaphone" class="size-3.5" style="color:#40E0D0" />
@@ -889,13 +889,13 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Input -->
-                <div class="border-t border-emerald-200/70 bg-white/90 p-3">
+                <div class="border-t border-blue-200/70 bg-white/90 p-3">
                     <div class="flex gap-2">
                         <textarea
                             v-model="messageInput"
                             rows="2"
                             placeholder="Type a message… (Enter to send)"
-                            class="flex-1 resize-none rounded-lg border border-emerald-200/70 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                            class="flex-1 resize-none rounded-lg border border-blue-200/70 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                             @keydown="handleKeydown"
                         />
                         <button

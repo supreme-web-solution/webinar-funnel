@@ -4,13 +4,14 @@ namespace App\Services\Promotion;
 
 use App\Models\Funnel;
 use App\Models\FunnelPromotionTopicSuggestion;
-use Illuminate\Support\Facades\Http;
+use App\Services\Ai\OpenRouterService;
 use Illuminate\Support\Str;
 
 class PromotionTopicSuggestionService
 {
     public function __construct(
         private readonly PromotionFunnelContextBuilder $contextBuilder,
+        private readonly OpenRouterService $openRouter,
     ) {}
 
     /**
@@ -20,47 +21,39 @@ class PromotionTopicSuggestionService
     {
         $count = max(5, min($count, (int) config('promotion.max_sequence_size', 30)));
         $context = $this->contextBuilder->build($funnel);
-        $apiKey = (string) config('services.openai.api_key', '');
 
-        if ($apiKey === '') {
+        if (! $this->openRouter->isConfigured()) {
             return $this->fallbackTopics($context, $count, $extraContext);
         }
 
         try {
-            $response = Http::withToken($apiKey)
-                ->timeout((int) config('promotion.openai.timeout', 90))
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => (string) config('promotion.openai.text_model', 'gpt-4o-mini'),
-                    'temperature' => 0.85,
-                    'response_format' => ['type' => 'json_object'],
-                    'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => 'You generate social media post topics for promoting a specific affiliate offer using the campaign knowledge dossier provided. '
-                                .'Each topic must be a standalone, specific post idea tied to the product benefits — never paste the product name into a generic template. '
-                                .'Do NOT use boilerplate webinar titles like "Watch this training completely to be our next success story". '
-                                .'Do NOT reference the AffiliateOS platform unless it is the actual offer being promoted. '
-                                .'Output strict JSON: {"topics":[{"topic":"...","angle":"problem|proof|how-to|objection|cta","score":0-100}]}.',
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => $this->topicPrompt($context, $count, $extraContext),
-                        ],
+            $result = $this->openRouter->chatJson(
+                [
+                    [
+                        'role' => 'system',
+                        'content' => 'You generate social media post topics for promoting a specific affiliate offer using the campaign knowledge dossier provided. '
+                            .'Each topic must be a standalone, specific post idea tied to the product benefits — never paste the product name into a generic template. '
+                            .'Do NOT use boilerplate webinar titles like "Watch this training completely to be our next success story". '
+                            .'Do NOT reference the AffiliateOS platform unless it is the actual offer being promoted. '
+                            .'Output strict JSON: {"topics":[{"topic":"...","angle":"problem|proof|how-to|objection|cta","score":0-100}]}.',
                     ],
-                ]);
+                    [
+                        'role' => 'user',
+                        'content' => $this->topicPrompt($context, $count, $extraContext),
+                    ],
+                ],
+                $this->openRouter->promotionTextModel(),
+                (int) config('promotion.openrouter.timeout', 90),
+                null,
+                0.85,
+                true,
+            );
 
-            if (! $response->successful()) {
+            if (! $result['ok'] || ! is_array($result['data'])) {
                 return $this->fallbackTopics($context, $count, $extraContext);
             }
 
-            $json = $response->json();
-            $items = $json['choices'][0]['message']['content'] ?? null;
-            if (! is_string($items) || $items === '') {
-                return $this->fallbackTopics($context, $count, $extraContext);
-            }
-
-            $decoded = json_decode($items, true);
-            $topics = is_array($decoded['topics'] ?? null) ? $decoded['topics'] : [];
+            $topics = is_array($result['data']['topics'] ?? null) ? $result['data']['topics'] : [];
             $normalized = [];
             foreach ($topics as $topic) {
                 $label = trim((string) ($topic['topic'] ?? ''));

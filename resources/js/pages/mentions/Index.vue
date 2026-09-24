@@ -177,7 +177,7 @@ function togglePlatform(p: string) {
 <template>
     <Head title="Brand Mentions" />
 
-    <div class="flex flex-col gap-6 p-4 md:p-6 w-full max-w-screen-xl mx-auto">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 md:p-6">
 
         <!-- ── Page header ── -->
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -571,7 +571,7 @@ function togglePlatform(p: string) {
                                             </span>
 
                                             <span v-if="mention.retweet_count" class="text-xs text-muted-foreground flex items-center gap-1">
-                                                <Icon icon="heroicons:arrow-path-rounded-square" class="size-3.5 text-green-400" />
+                                                <Icon icon="heroicons:arrow-path-rounded-square" class="size-3.5 text-blue-400" />
                                                 {{ fmtNum(mention.retweet_count) }}
                                             </span>
 

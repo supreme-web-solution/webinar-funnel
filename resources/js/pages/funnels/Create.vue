@@ -111,7 +111,7 @@ function coverIcon(cat: string): string {
 <template>
     <Head title="Create Funnel" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 md:p-6">
 
         <div class="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
             Preferred path:
@@ -389,7 +389,7 @@ function coverIcon(cat: string): string {
                                 </Badge>
                             </div>
 
-                            <div v-if="form.is_scratch" class="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3.5 py-2.5 text-xs text-emerald-800">
+                            <div v-if="form.is_scratch" class="rounded-lg border border-blue-200 bg-blue-50/60 px-3.5 py-2.5 text-xs text-blue-800">
                                 Scratch mode: this uses the first base template structure, but starts with empty page content and webinar settings.
                             </div>
 

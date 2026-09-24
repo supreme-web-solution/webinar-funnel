@@ -8,6 +8,7 @@ use App\Models\CampaignEmail;
 use App\Models\CampaignPage;
 use App\Services\Ai\OpenRouterService;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class CampaignContentGeneratorService
 {
@@ -115,32 +116,66 @@ class CampaignContentGeneratorService
 
         $ctx = $this->knowledge->contextForGeneration($campaign);
         $plan = $ctx['pass2']['email_sequence_plan'] ?? [];
+        $planSlice = is_array($plan) && $plan !== []
+            ? array_slice($plan, 0, $count)
+            : $this->defaultEmailPlan($count);
 
         $emails = [];
-        $planSlice = is_array($plan) ? array_slice($plan, 0, $count) : [];
+        $affiliateLink = (string) ($campaign->affiliate_link ?? '');
+        $product = trim((string) ($ctx['pass2']['product_name'] ?? $campaign->offer_data['product_name'] ?? $campaign->name));
 
         foreach ($planSlice as $i => $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $position = $i + 1;
+            $total = count($planSlice);
+            $previousInSequence = collect($emails)->map(fn (array $email) => [
+                'sequence_key' => $email['sequence_key'],
+                'subject' => $email['subject'],
+                'body_excerpt' => Str::limit(strip_tags((string) $email['body']), 280),
+            ])->values()->all();
+
             $one = $this->openRouter->chatJson([
                 [
                     'role' => 'system',
-                    'content' => 'Write one complete affiliate promo email. Return ONLY JSON {"sequence_key":"","subject":"","body":""} — body 250-450 words, story-driven, one clear CTA placeholder [AFFILIATE_LINK].',
+                    'content' => implode("\n", [
+                        "You write email {$position} of {$total} in a single affiliate follow-up SEQUENCE for {$product}.",
+                        'This is NOT a standalone promo — it continues the same story arc as the previous emails.',
+                        'Rules:',
+                        '- Reference prior emails naturally when helpful ("As I shared yesterday…", "If you missed my last note…").',
+                        '- Same voice, same offer, same knowledge-base facts — do NOT contradict earlier emails.',
+                        '- Assume some readers ignored earlier emails: one-sentence recap of the core promise, then new angle.',
+                        '- ONE clear click goal per email — include exactly one [AFFILIATE_LINK] CTA near the end.',
+                        '- Match the planned angle/goal for this position; escalate urgency toward the final emails.',
+                        '- Body: 200-400 words, conversational, plain text with line breaks.',
+                        'Return ONLY JSON {"sequence_key":"","subject":"","body":""}.',
+                        'sequence_key: short snake_case label (welcome, value, story, proof, objection, urgency, last_chance).',
+                    ]),
                 ],
                 [
                     'role' => 'user',
                     'content' => json_encode([
+                        'email_number' => $position,
+                        'total_emails' => $total,
                         'email_plan_item' => $item,
-                        'sequence' => $sequence,
+                        'sequence_type' => $sequence,
+                        'sequence_arc' => $this->describeSequenceArc($planSlice),
+                        'previous_emails_in_sequence' => $previousInSequence,
+                        'affiliate_link' => $affiliateLink,
                         'context' => $ctx,
                     ], JSON_PRETTY_PRINT),
                 ],
             ]);
 
             if ($one['ok'] && is_array($one['data'])) {
-                $body = str_replace('[AFFILIATE_LINK]', (string) ($campaign->affiliate_link ?? ''), (string) ($one['data']['body'] ?? ''));
+                $body = str_replace('[AFFILIATE_LINK]', $affiliateLink, (string) ($one['data']['body'] ?? ''));
                 $emails[] = [
-                    'sequence_key' => (string) ($one['data']['sequence_key'] ?? 'email_'.($i + 1)),
-                    'subject' => (string) ($one['data']['subject'] ?? 'Update'),
+                    'sequence_key' => (string) ($one['data']['sequence_key'] ?? ($item['angle'] ?? 'email_'.$position)),
+                    'subject' => (string) ($one['data']['subject'] ?? ($item['subject_hint'] ?? "Follow-up {$position}")),
                     'body' => $body,
+                    'plan_day' => is_numeric($item['day'] ?? null) ? (int) $item['day'] : null,
                 ];
             }
         }
@@ -158,11 +193,57 @@ class CampaignContentGeneratorService
                 'subject' => $email['subject'],
                 'body' => $email['body'],
                 'sort_order' => $i,
-                'meta' => ['sequence' => $sequence],
+                'meta' => [
+                    'sequence' => $sequence,
+                    'sequence_position' => $i + 1,
+                    'plan_day' => $email['plan_day'] ?? null,
+                ],
             ]);
         }
 
+        app(CampaignEmailSequenceService::class)->seedDefaultSchedules(
+            $campaign->fresh(),
+            $planSlice,
+        );
+
         return ['ok' => true, 'count' => count($emails), 'error' => null];
+    }
+
+    /**
+     * @return list<array{day: int, angle: string, subject_hint: string, goal: string}>
+     */
+    protected function defaultEmailPlan(int $count): array
+    {
+        $templates = [
+            ['day' => 0, 'angle' => 'welcome', 'subject_hint' => 'Welcome — here is what you signed up for', 'goal' => 'Deliver on the opt-in promise and introduce the offer softly'],
+            ['day' => 1, 'angle' => 'value', 'subject_hint' => 'Quick win you can use today', 'goal' => 'Share one actionable insight from the knowledge base'],
+            ['day' => 2, 'angle' => 'story', 'subject_hint' => 'Why I recommend this', 'goal' => 'Personal story that bridges to the affiliate offer'],
+            ['day' => 4, 'angle' => 'proof', 'subject_hint' => 'Proof this actually works', 'goal' => 'Social proof and results to build trust'],
+            ['day' => 6, 'angle' => 'objection', 'subject_hint' => 'Still on the fence?', 'goal' => 'Handle the main objection and remove friction'],
+            ['day' => 8, 'angle' => 'urgency', 'subject_hint' => 'Worth acting on this now', 'goal' => 'Strong reason to click today'],
+            ['day' => 10, 'angle' => 'last_chance', 'subject_hint' => 'Last note from me on this', 'goal' => 'Final follow-up with direct CTA for non-responders'],
+        ];
+
+        return array_slice($templates, 0, max(1, $count));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $planSlice
+     */
+    protected function describeSequenceArc(array $planSlice): string
+    {
+        $parts = [];
+        foreach ($planSlice as $i => $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $n = $i + 1;
+            $angle = (string) ($item['angle'] ?? 'follow_up');
+            $goal = (string) ($item['goal'] ?? 'drive clicks');
+            $parts[] = "Email {$n} ({$angle}): {$goal}";
+        }
+
+        return implode(' → ', $parts);
     }
 
     /**
@@ -244,6 +325,7 @@ class CampaignContentGeneratorService
         }
 
         $affiliateLink = $this->trackedLinks->createForCampaign($campaign, $affiliate, 'Affiliate offer');
+        $quizQuestions = $this->resolveQuizQuestions($campaign, $ctx, $product);
 
         $pages = [
             'squeeze' => [
@@ -271,10 +353,7 @@ class CampaignContentGeneratorService
             'quiz' => [
                 'title' => (string) ($quiz['title'] ?? 'Quick Quiz'),
                 'intro' => (string) ($quiz['purpose'] ?? 'Answer a few questions to get your personalized guide.'),
-                'questions' => $this->normalizeQuizQuestions(
-                    is_array($quiz['questions'] ?? null) ? $quiz['questions'] : [],
-                    $product,
-                ),
+                'questions' => $quizQuestions,
                 'result_headline' => 'Your results are ready!',
                 'result_body' => 'Download your guide on the next page.',
                 'editable' => true,
@@ -317,10 +396,62 @@ class CampaignContentGeneratorService
     }
 
     /**
-     * @param  array<int, mixed>  $raw
      * @return array<int, array{question: string, options: array<int, string>}>
      */
-    protected function normalizeQuizQuestions(array $raw, string $product): array
+    protected function resolveQuizQuestions(Campaign $campaign, array $ctx, string $product): array
+    {
+        $quiz = is_array($ctx['pass2']['quiz_strategy'] ?? null) ? $ctx['pass2']['quiz_strategy'] : [];
+        $raw = is_array($quiz['questions'] ?? null) ? $quiz['questions'] : [];
+        $fromKnowledge = $this->extractValidQuizQuestions($raw);
+
+        if (count($fromKnowledge) >= 3) {
+            return $fromKnowledge;
+        }
+
+        $generated = $this->generateQuizQuestionsFromKnowledge($campaign, $ctx, $product);
+        $merged = $this->extractValidQuizQuestions(array_merge($fromKnowledge, $generated));
+
+        return $this->normalizeQuizQuestions($merged, $product);
+    }
+
+    /**
+     * @return list<array{question: string, options: array<int, string>}>
+     */
+    protected function generateQuizQuestionsFromKnowledge(Campaign $campaign, array $ctx, string $product): array
+    {
+        $result = $this->openRouter->chatJson([
+            [
+                'role' => 'system',
+                'content' => implode("\n", [
+                    'Create a lead-qualification quiz for an affiliate funnel.',
+                    'Return ONLY JSON {"questions":[{"question":"","options":["","",""]}]} with exactly 4 questions.',
+                    'Each question must relate to the product/offer in the knowledge base.',
+                    'Each question needs 3-4 short answer options (no emojis).',
+                    'Questions should qualify the visitor and lead naturally toward the offer.',
+                ]),
+            ],
+            [
+                'role' => 'user',
+                'content' => json_encode([
+                    'product' => $product,
+                    'affiliate_link' => $campaign->affiliate_link,
+                    'context' => $ctx,
+                ], JSON_PRETTY_PRINT),
+            ],
+        ]);
+
+        if (! $result['ok'] || ! is_array($result['data']['questions'] ?? null)) {
+            return [];
+        }
+
+        return $this->extractValidQuizQuestions($result['data']['questions']);
+    }
+
+    /**
+     * @param  array<int, mixed>  $raw
+     * @return list<array{question: string, options: array<int, string>}>
+     */
+    protected function extractValidQuizQuestions(array $raw): array
     {
         $out = [];
 
@@ -348,6 +479,17 @@ class CampaignContentGeneratorService
                 break;
             }
         }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<int, mixed>  $raw
+     * @return array<int, array{question: string, options: array<int, string>}>
+     */
+    protected function normalizeQuizQuestions(array $raw, string $product): array
+    {
+        $out = $this->extractValidQuizQuestions($raw);
 
         if (count($out) >= 2) {
             return $out;

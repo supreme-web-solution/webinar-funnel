@@ -219,7 +219,7 @@ function typeIcon(type: string): string {
 
 function statusMeta(s: string) {
     const m: Record<string, { label: string; dot: string; text: string }> = {
-        published:  { label: 'Published',   dot: 'bg-emerald-500',             text: 'text-emerald-600 dark:text-emerald-400' },
+        published:  { label: 'Published',   dot: 'bg-blue-500',             text: 'text-blue-600 dark:text-blue-400' },
         scheduled:  { label: 'Scheduled',   dot: 'bg-blue-500',                text: 'text-blue-600 dark:text-blue-400'       },
         failed:     { label: 'Failed',      dot: 'bg-rose-500',                text: 'text-rose-600 dark:text-rose-400'       },
         generating: { label: 'Generating…', dot: 'bg-amber-500 animate-pulse', text: 'text-amber-600'                         },
@@ -240,7 +240,7 @@ const totalVisible = computed(() => filteredEventIds.value.size);
 <template>
     <Head title="Promotion Calendar" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 md:px-6">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 md:px-6">
 
         <!-- ── Header ─────────────────────────────────────────────────── -->
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -426,7 +426,7 @@ const totalVisible = computed(() => filteredEventIds.value.size);
                             </div>
                             <div v-if="selectedEvent.published_at">
                                 <p class="text-[0.6rem] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Published</p>
-                                <p class="text-emerald-600">{{ fmtFull(selectedEvent.published_at) }}</p>
+                                <p class="text-blue-600">{{ fmtFull(selectedEvent.published_at) }}</p>
                             </div>
                             <div v-if="selectedEvent.platforms?.length">
                                 <p class="text-[0.6rem] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Platforms</p>

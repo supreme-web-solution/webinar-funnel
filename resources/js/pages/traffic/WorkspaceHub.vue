@@ -1,0 +1,161 @@
+<script setup lang="ts">
+import { Icon } from '@iconify/vue';
+import { Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import CampaignTrafficLayout, { type CampaignHubContext } from '@/components/campaign-traffic/CampaignTrafficLayout.vue';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+
+const props = defineProps<{
+    standalone?: boolean;
+    workspace?: { name: string; status: string };
+    campaign: CampaignHubContext['campaign'];
+    traffic_funnel: CampaignHubContext['traffic_funnel'];
+    routes: CampaignHubContext['routes'];
+    stats: {
+        keywords: number;
+        mentions: number;
+        promotion_posts: number;
+        scheduled_posts: number;
+        ad_campaigns: number;
+        active_ads: number;
+    };
+    paid_ads_enabled: boolean;
+}>();
+
+const hub = computed(() => ({
+    standalone: props.standalone ?? true,
+    campaign: props.campaign,
+    workspace: props.workspace,
+    traffic_funnel: props.traffic_funnel,
+    routes: props.routes,
+}));
+
+const statCards = computed(() => {
+    const cards = [
+        { label: 'Keywords', value: props.stats.keywords, sub: 'tracked', icon: 'heroicons:hashtag' },
+        { label: 'Mentions', value: props.stats.mentions, sub: 'found', icon: 'heroicons:chat-bubble-left-right' },
+        { label: 'Social posts', value: props.stats.promotion_posts, sub: 'generated', icon: 'heroicons:megaphone' },
+        { label: 'Scheduled', value: props.stats.scheduled_posts, sub: 'queued', icon: 'heroicons:calendar-days' },
+    ];
+    if (props.paid_ads_enabled) {
+        cards.push({ label: 'Ad campaigns', value: props.stats.ad_campaigns, sub: `${props.stats.active_ads} active`, icon: 'heroicons:currency-dollar' });
+    }
+    return cards;
+});
+
+const isNewWorkspace = computed(
+    () => props.stats.promotion_posts === 0 && props.stats.keywords === 0,
+);
+
+const featureCards = computed(() => {
+    const items = [
+        {
+            title: 'Social promotion',
+            description: 'Create posts — pick a topic, generate, publish. Start here.',
+            icon: 'heroicons:megaphone',
+            href: props.routes.promotion_posts,
+            cta: 'Create post',
+            badge: props.stats.scheduled_posts > 0 ? `${props.stats.scheduled_posts} scheduled` : null,
+            variant: 'brand' as const,
+        },
+        {
+            title: 'Free traffic',
+            description: 'Track Reddit, YouTube, X & news mentions. AI auto-reply optional.',
+            icon: 'heroicons:magnifying-glass-circle',
+            href: props.routes.free,
+            cta: 'Open',
+            badge: null as string | null,
+            variant: 'brand-outline' as const,
+        },
+        {
+            title: 'Promo calendar',
+            description: 'Drag-and-drop schedule for standalone content.',
+            icon: 'heroicons:calendar-days',
+            href: props.routes.promotion_calendar,
+            cta: 'View calendar',
+            badge: null,
+            variant: 'brand-outline' as const,
+        },
+    ];
+    if (props.paid_ads_enabled && props.routes.ads) {
+        items.push({
+            title: 'Paid ads',
+            description: 'Facebook ad campaigns with AI creatives.',
+            icon: 'heroicons:currency-dollar',
+            href: props.routes.ads,
+            cta: 'Manage ads',
+            badge: props.stats.active_ads > 0 ? `${props.stats.active_ads} active` : null,
+            variant: 'brand' as const,
+        });
+    }
+    return items;
+});
+</script>
+
+<template>
+    <CampaignTrafficLayout :hub="hub" active="hub" :paid-ads-enabled="paid_ads_enabled">
+        <div
+            v-if="isNewWorkspace"
+            class="rounded-xl border border-blue-200/60 bg-blue-50/40 p-4"
+        >
+            <p class="text-sm font-semibold text-blue-900">Your standalone workspace is already set up</p>
+            <p class="mt-1 text-xs text-blue-800/90">
+                You don't need to create a campaign. Go to
+                <Link :href="routes.promotion_posts" class="font-semibold underline-offset-2 hover:underline">Social posts</Link>
+                and click <strong>New post</strong>, or set up
+                <Link :href="routes.setup ?? '/traffic?tab=setup'" class="font-semibold underline-offset-2 hover:underline">platforms & formats</Link>
+                in Traffic hub first.
+            </p>
+            <Button as-child size="sm" variant="brand" class="mt-3">
+                <Link :href="routes.promotion_posts">
+                    <Icon icon="heroicons:plus" class="size-3.5" />
+                    Create first post
+                </Link>
+            </Button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3" :class="paid_ads_enabled ? 'lg:grid-cols-5' : ''">
+            <div
+                v-for="stat in statCards"
+                :key="stat.label"
+                class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
+            >
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
+                </div>
+                <div class="min-w-0">
+                    <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
+                    <div class="flex items-baseline gap-1.5">
+                        <span class="text-xl font-bold leading-none tabular-nums">{{ stat.value }}</span>
+                        <span class="text-[0.65rem] text-muted-foreground">{{ stat.sub }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <article
+                v-for="card in featureCards"
+                :key="card.title"
+                class="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-blue-200/60 hover:shadow-md"
+            >
+                <div class="flex flex-1 flex-col gap-3 p-4 md:p-5">
+                    <div class="flex size-10 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10">
+                        <Icon :icon="card.icon" class="size-5 text-blue-600" />
+                    </div>
+                    <div class="flex-1">
+                        <h2 class="font-semibold text-foreground">{{ card.title }}</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">{{ card.description }}</p>
+                        <Badge v-if="card.badge" variant="outline" class="mt-2 border-blue-200 bg-blue-50 text-[0.65rem] text-blue-700">
+                            {{ card.badge }}
+                        </Badge>
+                    </div>
+                    <Button as-child size="sm" :variant="card.variant" class="mt-auto w-fit">
+                        <Link :href="card.href">{{ card.cta }}</Link>
+                    </Button>
+                </div>
+            </article>
+        </div>
+    </CampaignTrafficLayout>
+</template>

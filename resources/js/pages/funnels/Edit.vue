@@ -41,8 +41,6 @@ const props = defineProps<{
             webinar_duration_seconds?: number | null;
             webinar_cta_label?: string | null;
             webinar_cta_url?: string | null;
-            affiliate_request_link?: string | null;
-            jv_page?: string | null;
             vendor_contact?: {
                 heading?: string;
                 body?: string;
@@ -82,9 +80,7 @@ const props = defineProps<{
             page_type: 'optin' | 'webinar';
             schema: Record<string, unknown>;
         }>;
-        integrations: Array<{ integration_account: { id: number; name: string; provider: string } }>;
     };
-    integrationAccounts: Array<{ id: number; name: string; provider: string }>;
     conversationSummaries: Array<{
         conversation_key: string;
         attendee_name: string;
@@ -300,7 +296,7 @@ const publishing    = ref(false);
 const activeTab     = ref('optin');
 
 const funnelTabTriggerClass =
-    'relative flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-2 text-center text-[0.65rem] leading-tight text-muted-foreground transition-colors data-[state=active]:bg-teal-600 data-[state=active]:text-white data-[state=active]:shadow-sm xl:min-h-0 xl:flex-1 xl:flex-row xl:gap-1.5 xl:px-3 xl:py-1.5 xl:text-xs xl:whitespace-nowrap';
+    'relative flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-2 text-center text-[0.65rem] leading-tight text-muted-foreground transition-colors data-[state=active]:chip-brand-active xl:min-h-0 xl:flex-1 xl:flex-row xl:gap-1.5 xl:px-3 xl:py-1.5 xl:text-xs xl:whitespace-nowrap';
 const funnelTabIconClass = 'size-4 shrink-0 xl:size-3.5';
 const funnelTabBadgeClass =
     'absolute right-1 top-1 flex size-4 items-center justify-center rounded-full text-[0.6rem] font-bold xl:relative xl:right-auto xl:top-auto xl:ml-0.5';
@@ -379,8 +375,6 @@ const settingsForm = useForm<{
     webinar_duration_seconds: number | null;
     webinar_cta_label: string;
     webinar_cta_url: string;
-    affiliate_request_link: string;
-    jv_page: string;
     offers: Array<{
         title: string;
         description: string;
@@ -405,7 +399,6 @@ const settingsForm = useForm<{
     allow_replay: boolean;
     chat_seed_messages: Array<{ author: string; message: string }>;
     branding: { primary: string; secondary: string };
-    integration_account_ids: number[];
     traffic_ai_reply_enabled: boolean;
     traffic_ai_link_override: string;
     traffic_ai_extra_context: string;
@@ -417,8 +410,6 @@ const settingsForm = useForm<{
     webinar_duration_seconds: props.funnel.settings?.webinar_duration_seconds ?? null,
     webinar_cta_label: props.funnel.settings?.webinar_cta_label ?? 'Claim Your Spot',
     webinar_cta_url: props.funnel.settings?.webinar_cta_url ?? '',
-    affiliate_request_link: props.funnel.settings?.affiliate_request_link ?? '',
-    jv_page: props.funnel.settings?.jv_page ?? '',
     offers: (props.funnel.settings?.offers ?? []).map((offer) => ({
         title: offer.title ?? '',
         description: offer.description ?? '',
@@ -443,7 +434,6 @@ const settingsForm = useForm<{
     allow_replay: props.funnel.settings?.allow_replay ?? true,
     chat_seed_messages: props.funnel.settings?.chat_seed_messages ?? [],
     branding: { primary: '#111827', secondary: '#F9FAFB' },
-    integration_account_ids: props.funnel.integrations.map((i) => i.integration_account.id),
     traffic_ai_reply_enabled: props.funnel.settings?.traffic_ai_reply_enabled ?? false,
     traffic_ai_link_override: props.funnel.settings?.traffic_ai_link_override ?? '',
     traffic_ai_extra_context: props.funnel.settings?.traffic_ai_extra_context ?? '',
@@ -588,6 +578,13 @@ const removeOfferRow = (index: number): void => {
 const publish = (): void => {
     publishing.value = true;
     publishForm.post(`/funnels/${props.funnel.id}/publish`, {
+        onSuccess: () => {
+            toast.success(
+                isCampaignAttachedFunnel.value
+                    ? 'Campaign published.'
+                    : 'Funnel published.',
+            );
+        },
         onFinish: () => {
             publishing.value = false;
         },
@@ -597,6 +594,13 @@ const publish = (): void => {
 const unpublish = (): void => {
     publishing.value = true;
     unpublishForm.post(`/funnels/${props.funnel.id}/unpublish`, {
+        onSuccess: () => {
+            toast.success(
+                isCampaignAttachedFunnel.value
+                    ? 'Campaign unpublished.'
+                    : 'Funnel unpublished.',
+            );
+        },
         onFinish: () => {
             publishing.value = false;
         },
@@ -707,19 +711,6 @@ function vendorContactLinkLabel(url: string): string {
     } catch {
         return url;
     }
-}
-
-const espProviderIcon: Record<string, string> = {
-    mailchimp: 'simple-icons:mailchimp',
-    getresponse: 'simple-icons:getresponse',
-    activecampaign: 'simple-icons:activecampaign',
-    convertkit: 'simple-icons:convertkit',
-    aweber: 'logos:aweber',
-    drip: 'simple-icons:drip',
-};
-
-function providerIcon(provider: string): string {
-    return espProviderIcon[provider.toLowerCase()] ?? 'heroicons:envelope';
 }
 
 /* ─── Webinar AI Assistant state ────────────────────────────────────────── */
@@ -1439,41 +1430,41 @@ onUnmounted(() => {
 <template>
     <Head :title="`Edit — ${funnel.name}`" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4">
 
         <!-- Header -->
         <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div class="flex min-w-0 items-start gap-3">
-                    <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
-                        <Icon icon="heroicons:video-camera" class="size-5 text-teal-600" />
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10">
+                        <Icon icon="heroicons:video-camera" class="size-5 text-blue-600" />
                     </div>
-                    <div class="min-w-0">
+                <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
                             <h1 class="truncate text-xl font-bold tracking-tight md:text-2xl">{{ funnel.name }}</h1>
-                            <Badge
+                        <Badge
                                 variant="outline"
                                 class="capitalize text-[0.65rem]"
-                                :class="funnel.status === 'published'
-                                    ? 'border-teal-200 bg-teal-50 text-teal-700'
-                                    : funnel.status === 'archived'
+                            :class="funnel.status === 'published'
+                                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                : funnel.status === 'archived'
                                         ? 'border-slate-200 bg-slate-50 text-slate-700'
                                         : 'border-amber-200 bg-amber-50 text-amber-700'"
-                            >
-                                {{ funnel.status }}
-                            </Badge>
-                        </div>
+                        >
+                            {{ funnel.status }}
+                        </Badge>
+                    </div>
                         <p class="mt-0.5 truncate font-mono text-xs text-muted-foreground">/{{ funnel.slug }}</p>
                         <div class="mt-2 hidden md:flex flex-wrap items-center gap-2">
                             <span class="inline-flex items-center gap-1 rounded-md bg-muted/50 px-2 py-0.5 text-[0.65rem] text-foreground">
-                                <Icon icon="heroicons:eye" class="size-3 text-teal-600" />
+                                <Icon icon="heroicons:eye" class="size-3 text-blue-600" />
                                 {{ props.videoStats.accessed.toLocaleString() }} views
-                            </span>
+                                </span>
                             <span class="inline-flex items-center gap-1 rounded-md bg-muted/50 px-2 py-0.5 text-[0.65rem] text-foreground">
-                                <Icon icon="heroicons:play" class="size-3 text-teal-600" />
+                                <Icon icon="heroicons:play" class="size-3 text-blue-600" />
                                 {{ props.videoStats.watched_60s.toLocaleString() }} watched 60s
-                            </span>
-                        </div>
+                                </span>
+                            </div>
                     </div>
                 </div>
 
@@ -1485,38 +1476,46 @@ onUnmounted(() => {
                         </Link>
                     </Button>
                     <Button as-child variant="brand-outline" size="sm">
-                        <a :href="`/funnels/${funnel.id}/chat`">
-                            <Icon icon="heroicons:chat-bubble-left-right" class="size-3.5" />
+                    <a :href="`/funnels/${funnel.id}/chat`">
+                        <Icon icon="heroicons:chat-bubble-left-right" class="size-3.5" />
                             Chat
-                        </a>
-                    </Button>
+                    </a>
+                </Button>
                     <Button variant="brand-outline" size="sm" @click="shareModalOpen = true">
-                        <Icon icon="heroicons:share" class="size-3.5" />
-                        Share
-                    </Button>
-                    <Button
-                        v-if="funnel.status === 'published'"
+                    <Icon icon="heroicons:share" class="size-3.5" />
+                    Share
+                </Button>
+                <Button
+                    v-if="funnel.status === 'published'"
                         variant="brand-outline"
-                        size="sm"
-                        :disabled="publishing"
-                        @click="unpublish"
-                    >
-                        Unpublish
-                    </Button>
+                    size="sm"
+                    :disabled="publishing"
+                    @click="unpublish"
+                >
+                    Unpublish
+                </Button>
                     <Button variant="brand" size="sm" :disabled="publishing" @click="publish">
                         <Icon v-if="publishing" icon="heroicons:arrow-path" class="size-3.5 animate-spin" />
-                        <Icon v-else icon="heroicons:rocket-launch" class="size-3.5" />
-                        {{ publishing ? 'Publishing…' : funnel.status === 'published' ? 'Re-publish' : 'Publish' }}
-                    </Button>
-                    <Button
+                    <Icon v-else icon="heroicons:rocket-launch" class="size-3.5" />
+                    {{
+                        publishing
+                            ? 'Publishing…'
+                            : funnel.status === 'published'
+                                ? 'Re-publish'
+                                : isCampaignAttachedFunnel
+                                    ? 'Publish campaign'
+                                    : 'Publish'
+                    }}
+                </Button>
+                <Button
                         variant="ghost"
-                        size="sm"
+                    size="sm"
                         class="text-muted-foreground hover:text-destructive"
-                        :disabled="publishing"
-                        @click="removeFunnel"
-                    >
-                        <Icon icon="heroicons:trash" class="size-3.5" />
-                    </Button>
+                    :disabled="publishing"
+                    @click="removeFunnel"
+                >
+                    <Icon icon="heroicons:trash" class="size-3.5" />
+                </Button>
                 </div>
             </div>
         </div>
@@ -1524,11 +1523,11 @@ onUnmounted(() => {
         <!-- Campaign traffic hub notice -->
         <div
             v-if="campaignTrafficHubUrl"
-            class="flex flex-col gap-3 rounded-xl border border-teal-200/60 bg-teal-50/30 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+            class="flex flex-col gap-3 rounded-xl border border-blue-200/60 bg-blue-50/30 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
         >
             <div class="flex items-start gap-3">
-                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-teal-500/15 bg-teal-500/10">
-                    <Icon icon="heroicons:signal" class="size-5 text-teal-600" />
+                <div class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-blue-500/15 bg-blue-500/10">
+                    <Icon icon="heroicons:signal" class="size-5 text-blue-600" />
                 </div>
                 <div>
                     <p class="text-sm font-semibold text-foreground">Traffic lives in the campaign hub</p>
@@ -1558,10 +1557,6 @@ onUnmounted(() => {
                     <Icon icon="heroicons:sparkles" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">AI Assistant</span>
                 </TabsTrigger>
-                <TabsTrigger value="integrations" :class="funnelTabTriggerClass">
-                    <Icon icon="heroicons:puzzle-piece" :class="funnelTabIconClass" />
-                    <span class="max-w-full truncate">Integrations</span>
-                </TabsTrigger>
                 <TabsTrigger value="links" :class="funnelTabTriggerClass">
                     <Icon icon="heroicons:link" :class="funnelTabIconClass" />
                     <span class="max-w-full truncate">Share Links</span>
@@ -1579,7 +1574,7 @@ onUnmounted(() => {
                     <span class="max-w-full truncate">Paid Ads</span>
                     <span
                         v-if="(props.ads?.active_count ?? 0) > 0"
-                        :class="[funnelTabBadgeClass, 'bg-emerald-500 text-white']"
+                        :class="[funnelTabBadgeClass, 'bg-blue-500 text-white']"
                     >
                         {{ props.ads?.active_count }}
                     </span>
@@ -1589,7 +1584,7 @@ onUnmounted(() => {
                     <span class="max-w-full truncate">Chat</span>
                     <span
                         v-if="conversationSummaries.length > 0"
-                        :class="[funnelTabBadgeClass, 'bg-teal-600 text-white']"
+                        :class="[funnelTabBadgeClass, 'chip-brand-active']"
                     >
                         {{ conversationSummaries.length }}
                     </span>
@@ -1635,7 +1630,7 @@ onUnmounted(() => {
                         <button
                             title="Desktop preview"
                             class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                            :class="activeDevice === 'desktop' ? 'bg-teal-500/10 text-teal-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            :class="activeDevice === 'desktop' ? 'bg-blue-500/10 text-blue-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                             @click="setDevice('desktop')"
                         >
                             <Icon icon="heroicons:computer-desktop" class="size-3.5" />
@@ -1644,7 +1639,7 @@ onUnmounted(() => {
                         <button
                             title="Mobile preview"
                             class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                            :class="activeDevice === 'mobile' ? 'bg-teal-500/10 text-teal-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            :class="activeDevice === 'mobile' ? 'bg-blue-500/10 text-blue-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                             @click="setDevice('mobile')"
                         >
                             <Icon icon="heroicons:device-phone-mobile" class="size-3.5" />
@@ -1663,7 +1658,7 @@ onUnmounted(() => {
                         <button
                             title="Toggle Styles panel"
                             class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                            :class="showStyles ? 'bg-teal-500/10 text-teal-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            :class="showStyles ? 'bg-blue-500/10 text-blue-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                             @click="showStyles = !showStyles"
                         >
                             <Icon icon="heroicons:paint-brush" class="size-3.5" />
@@ -1674,7 +1669,7 @@ onUnmounted(() => {
                         <button
                             :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'"
                             class="flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                            :class="isFullscreen ? 'bg-teal-500/10 text-teal-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
+                            :class="isFullscreen ? 'bg-blue-500/10 text-blue-600 font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
                             @click="toggleFullscreen"
                         >
                             <Icon
@@ -1818,56 +1813,6 @@ onUnmounted(() => {
                                 </div>
                                 <p class="text-[0.65rem] text-muted-foreground">Attendees click this after watching the webinar.</p>
                             </div>
-                            <div class="space-y-1.5">
-                                <Label class="text-xs font-semibold">Affiliate Request Link</Label>
-                                <div class="flex overflow-hidden rounded-md border bg-muted/20">
-                                    <div class="inline-flex h-9 items-center px-3 text-muted-foreground">
-                                        <Icon icon="heroicons:link" class="size-4 pointer-events-none" />
-                                    </div>
-                                    <Input
-                                        v-model="settingsForm.affiliate_request_link"
-                                        type="url"
-                                        readonly
-                                        class="h-9 rounded-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
-                                        placeholder="https://www.jvzoo.com/affiliate/..."
-                                    />
-                                    <button
-                                        type="button"
-                                        class="inline-flex h-9 items-center border-l px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                                        :disabled="!settingsForm.affiliate_request_link?.trim()"
-                                        title="Open in new tab"
-                                        @click="openExternalLink(settingsForm.affiliate_request_link)"
-                                    >
-                                        <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
-                                    </button>
-                                </div>
-                                <p class="text-[0.65rem] text-muted-foreground">Used to request affiliate access for this offer.</p>
-                            </div>
-                            <div class="space-y-1.5">
-                                <Label class="text-xs font-semibold">JV Page</Label>
-                                <div class="flex overflow-hidden rounded-md border bg-muted/20">
-                                    <div class="inline-flex h-9 items-center px-3 text-muted-foreground">
-                                        <Icon icon="heroicons:globe-alt" class="size-4 pointer-events-none" />
-                                    </div>
-                                    <Input
-                                        v-model="settingsForm.jv_page"
-                                        type="url"
-                                        readonly
-                                        class="h-9 rounded-none border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
-                                        placeholder="https://your-offer.com/jv"
-                                    />
-                                    <button
-                                        type="button"
-                                        class="inline-flex h-9 items-center border-l px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                                        :disabled="!settingsForm.jv_page?.trim()"
-                                        title="Open in new tab"
-                                        @click="openExternalLink(settingsForm.jv_page)"
-                                    >
-                                        <Icon icon="heroicons:arrow-top-right-on-square" class="size-3.5" />
-                                    </button>
-                                </div>
-                                <p class="text-[0.65rem] text-muted-foreground">Partner resources and launch details page.</p>
-                            </div>
                             <div
                                 v-if="vendorContact"
                                 class="space-y-2.5 rounded-lg border border-amber-200/70 bg-amber-50/50 p-3.5 dark:border-amber-900/45 dark:bg-amber-950/20"
@@ -1943,11 +1888,11 @@ onUnmounted(() => {
                                 </div>
                                 <div class="rounded-lg border bg-muted/30 p-2.5">
                                     <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Watched 50%</p>
-                                    <p class="mt-0.5 text-lg font-bold text-teal-600 tabular-nums">{{ props.videoStats.watched_50_percent.toLocaleString() }}</p>
+                                    <p class="mt-0.5 text-lg font-bold text-blue-600 tabular-nums">{{ props.videoStats.watched_50_percent.toLocaleString() }}</p>
                                 </div>
                                 <div class="rounded-lg border bg-muted/30 p-2.5">
                                     <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Watched End</p>
-                                    <p class="mt-0.5 text-lg font-bold text-emerald-600 tabular-nums">{{ props.videoStats.watched_to_end.toLocaleString() }}</p>
+                                    <p class="mt-0.5 text-lg font-bold text-blue-600 tabular-nums">{{ props.videoStats.watched_to_end.toLocaleString() }}</p>
                                 </div>
                                 <div class="rounded-lg border bg-muted/30 p-2.5 col-span-2 sm:col-span-1">
                                     <p class="text-[0.6rem] uppercase tracking-wide text-muted-foreground">Avg Watch (s)</p>
@@ -2154,10 +2099,10 @@ onUnmounted(() => {
             <TabsContent value="ai-assistant" class="space-y-5">
 
                 <!-- ── Hero toggle card ─────────────────────────────── -->
-                <div class="flex items-center justify-between gap-4 rounded-xl border border-teal-200/60 bg-teal-50/30 p-4 shadow-sm">
+                <div class="flex items-center justify-between gap-4 rounded-xl border border-blue-200/60 bg-blue-50/30 p-4 shadow-sm">
                     <div class="flex items-center gap-3 min-w-0">
-                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/40">
-                            <Icon icon="heroicons:cpu-chip" class="size-5 text-teal-600 dark:text-teal-400" />
+                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/40">
+                            <Icon icon="heroicons:cpu-chip" class="size-5 text-blue-600 dark:text-blue-400" />
                         </div>
                         <div class="min-w-0">
                             <p class="text-sm font-semibold text-foreground">Webinar AI Assistant</p>
@@ -2214,7 +2159,7 @@ onUnmounted(() => {
                                     v-for="i in AI_SOURCE_LIMIT"
                                     :key="i"
                                     class="h-2 w-8 rounded-full transition-colors"
-                                    :class="i <= aiSourceCount ? 'bg-teal-500' : 'bg-muted'"
+                                    :class="i <= aiSourceCount ? 'bg-blue-500' : 'bg-muted'"
                                 />
                                 <span class="ml-1 text-xs text-muted-foreground">{{ aiSourceCount }}/{{ AI_SOURCE_LIMIT }}</span>
                             </div>
@@ -2229,7 +2174,7 @@ onUnmounted(() => {
                                     :key="tab"
                                     class="flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors"
                                     :class="addSourceTab === tab
-                                        ? 'border-b-2 border-teal-500 bg-background text-teal-600 dark:text-teal-400'
+                                        ? 'border-b-2 border-blue-500 bg-background text-blue-600 dark:text-blue-400'
                                         : 'text-muted-foreground hover:text-foreground'"
                                     :disabled="aiSourceLimitReached"
                                     @click="addSourceTab = tab"
@@ -2287,7 +2232,7 @@ onUnmounted(() => {
                                 <!-- File tab -->
                                 <div v-else class="space-y-2.5">
                                     <Input v-model="aiFileForm.title" class="h-8 text-xs" placeholder="Optional title" />
-                                    <label class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors hover:border-teal-400 hover:bg-teal-50/40 dark:hover:bg-teal-950/20">
+                                    <label class="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/40 dark:hover:bg-blue-950/20">
                                         <Icon icon="heroicons:arrow-up-tray" class="size-6 text-muted-foreground" />
                                         <span class="text-xs text-muted-foreground">
                                             <span class="font-medium text-foreground">Click to browse</span> or drag &amp; drop
@@ -2296,7 +2241,7 @@ onUnmounted(() => {
                                         <input type="file" class="sr-only" accept=".pdf,.txt,.md,.csv,.xlsx,.xls,.docx" @change="setAiFile" />
                                     </label>
                                     <p v-if="aiFileForm.file" class="flex items-center gap-1.5 text-xs text-foreground">
-                                        <Icon icon="heroicons:document" class="size-3.5 text-teal-500" />
+                                        <Icon icon="heroicons:document" class="size-3.5 text-blue-500" />
                                         {{ aiFileForm.file.name }}
                                     </p>
                                     <Button
@@ -2336,12 +2281,12 @@ onUnmounted(() => {
                                     <div class="flex items-start gap-3 p-3.5">
                                         <!-- type icon -->
                                         <div class="flex size-8 shrink-0 items-center justify-center rounded-lg"
-                                            :class="source.type === 'url' ? 'bg-sky-100 dark:bg-sky-900/30' : source.type === 'text' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-orange-100 dark:bg-orange-900/30'"
+                                            :class="source.type === 'url' ? 'bg-sky-100 dark:bg-sky-900/30' : source.type === 'text' ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-orange-100 dark:bg-orange-900/30'"
                                         >
                                             <Icon
                                                 :icon="source.type === 'url' ? 'heroicons:globe-alt' : source.type === 'text' ? 'heroicons:document-text' : 'heroicons:paper-clip'"
                                                 class="size-4"
-                                                :class="source.type === 'url' ? 'text-sky-600' : source.type === 'text' ? 'text-emerald-600' : 'text-orange-600'"
+                                                :class="source.type === 'url' ? 'text-sky-600' : source.type === 'text' ? 'text-blue-600' : 'text-orange-600'"
                                             />
                                         </div>
 
@@ -2355,7 +2300,7 @@ onUnmounted(() => {
                                                     :class="{
                                                         'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': source.status === 'queued',
                                                         'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400': source.status === 'processing',
-                                                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400': source.status === 'ready',
+                                                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400': source.status === 'ready',
                                                         'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400': source.status === 'failed',
                                                     }"
                                                 >
@@ -2363,14 +2308,14 @@ onUnmounted(() => {
                                                         :class="{
                                                             'bg-yellow-500': source.status === 'queued',
                                                             'bg-blue-500 animate-pulse': source.status === 'processing',
-                                                            'bg-emerald-500': source.status === 'ready',
+                                                            'bg-blue-500': source.status === 'ready',
                                                             'bg-red-500': source.status === 'failed',
                                                         }"
                                                     />
                                                     {{ source.status }}
                                                 </span>
                                                 <!-- chunk count pill -->
-                                                <span v-if="source.chunk_count > 0" class="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[0.65rem] font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                                                <span v-if="source.chunk_count > 0" class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[0.65rem] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                                                     <Icon icon="heroicons:square-3-stack-3d" class="size-3" />
                                                     {{ source.chunk_count }} chunks
                                                 </span>
@@ -2387,7 +2332,7 @@ onUnmounted(() => {
                                                         <Button
                                                             v-if="source.chunk_count > 0"
                                                             variant="ghost" size="sm"
-                                                            class="h-7 w-7 p-0 text-muted-foreground hover:text-teal-600"
+                                                            class="h-7 w-7 p-0 text-muted-foreground hover:text-blue-600"
                                                             @click="toggleSourceChunks(source)"
                                                         >
                                                             <Icon
@@ -2427,13 +2372,13 @@ onUnmounted(() => {
                                                     class="group relative flex flex-col gap-1.5 rounded-lg border bg-background p-2.5 text-xs shadow-sm"
                                                 >
                                                     <div class="flex items-center gap-1.5">
-                                                        <span class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-teal-100 px-1 text-[0.6rem] font-bold text-teal-700 dark:bg-teal-900/40 dark:text-teal-400">
+                                                        <span class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-blue-100 px-1 text-[0.6rem] font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
                                                             #{{ chunk.chunk_index }}
                                                         </span>
                                                         <span class="text-[0.65rem] text-muted-foreground">chunk</span>
                                                     </div>
                                                     <p class="line-clamp-4 text-[0.72rem] leading-relaxed text-foreground/80">{{ chunk.content }}</p>
-                                                    <div class="absolute inset-0 rounded-lg ring-1 ring-transparent transition group-hover:ring-teal-300 dark:group-hover:ring-teal-700" />
+                                                    <div class="absolute inset-0 rounded-lg ring-1 ring-transparent transition group-hover:ring-blue-300 dark:group-hover:ring-blue-700" />
                                                 </div>
                                             </div>
                                             <p v-if="source.chunk_count > (sourceChunks[source.id]?.length ?? 0)" class="text-[0.65rem] text-muted-foreground">
@@ -2462,74 +2407,6 @@ onUnmounted(() => {
                 </div>
             </TabsContent>
 
-            <!-- ── Tab: Integrations ── -->
-            <TabsContent value="integrations" class="space-y-4">
-                <Card class="border shadow-sm">
-                    <CardHeader class="pb-3">
-                        <CardTitle class="text-base font-semibold">ESP Integrations</CardTitle>
-                        <CardDescription class="text-xs">
-                            Connect an email service provider — leads will be auto-subscribed when they register.
-                            <Link href="/integrations" class="text-teal-600 underline ml-1">Add more accounts →</Link>
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div v-if="integrationAccounts.length === 0" class="flex flex-col items-center py-10 gap-3 text-muted-foreground">
-                            <Icon icon="heroicons:puzzle-piece" class="size-10 opacity-30" />
-                            <p class="text-sm">No integration accounts yet.</p>
-                            <Button as-child size="sm" variant="outline">
-                                <Link href="/integrations">Connect an ESP</Link>
-                            </Button>
-                        </div>
-
-                        <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            <label
-                                v-for="account in integrationAccounts"
-                                :key="account.id"
-                                class="flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition-colors"
-                                :class="settingsForm.integration_account_ids.includes(account.id)
-                                    ? 'border-teal-500 bg-teal-500/5'
-                                    : 'hover:border-border/80'"
-                            >
-                                <input
-                                    v-model="settingsForm.integration_account_ids"
-                                    type="checkbox"
-                                    class="sr-only"
-                                    :value="account.id"
-                                />
-                                <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                    <Icon :icon="providerIcon(account.provider)" class="size-5" />
-                                </div>
-                                <div class="min-w-0 flex-1">
-                                    <p class="text-sm font-medium text-foreground truncate">{{ account.name }}</p>
-                                    <p class="text-xs text-muted-foreground capitalize">{{ account.provider }}</p>
-                                </div>
-                                <Icon
-                                    v-if="settingsForm.integration_account_ids.includes(account.id)"
-                                    icon="heroicons:check-circle"
-                                    class="size-5 shrink-0 text-teal-600"
-                                />
-                                <Icon
-                                    v-else
-                                    icon="heroicons:plus-circle"
-                                    class="size-5 shrink-0 text-muted-foreground/50"
-                                />
-                            </label>
-                        </div>
-
-                        <div v-if="integrationAccounts.length > 0" class="flex justify-end mt-4">
-                            <Button
-                                variant="brand" size="sm" class="gap-1.5"
-                                :disabled="savingSettings || settingsForm.processing"
-                                @click="saveSettings"
-                            >
-                                <Icon icon="heroicons:check" class="size-3.5" />
-                                Save integrations
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
             <!-- ── Tab: Share Links ── -->
             <TabsContent value="links" class="space-y-4">
                 <!-- Status banner -->
@@ -2539,8 +2416,16 @@ onUnmounted(() => {
                 >
                     <Icon icon="heroicons:exclamation-triangle" class="size-5 shrink-0 text-amber-600 mt-0.5" />
                     <div class="text-sm">
-                        <p class="font-semibold text-amber-800">Funnel is not published yet</p>
-                        <p class="text-amber-700 text-xs mt-0.5">These links won't be publicly accessible until you publish the funnel.</p>
+                        <p class="font-semibold text-amber-800">
+                            {{ isCampaignAttachedFunnel ? 'Campaign is not published yet' : 'Funnel is not published yet' }}
+                        </p>
+                        <p class="text-amber-700 text-xs mt-0.5">
+                            {{
+                                isCampaignAttachedFunnel
+                                    ? "These links won't be publicly accessible until you publish the campaign."
+                                    : "These links won't be publicly accessible until you publish the funnel."
+                            }}
+                        </p>
                     </div>
                     <Button
                         size="sm"
@@ -2557,8 +2442,8 @@ onUnmounted(() => {
                     <Card class="border shadow-sm">
                         <CardHeader class="pb-2">
                             <div class="flex items-center gap-2">
-                                <div class="flex size-8 items-center justify-center rounded-lg bg-teal-500/10">
-                                    <Icon icon="heroicons:cursor-arrow-ripple" class="size-4 text-teal-600" />
+                                <div class="flex size-8 items-center justify-center rounded-lg bg-blue-500/10">
+                                    <Icon icon="heroicons:cursor-arrow-ripple" class="size-4 text-blue-600" />
                                 </div>
                                 <div>
                                     <CardTitle class="text-sm font-semibold">
@@ -2595,7 +2480,7 @@ onUnmounted(() => {
                                 <Icon
                                     :icon="copiedLink === 'optin' ? 'heroicons:check' : 'heroicons:clipboard-document'"
                                     class="size-3.5"
-                                    :class="copiedLink === 'optin' ? 'text-emerald-600' : ''"
+                                    :class="copiedLink === 'optin' ? 'text-blue-600' : ''"
                                 />
                                 {{ copiedLink === 'optin' ? 'Copied!' : 'Copy opt-in link' }}
                             </Button>
@@ -2636,7 +2521,7 @@ onUnmounted(() => {
                                 <Icon
                                     :icon="copiedLink === 'webinar' ? 'heroicons:check' : 'heroicons:clipboard-document'"
                                     class="size-3.5"
-                                    :class="copiedLink === 'webinar' ? 'text-emerald-600' : ''"
+                                    :class="copiedLink === 'webinar' ? 'text-blue-600' : ''"
                                 />
                                 {{ copiedLink === 'webinar' ? 'Copied!' : 'Copy webinar link' }}
                             </Button>
@@ -2674,10 +2559,10 @@ onUnmounted(() => {
                     <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Total Posts</p><p class="text-2xl font-bold mt-1">{{ props.promotion.stats.total }}</p></CardContent></Card>
                     <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Draft</p><p class="text-2xl font-bold mt-1 text-amber-600">{{ props.promotion.stats.draft }}</p></CardContent></Card>
                     <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Scheduled</p><p class="text-2xl font-bold mt-1 text-blue-600">{{ props.promotion.stats.scheduled }}</p></CardContent></Card>
-                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Published</p><p class="text-2xl font-bold mt-1 text-emerald-600">{{ props.promotion.stats.published }}</p></CardContent></Card>
+                    <Card class="border shadow-sm"><CardContent class="p-4"><p class="text-xs text-muted-foreground">Published</p><p class="text-2xl font-bold mt-1 text-blue-600">{{ props.promotion.stats.published }}</p></CardContent></Card>
                 </div>
 
-                <Card class="border shadow-sm border-dashed border-teal-500/30">
+                <Card class="border shadow-sm border-dashed border-blue-500/30">
                     <CardHeader class="pb-2">
                         <CardTitle class="text-sm font-semibold">Auto topic suggestions</CardTitle>
                         <CardDescription class="text-xs">
@@ -2738,9 +2623,9 @@ onUnmounted(() => {
 
             <!-- ── Tab: Paid Traffic Assets ── -->
             <TabsContent v-if="showFunnelTrafficTools && hasPaidTrafficAssets && props.paidTrafficAssets" value="paid-traffic-assets" class="space-y-4">
-                <div class="overflow-hidden rounded-xl border bg-gradient-to-br from-amber-500/10 via-primary/5 to-emerald-500/10 p-5">
+                <div class="overflow-hidden rounded-xl border bg-gradient-to-br from-amber-500/10 via-primary/5 to-blue-500/10 p-5">
                     <div class="flex items-center gap-2 mb-2">
-                        <Icon icon="heroicons:rocket-launch" class="size-5 text-teal-600" />
+                        <Icon icon="heroicons:rocket-launch" class="size-5 text-blue-600" />
                         <h3 class="text-sm font-semibold text-foreground">Paid Traffic Assets</h3>
                     </div>
                     <p class="text-sm text-muted-foreground max-w-2xl">
@@ -2758,7 +2643,7 @@ onUnmounted(() => {
                     :href="props.paidTrafficAssets.drive_url"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="group relative mx-auto block max-w-2xl overflow-hidden rounded-2xl border bg-black shadow-lg transition hover:border-teal-500/50"
+                    class="group relative mx-auto block max-w-2xl overflow-hidden rounded-2xl border bg-black shadow-lg transition hover:border-blue-500/50"
                 >
                     <div class="relative aspect-video w-full">
                         <img
@@ -2774,7 +2659,7 @@ onUnmounted(() => {
                             <Icon icon="heroicons:film" class="size-16 text-white/30" />
                         </div>
                         <div class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/30 transition group-hover:bg-black/45">
-                            <div class="flex size-16 items-center justify-center rounded-full bg-white/95 text-teal-600 shadow-xl transition group-hover:scale-105">
+                            <div class="flex size-16 items-center justify-center rounded-full bg-white/95 text-blue-600 shadow-xl transition group-hover:scale-105">
                                 <Icon icon="heroicons:play-solid" class="size-8 ml-1" />
                             </div>
                             <p class="text-sm font-semibold text-white drop-shadow">Download paid traffic assets</p>
@@ -2818,7 +2703,7 @@ onUnmounted(() => {
                     </CardContent></Card>
                     <Card class="border shadow-sm"><CardContent class="p-4">
                         <p class="text-xs text-muted-foreground">Active</p>
-                        <p class="text-2xl font-bold mt-1 text-emerald-600">{{ props.ads.active_count }}</p>
+                        <p class="text-2xl font-bold mt-1 text-blue-600">{{ props.ads.active_count }}</p>
                     </CardContent></Card>
                     <Card class="border shadow-sm"><CardContent class="p-4">
                         <p class="text-xs text-muted-foreground">Total Spend</p>
@@ -2828,14 +2713,14 @@ onUnmounted(() => {
 
                 <!-- Feature highlight -->
                 <div class="rounded-xl border bg-gradient-to-br from-primary/5 to-primary/10 p-4 space-y-3">
-                    <p class="text-xs font-semibold text-teal-600">What the AI Ads engine does:</p>
+                    <p class="text-xs font-semibold text-blue-600">What the AI Ads engine does:</p>
                     <div class="grid sm:grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:sparkles" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />AI researches your audience: hooks, angles, personas, pain points</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:document-text" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Generates complete ad copy: headline, primary text, CTA</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:photo" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Generates banner images for each creative</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:rocket-launch" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Launches across Facebook, Instagram, TikTok, Google, X, LinkedIn</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:chart-bar" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Tracks spend, CTR, CPC, conversions, and ROAS per creative</div>
-                        <div class="flex items-start gap-2"><Icon icon="heroicons:trophy" class="size-3.5 text-teal-600 shrink-0 mt-0.5" />Auto-identifies winning creatives for scaling</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:sparkles" class="size-3.5 text-blue-600 shrink-0 mt-0.5" />AI researches your audience: hooks, angles, personas, pain points</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:document-text" class="size-3.5 text-blue-600 shrink-0 mt-0.5" />Generates complete ad copy: headline, primary text, CTA</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:photo" class="size-3.5 text-blue-600 shrink-0 mt-0.5" />Generates banner images for each creative</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:rocket-launch" class="size-3.5 text-blue-600 shrink-0 mt-0.5" />Launches across Facebook, Instagram, TikTok, Google, X, LinkedIn</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:chart-bar" class="size-3.5 text-blue-600 shrink-0 mt-0.5" />Tracks spend, CTR, CPC, conversions, and ROAS per creative</div>
+                        <div class="flex items-start gap-2"><Icon icon="heroicons:trophy" class="size-3.5 text-blue-600 shrink-0 mt-0.5" />Auto-identifies winning creatives for scaling</div>
                     </div>
                 </div>
 
@@ -2876,10 +2761,10 @@ onUnmounted(() => {
                         v-for="thread in conversationSummaries"
                         :key="thread.conversation_key"
                         :href="`/funnels/${funnel.id}/chat`"
-                        class="flex items-start gap-3 rounded-xl border p-3.5 hover:border-teal-500/30 hover:bg-muted/30 transition-colors"
+                        class="flex items-start gap-3 rounded-xl border p-3.5 hover:border-blue-500/30 hover:bg-muted/30 transition-colors"
                     >
-                        <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-500/10">
-                            <span class="text-xs font-bold text-teal-600">{{ thread.attendee_name.charAt(0).toUpperCase() }}</span>
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-500/10">
+                            <span class="text-xs font-bold text-blue-600">{{ thread.attendee_name.charAt(0).toUpperCase() }}</span>
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="text-sm font-semibold text-foreground">{{ thread.attendee_name }}</p>
@@ -2902,7 +2787,7 @@ onUnmounted(() => {
                     title="Funnel Traffic Settings"
                     description="Track mentions and conversations per funnel keyword"
                 />
-</TabsContent>
+            </TabsContent>
 
         </Tabs>
 
@@ -2992,8 +2877,8 @@ onUnmounted(() => {
                             <button
                                 class="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition"
                                 :class="shareLinkCopied
-                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                    : 'bg-teal-500/10 text-teal-600 hover:bg-teal-500/20'"
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    : 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20'"
                                 @click="copyShareLink"
                             >
                                 <span v-if="shareLinkCopied" class="flex items-center gap-1">

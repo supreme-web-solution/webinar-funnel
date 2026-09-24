@@ -68,18 +68,18 @@ const phaseLabel = computed(() => {
     <div
         v-if="generation && (isRunning || isFailed)"
         class="space-y-3 rounded-xl border p-4 shadow-sm"
-        :class="isFailed ? 'border-red-200 bg-red-50/60' : 'border-teal-200/60 bg-teal-50/30'"
+        :class="isFailed ? 'border-red-200 bg-red-50/60' : 'border-blue-200/60 bg-blue-50/30'"
     >
         <div class="flex items-start gap-3">
             <Icon
                 :icon="isFailed ? 'heroicons:exclamation-circle' : 'heroicons:arrow-path'"
                 class="mt-0.5 size-5 shrink-0"
-                :class="[isFailed ? 'text-red-600' : 'animate-spin text-teal-600']"
+                :class="[isFailed ? 'text-red-600' : 'animate-spin text-blue-600']"
             />
             <div class="min-w-0 flex-1 space-y-1">
                 <p class="text-sm font-medium">{{ generation.message || 'Working…' }}</p>
                 <p v-if="generation.detail" class="text-xs text-muted-foreground">{{ generation.detail }}</p>
-                <p class="text-xs text-teal-700">
+                <p class="text-xs text-blue-700">
                     <span class="font-medium">{{ phaseLabel }}</span>
                     <span v-if="generation.selected_title"> · {{ generation.selected_title }}</span>
                     <span v-if="generation.pages_total"> · {{ generation.pages_done ?? 0 }}/{{ generation.pages_total }} pages</span>
@@ -89,9 +89,9 @@ const phaseLabel = computed(() => {
         </div>
 
         <div v-if="isRunning" class="space-y-1">
-            <div class="h-2 overflow-hidden rounded-full bg-teal-100">
+            <div class="h-2 overflow-hidden rounded-full bg-blue-100">
                 <div
-                    class="h-full rounded-full bg-linear-to-r from-teal-600 to-cyan-400 transition-all duration-500"
+                    class="h-full rounded-full fill-brand-gradient transition-all duration-500"
                     :style="{ width: `${Math.max(progress, 8)}%` }"
                 />
             </div>
@@ -100,9 +100,9 @@ const phaseLabel = computed(() => {
 
         <p v-if="isFailed && generation.error" class="text-xs text-red-700">{{ generation.error }}</p>
 
-        <ul v-if="recentEvents.length" class="space-y-1 border-t border-teal-200/40 pt-2 text-[11px] text-muted-foreground">
+        <ul v-if="recentEvents.length" class="space-y-1 border-t border-blue-200/40 pt-2 text-[11px] text-muted-foreground">
             <li v-for="(ev, i) in recentEvents" :key="i" class="flex gap-2">
-                <span class="shrink-0 text-teal-500">●</span>
+                <span class="shrink-0 text-blue-500">●</span>
                 <span>{{ ev.message }}<span v-if="ev.detail" class="text-muted-foreground/80"> — {{ ev.detail }}</span></span>
             </li>
         </ul>

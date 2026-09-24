@@ -110,7 +110,7 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
 <template>
     <Head title="Leads" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4">
         <!-- Header -->
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="min-w-0">
@@ -140,8 +140,8 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -178,7 +178,7 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
                         v-if="hasFilters"
                         variant="ghost"
                         size="sm"
-                        class="text-teal-700"
+                        class="text-blue-700"
                         @click="clearFilters"
                     >
                         <Icon icon="heroicons:x-mark" class="size-3.5" />
@@ -189,8 +189,8 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
 
             <!-- Empty -->
             <div v-if="leads.data.length === 0" class="flex flex-col items-center justify-center gap-4 px-6 py-14 text-center">
-                <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                    <Icon icon="heroicons:users" class="size-7 text-teal-600/60" />
+                <div class="flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                    <Icon icon="heroicons:users" class="size-7 text-blue-600/60" />
                 </div>
                 <div>
                     <p class="font-semibold text-foreground">
@@ -210,7 +210,7 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
             <div v-else class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-border/60 bg-teal-50/20">
+                        <tr class="border-b border-border/60 bg-blue-50/20">
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">#</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Lead</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Funnel</th>
@@ -219,7 +219,7 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border/60">
-                        <tr v-for="(lead, i) in leads.data" :key="lead.id" class="transition-colors hover:bg-teal-50/20">
+                        <tr v-for="(lead, i) in leads.data" :key="lead.id" class="transition-colors hover:bg-blue-50/20">
                             <td class="w-10 px-4 py-3 text-xs tabular-nums text-muted-foreground">
                                 {{ (leads.from ?? 0) + i }}
                             </td>
@@ -241,9 +241,9 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
                                 <Link
                                     v-if="lead.funnel"
                                     :href="`/funnels/${lead.funnel.id}/edit`"
-                                    class="group inline-flex max-w-[160px] items-center gap-1 truncate text-xs font-medium text-foreground hover:text-teal-700"
+                                    class="group inline-flex max-w-[160px] items-center gap-1 truncate text-xs font-medium text-foreground hover:text-blue-700"
                                 >
-                                    <Icon icon="heroicons:funnel" class="size-3 shrink-0 text-teal-600" />
+                                    <Icon icon="heroicons:funnel" class="size-3 shrink-0 text-blue-600" />
                                     {{ lead.funnel.name }}
                                 </Link>
                                 <span v-else class="text-xs text-muted-foreground">—</span>
@@ -252,7 +252,7 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
                                 <Badge
                                     variant="outline"
                                     class="text-[0.65rem] capitalize"
-                                    :class="lead.source === 'optin' ? 'border-teal-200 bg-teal-50 text-teal-700' : ''"
+                                    :class="lead.source === 'optin' ? 'border-blue-200 bg-blue-50 text-blue-700' : ''"
                                 >
                                     {{ lead.source }}
                                 </Badge>
@@ -278,8 +278,8 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
                         :disabled="!link.url"
                         class="inline-flex h-7 min-w-7 items-center justify-center rounded-lg border px-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                         :class="link.active
-                            ? 'border-teal-600 bg-teal-600 text-white'
-                            : 'border-border/60 bg-white text-foreground hover:bg-teal-50'"
+                            ? 'chip-brand-active'
+                            : 'border-border/60 bg-white text-foreground hover:bg-blue-50'"
                         @click="link.url && router.get(link.url, {}, { preserveState: true })"
                         v-html="link.label"
                     />

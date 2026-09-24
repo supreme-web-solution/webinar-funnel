@@ -56,6 +56,11 @@ class HandleInertiaRequests extends Middleware
                 'can_view_bundle_features' => in_array('view_extra_features', $permissions, true),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'commandCenter' => $user ? [
+                'name' => config('ai_employee.name', 'Alex'),
+                'title' => config('ai_employee.title', 'Command Center'),
+                'page' => '/command-center',
+            ] : null,
         ];
     }
 }

@@ -19,12 +19,32 @@ class EspDispatcher
         array $providerConfig = []
     ): array {
         $adapter = $this->adapterFor($integrationAccount->provider);
+        $credentials = is_array($integrationAccount->credentials) ? $integrationAccount->credentials : [];
+        $credentials = $this->mergeListOverride($credentials, $providerConfig);
 
         return $adapter->subscribe(
             $leadPayload,
-            $integrationAccount->credentials ?? [],
+            $credentials,
             $providerConfig
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     * @param  array<string, mixed>  $providerConfig
+     * @return array<string, mixed>
+     */
+    protected function mergeListOverride(array $credentials, array $providerConfig): array
+    {
+        $listId = trim((string) ($providerConfig['list_id'] ?? $providerConfig['audience_id'] ?? ''));
+        if ($listId === '') {
+            return $credentials;
+        }
+
+        $credentials['list_id'] = $listId;
+        $credentials['audience_id'] = $listId;
+
+        return $credentials;
     }
 
     /**
@@ -42,14 +62,14 @@ class EspDispatcher
     private function adapterFor(string $provider): EspProviderAdapter
     {
         return match ($provider) {
-            'mailchimp'       => app(MailchimpEspAdapter::class),
-            'getresponse'     => app(GetResponseEspAdapter::class),
-            'convertkit'      => app(ConvertKitEspAdapter::class),
-            'activecampaign'  => app(ActiveCampaignEspAdapter::class),
+            'mailchimp' => app(MailchimpEspAdapter::class),
+            'getresponse' => app(GetResponseEspAdapter::class),
+            'convertkit' => app(ConvertKitEspAdapter::class),
+            'activecampaign' => app(ActiveCampaignEspAdapter::class),
             'sendinblue',
-            'brevo'           => app(BrevoEspAdapter::class),
+            'brevo' => app(BrevoEspAdapter::class),
             'generic_webhook' => app(GenericWebhookEspAdapter::class),
-            default           => new UnsupportedEspAdapter($provider),
+            default => new UnsupportedEspAdapter($provider),
         };
     }
 }

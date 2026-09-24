@@ -33,12 +33,12 @@ function embedVideoUrl(url: string): string | null {
 
     <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
         <div
-            class="relative overflow-hidden rounded-2xl border border-emerald-200/60 bg-linear-to-r from-emerald-50 via-cyan-50 to-sky-50 p-5 shadow-sm"
+            class="relative overflow-hidden rounded-2xl border border-blue-200/60 bg-linear-to-r from-blue-50 via-blue-50 to-sky-50 p-5 shadow-sm"
         >
-            <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-emerald-200/40 blur-2xl" />
+            <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-blue-200/40 blur-2xl" />
             <div class="relative flex items-start gap-3">
                 <div
-                    class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500 to-cyan-500 text-white shadow-sm"
+                    class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-blue-500 text-white shadow-sm"
                 >
                     <Icon icon="heroicons:user-group" class="size-5" />
                 </div>

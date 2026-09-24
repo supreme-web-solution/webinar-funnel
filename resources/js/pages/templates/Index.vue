@@ -100,7 +100,7 @@ function coverIcon(cat: string): string {
 <template>
     <Head title="Template Library" />
 
-    <div class="flex flex-col gap-6 p-4 md:p-6 w-full max-w-screen-xl mx-auto">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 md:p-6">
 
         <!-- ── Page header ── -->
         <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">

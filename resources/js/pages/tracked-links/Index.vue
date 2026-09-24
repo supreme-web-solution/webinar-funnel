@@ -25,6 +25,7 @@ import {
     type DeviceRule,
     type GeoRule,
 } from '@/composables/useTrackedLinkRules';
+import { countryLabel } from '@/data/trackedLinkCountries';
 
 type TrackedLinkRow = {
     id: number;
@@ -39,7 +40,7 @@ type TrackedLinkRow = {
     created_at: string;
 };
 
-const props = defineProps<{ links: TrackedLinkRow[] }>();
+const props = defineProps<{ links: TrackedLinkRow[]; clicks_last_7_days?: number }>();
 
 const createGeoRules = ref<GeoRule[]>([]);
 const createDeviceRules = ref<DeviceRule[]>([]);
@@ -78,7 +79,7 @@ const statCards = computed(() => [
     { label: 'Total', value: stats.value.total, sub: 'links', icon: 'heroicons:link' },
     { label: 'Active', value: stats.value.active, sub: 'live', icon: 'heroicons:signal' },
     { label: 'Clicks', value: stats.value.clicks, sub: 'all time', icon: 'heroicons:cursor-arrow-rays' },
-    { label: 'Routed', value: stats.value.withRules, sub: 'geo/device', icon: 'heroicons:globe-alt' },
+    { label: 'This week', value: props.clicks_last_7_days ?? 0, sub: 'clicks', icon: 'heroicons:chart-bar' },
 ]);
 
 const filteredLinks = computed(() => {
@@ -184,7 +185,7 @@ function fmtDate(iso: string): string {
 <template>
     <Head title="Tracked Links" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4">
         <!-- Header -->
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="min-w-0">
@@ -210,8 +211,8 @@ function fmtDate(iso: string): string {
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -265,10 +266,10 @@ function fmtDate(iso: string): string {
         <!-- Empty state -->
         <div
             v-if="!links.length"
-            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-teal-200/60 bg-white px-6 py-14 text-center shadow-sm"
+            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-blue-200/60 bg-white px-6 py-14 text-center shadow-sm"
         >
-            <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                <Icon icon="heroicons:link" class="size-7 text-teal-600/60" />
+            <div class="flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                <Icon icon="heroicons:link" class="size-7 text-blue-600/60" />
             </div>
             <div>
                 <p class="font-semibold text-foreground">No manual links yet</p>
@@ -292,12 +293,12 @@ function fmtDate(iso: string): string {
             <article
                 v-for="link in filteredLinks"
                 :key="link.id"
-                class="overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-teal-200/60 hover:shadow-md"
+                class="overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-blue-200/60 hover:shadow-md"
             >
                 <div class="flex flex-col gap-4 p-4 lg:flex-row lg:items-start lg:justify-between">
                     <div class="flex min-w-0 flex-1 items-start gap-3">
-                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
-                            <Icon icon="heroicons:shield-check" class="size-5 text-teal-600" />
+                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10">
+                            <Icon icon="heroicons:shield-check" class="size-5 text-blue-600" />
                         </div>
                         <div class="min-w-0 flex-1 space-y-2">
                             <div class="flex flex-wrap items-center gap-2">
@@ -305,14 +306,14 @@ function fmtDate(iso: string): string {
                                 <Badge
                                     variant="outline"
                                     class="text-[0.6rem]"
-                                    :class="link.is_active ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
+                                    :class="link.is_active ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
                                 >
                                     {{ link.is_active ? 'Active' : 'Paused' }}
                                 </Badge>
                                 <Badge
                                     variant="outline"
                                     class="text-[0.6rem] tabular-nums"
-                                    :class="link.click_count > 0 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : ''"
+                                    :class="link.click_count > 0 ? 'border-blue-200 bg-blue-50 text-blue-700' : ''"
                                 >
                                     {{ link.click_count }} {{ link.click_count === 1 ? 'click' : 'clicks' }}
                                 </Badge>
@@ -322,7 +323,7 @@ function fmtDate(iso: string): string {
                             </div>
                             <a
                                 :href="link.public_url"
-                                class="block break-all text-sm text-teal-600 hover:text-teal-800 hover:underline"
+                                class="block break-all text-sm text-blue-600 hover:text-blue-800 hover:underline"
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
@@ -372,7 +373,7 @@ function fmtDate(iso: string): string {
                     <div v-if="link.geo_rules" class="rounded-lg border border-border/60 bg-white p-2.5">
                         <p class="font-medium text-muted-foreground">Geo rules</p>
                         <p v-for="(url, country) in link.geo_rules" :key="country" class="mt-1 break-all">
-                            <span class="font-mono text-teal-700">{{ country }}</span> → {{ url }}
+                            <span class="font-mono text-blue-700">{{ countryLabel(String(country)) }} ({{ country }})</span> → {{ url }}
                         </p>
                     </div>
                     <div v-if="link.device_rules" class="rounded-lg border border-border/60 bg-white p-2.5">

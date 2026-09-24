@@ -71,8 +71,8 @@ function embedVideoUrl(url: string | null | undefined): string | null {
                 <h1 class="text-xl font-bold tracking-tight text-foreground md:text-2xl">Tutorial</h1>
                 <p class="mt-0.5 text-sm leading-relaxed text-muted-foreground">{{ intro }}</p>
             </div>
-            <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
-                <Icon icon="heroicons:academic-cap" class="size-5 text-teal-600" />
+            <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10">
+                <Icon icon="heroicons:academic-cap" class="size-5 text-blue-600" />
             </div>
         </div>
 
@@ -83,8 +83,8 @@ function embedVideoUrl(url: string | null | undefined): string | null {
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -103,9 +103,9 @@ function embedVideoUrl(url: string | null | undefined): string | null {
                 :key="`${section.title}-${index}`"
                 class="overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm"
             >
-                <div class="border-b border-border/60 bg-teal-50/20 px-4 py-3 md:px-5">
+                <div class="border-b border-border/60 bg-blue-50/20 px-4 py-3 md:px-5">
                     <div class="flex items-center gap-2">
-                        <span class="flex size-6 shrink-0 items-center justify-center rounded-md bg-teal-600 text-[0.65rem] font-bold text-white">
+                        <span class="flex size-6 shrink-0 items-center justify-center rounded-md bg-brand-gradient text-[0.65rem] font-bold text-white">
                             {{ index + 1 }}
                         </span>
                         <h2 class="text-base font-semibold text-foreground">{{ section.title }}</h2>
@@ -148,10 +148,10 @@ function embedVideoUrl(url: string | null | undefined): string | null {
         <!-- Empty -->
         <div
             v-else
-            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-teal-200/60 bg-white px-6 py-14 text-center shadow-sm"
+            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-blue-200/60 bg-white px-6 py-14 text-center shadow-sm"
         >
-            <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                <Icon icon="heroicons:academic-cap" class="size-7 text-teal-600/60" />
+            <div class="flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                <Icon icon="heroicons:academic-cap" class="size-7 text-blue-600/60" />
             </div>
             <div>
                 <p class="font-semibold text-foreground">Content coming soon</p>
@@ -163,15 +163,15 @@ function embedVideoUrl(url: string | null | undefined): string | null {
             </div>
             <ul class="mt-2 space-y-2 text-left text-sm text-muted-foreground">
                 <li class="flex items-start gap-2">
-                    <Icon icon="heroicons:check-circle" class="mt-0.5 size-4 shrink-0 text-teal-600" />
+                    <Icon icon="heroicons:check-circle" class="mt-0.5 size-4 shrink-0 text-blue-600" />
                     Create and publish webinar funnels
                 </li>
                 <li class="flex items-start gap-2">
-                    <Icon icon="heroicons:check-circle" class="mt-0.5 size-4 shrink-0 text-teal-600" />
+                    <Icon icon="heroicons:check-circle" class="mt-0.5 size-4 shrink-0 text-blue-600" />
                     Connect social accounts for traffic auto-reply
                 </li>
                 <li class="flex items-start gap-2">
-                    <Icon icon="heroicons:check-circle" class="mt-0.5 size-4 shrink-0 text-teal-600" />
+                    <Icon icon="heroicons:check-circle" class="mt-0.5 size-4 shrink-0 text-blue-600" />
                     Track keywords and mentions
                 </li>
             </ul>

@@ -280,7 +280,7 @@ const statCards = computed(() => [
 <template>
     <Head title="ESP Integrations" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4">
 
             <!-- Header -->
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -304,8 +304,8 @@ const statCards = computed(() => [
                     :key="stat.label"
                     class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
                 >
-                    <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                        <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                    <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                        <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                     </div>
                     <div class="min-w-0">
                         <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -320,7 +320,7 @@ const statCards = computed(() => [
             <!-- ── Connect integration modal ── -->
             <Dialog :open="showForm" @update:open="onConnectDialogChange">
                 <DialogContent class="max-h-[90vh] max-w-2xl gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-xl">
-                    <div class="bg-linear-to-br from-teal-50 via-cyan-50/60 to-white px-5 py-4">
+                    <div class="bg-linear-to-br from-blue-50 via-blue-50/60 to-white px-5 py-4">
                         <DialogHeader class="text-left">
                             <DialogTitle class="text-base">Connect a new integration</DialogTitle>
                             <DialogDescription class="text-xs">
@@ -340,9 +340,9 @@ const statCards = computed(() => [
                                     v-for="p in PROVIDERS"
                                     :key="p.id"
                                     type="button"
-                                    class="group relative flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center shadow-sm transition-all hover:border-teal-300 hover:shadow-md"
+                                    class="group relative flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center shadow-sm transition-all hover:border-blue-300 hover:shadow-md"
                                     :class="selectedId === p.id
-                                        ? 'border-teal-500 bg-teal-50/50 ring-2 ring-teal-200'
+                                        ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-200'
                                         : 'border-border/60 bg-white'"
                                     @click="selectProvider(p.id as ProviderId)"
                                 >
@@ -361,7 +361,7 @@ const statCards = computed(() => [
                                     <span class="text-[0.7rem] font-medium leading-tight text-foreground">{{ p.label }}</span>
                                     <div
                                         v-if="selectedId === p.id"
-                                        class="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-teal-600"
+                                        class="bg-brand-gradient absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full"
                                     >
                                         <Icon icon="heroicons:check" class="size-2.5 text-white" />
                                     </div>
@@ -476,10 +476,10 @@ const statCards = computed(() => [
                 <!-- Empty state -->
                 <div
                     v-if="accounts.length === 0"
-                    class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-teal-200/60 bg-white px-6 py-14 text-center shadow-sm"
+                    class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-blue-200/60 bg-white px-6 py-14 text-center shadow-sm"
                 >
-                    <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                        <Icon icon="heroicons:puzzle-piece" class="size-7 text-teal-600/60" />
+                    <div class="flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                        <Icon icon="heroicons:puzzle-piece" class="size-7 text-blue-600/60" />
                     </div>
                     <div>
                         <p class="font-semibold text-foreground">No integrations connected</p>
@@ -527,7 +527,7 @@ const statCards = computed(() => [
                                 <Badge
                                     class="shrink-0 text-[0.65rem] capitalize px-1.5"
                                     :class="account.status === 'active'
-                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
                                         : 'bg-red-500/20 text-red-300 border-red-500/30'"
                                 >
                                     {{ account.status }}
@@ -546,7 +546,7 @@ const statCards = computed(() => [
                                     v-if="testResults[account.id]"
                                     class="flex items-start gap-1.5 rounded-md border px-2.5 py-2 text-xs"
                                     :class="testResults[account.id]?.ok
-                                        ? 'border-emerald-500/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                                        ? 'border-blue-500/30 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400'
                                         : 'border-destructive/30 bg-destructive/5 text-destructive'"
                                 >
                                     <Icon
@@ -610,7 +610,7 @@ const statCards = computed(() => [
                             <Badge
                                 :class="queueHealth.failed_last_24h > 0
                                     ? 'bg-red-50 text-red-700 border-red-200'
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'"
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'"
                             >
                                 Failed (24h): {{ queueHealth.failed_last_24h }}
                             </Badge>
@@ -639,7 +639,7 @@ const statCards = computed(() => [
                                 <Badge
                                     class="capitalize text-[0.62rem] px-1.5 py-0.5"
                                     :class="log.status === 'success'
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
                                         : log.status === 'queued'
                                             ? 'bg-amber-50 text-amber-700 border-amber-200'
                                             : 'bg-red-50 text-red-700 border-red-200'"

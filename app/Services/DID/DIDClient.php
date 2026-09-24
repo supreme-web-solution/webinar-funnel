@@ -2,6 +2,7 @@
 
 namespace App\Services\DID;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -72,7 +73,13 @@ class DIDClient
 
         Log::info('[D-ID] Fetching presenters from API.');
 
-        $response = $this->http()->get('/clips/presenters');
+        try {
+            $response = $this->http()->get('/clips/presenters');
+        } catch (ConnectionException $e) {
+            Log::warning('[D-ID] Connection failed while fetching presenters', ['error' => $e->getMessage()]);
+
+            return is_array($cached) ? $cached : [];
+        }
 
         if (! $response->successful()) {
             Log::warning('[D-ID] Failed to fetch presenters', ['status' => $response->status(), 'body' => $response->body()]);
@@ -118,10 +125,10 @@ class DIDClient
         $response = $this->http()->post('/clips', [
             'presenter_id' => $presenterId,
             'script' => [
-                'type'     => 'text',
-                'input'    => $script,
+                'type' => 'text',
+                'input' => $script,
                 'provider' => [
-                    'type'     => 'microsoft',
+                    'type' => 'microsoft',
                     'voice_id' => $voiceId,
                 ],
             ],
@@ -174,15 +181,15 @@ class DIDClient
         $response = $this->http()->post('/talks', [
             'source_url' => $presenterImageUrl,
             'script' => [
-                'type'     => 'text',
-                'input'    => $script,
+                'type' => 'text',
+                'input' => $script,
                 'provider' => [
-                    'type'     => 'microsoft',
+                    'type' => 'microsoft',
                     'voice_id' => $voiceId,
                 ],
             ],
             'config' => [
-                'stitch'        => true,
+                'stitch' => true,
                 'result_format' => 'mp4',
             ],
         ]);
@@ -224,8 +231,8 @@ class DIDClient
         // D-ID keys are `API_USERNAME:API_PASSWORD` — encode as standard HTTP Basic auth.
         return Http::withHeaders([
             'Authorization' => 'Basic '.base64_encode($this->apiKey),
-            'Accept'        => 'application/json',
-            'Content-Type'  => 'application/json',
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
         ])
             ->baseUrl(self::BASE_URL)
             ->timeout((int) config('services.did.timeout', 120));

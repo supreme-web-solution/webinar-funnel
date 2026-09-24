@@ -214,7 +214,7 @@ function isSelected(id: string) {
 }
 
 function blockRing(id: string) {
-    return isSelected(id) ? 'ring-2 ring-teal-500 ring-offset-2' : 'hover:ring-2 hover:ring-teal-200 hover:ring-offset-1';
+    return isSelected(id) ? 'ring-2 ring-blue-500 ring-offset-2' : 'hover:ring-2 hover:ring-blue-200 hover:ring-offset-1';
 }
 
 function onInlineBlur(key: string, event: FocusEvent) {
@@ -262,7 +262,7 @@ function save() {
                     <button
                         type="button"
                         class="rounded-md px-3 py-1.5 text-xs font-medium"
-                        :class="device === 'desktop' ? 'bg-teal-600 text-white' : 'text-slate-400'"
+                        :class="device === 'desktop' ? 'chip-brand-active' : 'text-slate-400'"
                         @click="device = 'desktop'"
                     >
                         Desktop
@@ -270,7 +270,7 @@ function save() {
                     <button
                         type="button"
                         class="rounded-md px-3 py-1.5 text-xs font-medium"
-                        :class="device === 'mobile' ? 'bg-teal-600 text-white' : 'text-slate-400'"
+                        :class="device === 'mobile' ? 'chip-brand-active' : 'text-slate-400'"
                         @click="device = 'mobile'"
                     >
                         Mobile
@@ -298,7 +298,7 @@ function save() {
                         :key="b.id"
                         type="button"
                         class="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors lg:w-full"
-                        :class="isSelected(b.id) ? 'bg-teal-600 text-white' : 'text-slate-300 hover:bg-slate-800'"
+                        :class="isSelected(b.id) ? 'chip-brand-active' : 'text-slate-300 hover:bg-slate-800'"
                         @click="selectBlock(b.id)"
                     >
                         <Icon :icon="b.icon" class="size-4 shrink-0" />
@@ -346,7 +346,7 @@ function save() {
                             @click="selectBlock('bullets')"
                         >
                             <li v-for="(b, i) in bullets" :key="i" class="flex gap-2 rounded px-1 py-0.5">
-                                <span class="text-teal-400">✓</span>
+                                <span class="text-blue-400">✓</span>
                                 <span>{{ b }}</span>
                             </li>
                             <li v-if="!bullets.length" class="text-slate-500 italic">Add bullet points in the panel →</li>
@@ -527,13 +527,13 @@ function save() {
                                     <div class="min-w-0 flex-1">
                                         <h2 class="text-lg font-bold text-slate-900">{{ b.title }}</h2>
                                         <div class="mt-2 flex flex-wrap items-center gap-2">
-                                            <span class="rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{{ b.type_label }}</span>
-                                            <span class="text-sm font-semibold text-emerald-700">{{ b.value_label }}</span>
+                                            <span class="rounded-full bg-brand-gradient px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{{ b.type_label }}</span>
+                                            <span class="text-sm font-semibold text-blue-700">{{ b.value_label }}</span>
                                         </div>
                                         <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ b.description }}</p>
                                         <ul v-if="b.features.length" class="mt-3 space-y-1.5">
                                             <li v-for="(f, i) in b.features" :key="i" class="flex gap-2 text-sm text-slate-700">
-                                                <span class="mt-0.5 text-emerald-600">✓</span>
+                                                <span class="mt-0.5 text-blue-600">✓</span>
                                                 <span>{{ f }}</span>
                                             </li>
                                         </ul>
@@ -677,7 +677,7 @@ function save() {
                                 Cards are pulled from your generated bonuses. To change which appear here, go to
                                 <strong>Step 5 — Bonuses</strong> and use the checkboxes, then click <strong>Save bonus page</strong>.
                             </p>
-                            <p v-if="previewBonusCards.length" class="text-xs text-emerald-700">
+                            <p v-if="previewBonusCards.length" class="text-xs text-blue-700">
                                 Showing {{ previewBonusCards.length }} bonus{{ previewBonusCards.length === 1 ? '' : 'es' }} in preview.
                             </p>
                         </div>

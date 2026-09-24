@@ -27,13 +27,22 @@ class SocialTrafficController extends Controller
         'instagram' => 'instagram',
         'tiktok' => 'tiktok',
         'linkedin' => 'linkedin',
+        'threads' => 'threads',
+        'pinterest' => 'pinterest',
     ];
 
     /** @var list<string> */
     public const TRAFFIC_REPLY_PLATFORMS = ['reddit', 'youtube', 'x'];
 
     /** @var list<string> */
-    public const POSTING_ADS_PLATFORMS = ['facebook', 'instagram', 'tiktok', 'linkedin'];
+    public const POSTING_PLATFORMS = [
+        'facebook',
+        'instagram',
+        'tiktok',
+        'linkedin',
+        'threads',
+        'pinterest',
+    ];
 
     public function edit(Request $request): Response
     {
@@ -66,7 +75,7 @@ class SocialTrafficController extends Controller
             'appUrlMismatch' => $appUrl !== '' && $appUrl !== $requestOrigin,
             'requestOrigin' => $requestOrigin,
             'trafficPlatforms' => self::TRAFFIC_REPLY_PLATFORMS,
-            'postingPlatforms' => self::POSTING_ADS_PLATFORMS,
+            'postingPlatforms' => self::POSTING_PLATFORMS,
             'facebookAdsDiagnostics' => $this->facebookAdsDiagnostics((int) $request->user()->id),
         ]);
     }
@@ -408,6 +417,8 @@ class SocialTrafficController extends Controller
             'instagram' => 'Instagram',
             'tiktok' => 'TikTok',
             'linkedin' => 'LinkedIn',
+            'threads' => 'Threads',
+            'pinterest' => 'Pinterest',
             default => ucfirst($localPlatform),
         };
 
@@ -488,6 +499,8 @@ class SocialTrafficController extends Controller
             'instagram' => url('/settings/social-traffic/instagram/callback'),
             'tiktok' => url('/settings/social-traffic/tiktok/callback'),
             'linkedin' => url('/settings/social-traffic/linkedin/callback'),
+            'threads' => url('/settings/social-traffic/threads/callback'),
+            'pinterest' => url('/settings/social-traffic/pinterest/callback'),
             default => route('settings.social-traffic.zernio.callback'),
         };
     }
@@ -504,6 +517,7 @@ class SocialTrafficController extends Controller
             str_ends_with($path, 'instagram/callback') => 'instagram',
             str_ends_with($path, 'tiktok/callback') => 'tiktok',
             str_ends_with($path, 'linkedin/callback') => 'linkedin',
+            str_ends_with($path, 'threads/callback') => 'threads',
             str_ends_with($path, 'pinterest/callback') => 'pinterest',
             default => null,
         };

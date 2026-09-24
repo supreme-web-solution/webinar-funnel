@@ -220,13 +220,13 @@ const {
                                     v-for="p in trafficReplyPlatforms"
                                     :key="p.key"
                                     class="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5"
-                                    :class="trafficAccountForPlatform(p.key) ? 'border-green-500/40' : ''"
+                                    :class="trafficAccountForPlatform(p.key) ? 'border-blue-500/40' : ''"
                                 >
                                     <div class="flex items-center gap-2">
                                         <Icon :icon="p.icon" class="size-4 shrink-0" :style="{ color: p.color }" />
                                         <span class="text-xs font-medium">{{ p.label }}</span>
                                     </div>
-                                    <p v-if="trafficAccountForPlatform(p.key)" class="mt-1.5 text-[0.65rem] text-green-600 dark:text-green-400">
+                                    <p v-if="trafficAccountForPlatform(p.key)" class="mt-1.5 text-[0.65rem] text-blue-600 dark:text-blue-400">
                                         Connected · {{ trafficAccountForPlatform(p.key)?.platform_username || 'account linked' }}
                                     </p>
                                     <p v-if="trafficAccountForPlatform(p.key)" class="text-[0.65rem] text-muted-foreground">
@@ -275,7 +275,7 @@ const {
                         </p>
                         <div
                             v-if="trafficSuggestedKeywords.length > 0"
-                            class="space-y-2 rounded-lg border border-dashed border-emerald-200/80 bg-emerald-50/50 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+                            class="space-y-2 rounded-lg border border-dashed border-blue-200/80 bg-blue-50/50 p-3 dark:border-blue-900/50 dark:bg-blue-950/20"
                         >
                             <div>
                                 <p class="text-xs font-semibold text-foreground">Suggested keywords</p>
@@ -610,7 +610,7 @@ const {
                                     <p v-if="mention.content && mention.content !== mention.title" class="text-xs text-muted-foreground leading-relaxed">{{ trunc(mention.content, 220) }}</p>
                                     <p
                                         v-if="trafficMentionAutoReplied(mention.traffic_reply_attempt)"
-                                        class="mt-1.5 text-[0.65rem] text-green-700 dark:text-green-400"
+                                        class="mt-1.5 text-[0.65rem] text-blue-700 dark:text-blue-400"
                                     >
                                         Your app posted an auto-reply
                                         <template v-if="mention.traffic_reply_attempt?.posted_at">

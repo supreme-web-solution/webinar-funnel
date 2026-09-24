@@ -487,7 +487,7 @@ export function useFreeTrafficPanel(
         }
 
         const map: Record<string, { label: string; class: string }> = {
-            posted: { label: 'Auto-replied', class: 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400' },
+            posted: { label: 'Auto-replied', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
             queued_post: { label: 'Posting…', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
             generating: { label: 'Generating…', class: 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-400' },
             pending_evaluation: { label: 'Queued', class: 'border-slate-500/40 bg-slate-500/10 text-muted-foreground' },

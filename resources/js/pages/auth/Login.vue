@@ -14,8 +14,8 @@ import { request } from '@/routes/password';
 
 defineOptions({
     layout: {
-        title: 'Log in to your account',
-        description: 'Access your affiliate business dashboard',
+        title: 'Welcome back',
+        description: 'Log in to your affiliate business dashboard',
     },
 });
 
@@ -31,7 +31,7 @@ defineProps<{
 
     <div
         v-if="status"
-        class="mb-4 text-center text-sm font-medium text-green-600"
+        class="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-center text-sm font-medium text-blue-800"
     >
         {{ status }}
     </div>
@@ -40,9 +40,9 @@ defineProps<{
         v-bind="store.form()"
         :reset-on-success="['password']"
         v-slot="{ errors, processing }"
-        class="flex flex-col gap-6"
+        class="flex flex-col gap-5"
     >
-        <div class="grid gap-6">
+        <div class="grid gap-5">
             <div class="grid gap-2">
                 <Label for="email">Email address</Label>
                 <Input
@@ -54,6 +54,7 @@ defineProps<{
                     :tabindex="1"
                     autocomplete="email"
                     placeholder="email@example.com"
+                    class="h-11 rounded-xl border-border/70 bg-white shadow-sm"
                 />
                 <InputError :message="errors.email" />
             </div>
@@ -64,7 +65,7 @@ defineProps<{
                     <TextLink
                         v-if="canResetPassword"
                         :href="request()"
-                        class="text-sm"
+                        class="text-xs text-blue-700 hover:text-blue-800"
                         :tabindex="5"
                     >
                         Forgot password?
@@ -77,20 +78,21 @@ defineProps<{
                     :tabindex="2"
                     autocomplete="current-password"
                     placeholder="Password"
+                    class="h-11 rounded-xl border-border/70 bg-white shadow-sm"
                 />
                 <InputError :message="errors.password" />
             </div>
 
-            <div class="flex items-center justify-between">
-                <Label for="remember" class="flex items-center space-x-3">
-                    <Checkbox id="remember" name="remember" :tabindex="3" />
-                    <span>Remember me</span>
-                </Label>
-            </div>
+            <Label for="remember" class="flex cursor-pointer items-center gap-3 text-sm text-muted-foreground">
+                <Checkbox id="remember" name="remember" :tabindex="3" />
+                <span>Remember me for 30 days</span>
+            </Label>
 
             <Button
                 type="submit"
-                class="mt-4 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                variant="brand"
+                size="lg"
+                class="mt-1 w-full rounded-xl"
                 :tabindex="4"
                 :disabled="processing"
                 data-test="login-button"
@@ -100,5 +102,11 @@ defineProps<{
             </Button>
         </div>
 
+        <p v-if="canRegister" class="text-center text-sm text-muted-foreground">
+            Don't have an account?
+            <TextLink :href="register()" class="font-medium text-blue-700 hover:text-blue-800" :tabindex="6">
+                Create one free
+            </TextLink>
+        </p>
     </Form>
 </template>

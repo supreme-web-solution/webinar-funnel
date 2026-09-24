@@ -4,32 +4,33 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\FunnelPromotionGenerateAssetsRequest;
 use App\Http\Requests\FunnelPromotionScheduleRequest;
-use App\Http\Requests\FunnelPromotionStoreRequest;
 use App\Http\Requests\FunnelPromotionScriptGenerateRequest;
+use App\Http\Requests\FunnelPromotionStoreRequest;
 use App\Http\Requests\FunnelPromotionUpdateRequest;
-use App\Jobs\GeneratePromotionImageJob;
-use App\Jobs\GeneratePromotionTextJob;
-use App\Jobs\GeneratePromotionVideoJob;
 use App\Jobs\PublishPromotionPostJob;
 use App\Models\Campaign;
 use App\Models\Funnel;
 use App\Models\FunnelPromotionPost;
 use App\Models\FunnelPromotionScheduleEvent;
 use App\Models\FunnelPromotionTopicSuggestion;
+use App\Models\User;
 use App\Services\Campaigns\CampaignKnowledgeContextService;
-use App\Services\Campaigns\CampaignTrafficHubService;
+use App\Services\Content\PlatformFormatCatalog;
 use App\Services\DID\DIDClient;
+use App\Services\Promotion\CarouselTextSlideRenderer;
 use App\Services\Promotion\PromotionCtaResolverService;
 use App\Services\Promotion\PromotionGenerationCoordinator;
+use App\Services\Promotion\PromotionGenerationDispatcher;
 use App\Services\Promotion\PromotionPlatformCatalog;
-use App\Services\Promotion\PromotionTopicSuggestionService;
 use App\Services\Promotion\PromotionPublishGuard;
 use App\Services\Promotion\PromotionTextGenerationService;
+use App\Services\Promotion\PromotionTopicSuggestionService;
+use App\Services\Traffic\TrafficHubResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,6 +39,8 @@ class FunnelPromotionController extends Controller
     public function index(Request $request, Funnel $funnel, DIDClient $did, PromotionPlatformCatalog $platformCatalog, ?Campaign $campaign = null): Response
     {
         $this->authorizeFunnel($funnel);
+        $hubResolver = app(TrafficHubResolver::class);
+        $trafficHub = $hubResolver->payload($funnel, $campaign);
 
         $status = trim((string) $request->query('status', ''));
         $type = trim((string) $request->query('type', ''));
@@ -117,20 +120,24 @@ class FunnelPromotionController extends Controller
                 (int) $request->user()->id,
                 is_array($postPlatformKeys) ? $postPlatformKeys : []
             ),
-            'videoEnabled'       => $did->isEnabled(),
-            'availableAvatars'   => $did->isEnabled() ? $this->buildAvatarList($did->getPresenters()) : [],
-            'availableVoices'    => DIDClient::VOICES,
-            'socialTrafficUrl'   => route('settings.social-traffic.edit'),
+            'videoEnabled' => $did->isEnabled(),
+            'availableAvatars' => $did->isEnabled() ? $this->buildAvatarList($did->getPresenters()) : [],
+            'availableVoices' => DIDClient::VOICES,
+            'socialTrafficUrl' => route('settings.social-traffic.edit'),
             'routes' => [
                 'store' => route('funnels.promotion.posts.store', $funnel),
                 'bulk' => route('funnels.promotion.posts.bulk', $funnel),
                 'calendar' => $campaign
                     ? route('campaigns.traffic.promotion.calendar', $campaign)
-                    : route('funnels.promotion.calendar.index', $funnel),
+                    : ($hubResolver->isStandaloneContext($funnel, $campaign)
+                        ? route('traffic.workspace.promotion.calendar')
+                        : route('funnels.promotion.calendar.index', $funnel)),
                 'topicsGenerate' => route('funnels.promotion.topics.generate', $funnel),
                 'scriptGenerate' => route('funnels.promotion.scripts.generate', $funnel),
             ],
-            'campaignHub' => $campaign ? app(CampaignTrafficHubService::class)->hubPayload($campaign) : null,
+            'campaignHub' => $trafficHub,
+            'contentFormatCatalog' => app(PlatformFormatCatalog::class)->catalogPayload(),
+            'carouselLayoutTemplates' => CarouselTextSlideRenderer::layoutCatalog(),
         ]);
     }
 
@@ -252,12 +259,56 @@ class FunnelPromotionController extends Controller
         $validated = $request->validated();
 
         $cta = $ctaResolver->resolve($funnel);
+        $formatCatalog = app(PlatformFormatCatalog::class);
+        $generationContext = $validated['generation_context'] ?? [];
+        $contentFormat = $validated['content_format']
+            ?? (is_string($generationContext['content_format'] ?? null) ? $generationContext['content_format'] : null);
+        $formatSpec = is_string($contentFormat) && $contentFormat !== ''
+            ? $formatCatalog->format($contentFormat)
+            : null;
+
+        $contentType = $validated['content_type'];
+
+        if ($formatSpec !== null) {
+            $contentType = $formatCatalog->mapToPromotionContentType($contentFormat);
+        }
+
+        if (is_string($contentFormat) && $contentFormat !== '') {
+            $generationContext['content_format'] = $contentFormat;
+        }
+
+        if ($formatSpec !== null) {
+            if (! array_key_exists('include_text', $generationContext)) {
+                $generationContext['include_text'] = true;
+            }
+            if (! array_key_exists('include_image', $generationContext)) {
+                $generationContext['include_image'] = $formatCatalog->requiresImageAsset($formatSpec);
+            }
+        }
+
+        $renderProvider = is_string($generationContext['video_render_provider'] ?? null)
+            ? (string) $generationContext['video_render_provider']
+            : null;
+        if ($contentType === FunnelPromotionPost::TYPE_VIDEO && $renderProvider) {
+            $generationContext['video_render_provider'] = $renderProvider;
+        }
+
+        $metadata = ['created_from' => 'promotion_ui'];
+        if ($formatSpec !== null) {
+            $metadata['format_key'] = $contentFormat;
+            $metadata['format_spec'] = $formatSpec;
+            $metadata['media_spec'] = $formatCatalog->mediaSpec($formatSpec);
+        }
+        if ($renderProvider) {
+            $metadata['video_render_provider'] = $renderProvider;
+        }
+
         $post = FunnelPromotionPost::query()->create([
             'user_id' => $request->user()->id,
             'funnel_id' => $funnel->id,
             'title' => $validated['title'] ?? null,
             'topic' => $validated['topic'],
-            'content_type' => $validated['content_type'],
+            'content_type' => $contentType,
             'platforms' => $validated['platforms'],
             'publish_mode' => $validated['publish_mode'],
             'status' => FunnelPromotionPost::STATUS_DRAFT,
@@ -268,8 +319,8 @@ class FunnelPromotionController extends Controller
             'email_body' => $validated['email_body'] ?? null,
             'hashtags' => $validated['hashtags'] ?? null,
             'timezone' => (string) config('promotion.default_timezone', 'UTC'),
-            'generation_context' => $validated['generation_context'] ?? null,
-            'metadata' => ['created_from' => 'promotion_ui'],
+            'generation_context' => $generationContext !== [] ? $generationContext : null,
+            'metadata' => $metadata,
         ]);
 
         if (($validated['auto_generate'] ?? false) === true) {
@@ -277,26 +328,52 @@ class FunnelPromotionController extends Controller
             // For image posts: generate both the text caption AND the image.
             // For text/email/video: only dispatch the matching job.
             $types = [$post->content_type];
+            $usesMultiSlide = $formatCatalog->usesMultiSlideImages($formatSpec);
+            $ctx = (array) ($post->generation_context ?? []);
 
             if ($post->content_type === FunnelPromotionPost::TYPE_IMAGE) {
-                $ctx = (array) ($post->generation_context ?? []);
-                if (($ctx['include_text'] ?? true) !== false) {
+                // Carousels always need text/slide copy first — the image job alone
+                // is stripped below and would leave the post stuck in "generating".
+                $needsText = $usesMultiSlide || (($ctx['include_text'] ?? true) !== false);
+                if ($needsText) {
                     $types[] = FunnelPromotionPost::TYPE_TEXT;
                 }
             }
 
             Log::info('[Promotion] store: dispatching generation jobs', [
                 'post_id' => $post->id,
-                'types'   => $types,
+                'types' => $types,
+                'content_format' => $contentFormat,
+                'uses_multi_slide' => $usesMultiSlide,
             ]);
 
             $post->update(['status' => FunnelPromotionPost::STATUS_GENERATING]);
-            $this->dispatchGeneration($post, $types, false);
+
+            if ($usesMultiSlide) {
+                $types = array_values(array_filter(
+                    $types,
+                    fn (string $type): bool => $type !== FunnelPromotionPost::TYPE_IMAGE,
+                ));
+            }
+
+            if ($types === []) {
+                Log::warning('[Promotion] store: no generation jobs to dispatch', [
+                    'post_id' => $post->id,
+                    'content_format' => $contentFormat,
+                ]);
+                $post->update([
+                    'status' => FunnelPromotionPost::STATUS_FAILED,
+                    'last_error' => 'Nothing to generate — enable slide copy/text or pick another format.',
+                ]);
+            } else {
+                $this->dispatchGeneration($post, $types, false);
+            }
         }
 
         Log::info('[Promotion] store: post created', [
-            'post_id'      => $post->id,
+            'post_id' => $post->id,
             'content_type' => $post->content_type,
+            'content_format' => $contentFormat,
             'auto_generate' => $validated['auto_generate'] ?? false,
         ]);
 
@@ -332,13 +409,13 @@ class FunnelPromotionController extends Controller
         $validated = $request->validated();
 
         Log::info('[Promotion] generateAssets: dispatching generation jobs', [
-            'post_id'  => $post->id,
-            'types'    => $validated['types'],
+            'post_id' => $post->id,
+            'types' => $validated['types'],
             'platform' => $post->platforms,
         ]);
 
         $post->update([
-            'status'     => FunnelPromotionPost::STATUS_GENERATING,
+            'status' => FunnelPromotionPost::STATUS_GENERATING,
             'last_error' => null,
         ]);
 
@@ -412,24 +489,27 @@ class FunnelPromotionController extends Controller
      */
     private function dispatchGeneration(FunnelPromotionPost $post, array $types, bool $waitForVideo): void
     {
-        $types = array_values(array_unique($types));
+        app(PromotionGenerationDispatcher::class)->dispatch($post, $types, $waitForVideo);
+    }
 
-        if (in_array(FunnelPromotionPost::TYPE_TEXT, $types, true) || in_array(FunnelPromotionPost::TYPE_EMAIL, $types, true)) {
-            Log::info('[Promotion] dispatchGeneration: dispatching text job', ['post_id' => $post->id]);
-            GeneratePromotionTextJob::dispatch($post->id);
+    private function usesMultiSlideImages(FunnelPromotionPost $post): bool
+    {
+        $spec = $this->formatSpecForPost($post);
+
+        return app(PlatformFormatCatalog::class)->usesMultiSlideImages($spec);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function formatSpecForPost(FunnelPromotionPost $post): ?array
+    {
+        $formatKey = data_get($post->metadata, 'format_key') ?? data_get($post->generation_context, 'content_format');
+        if (! is_string($formatKey) || $formatKey === '') {
+            return null;
         }
-        if (in_array(FunnelPromotionPost::TYPE_IMAGE, $types, true)) {
-            Log::info('[Promotion] dispatchGeneration: dispatching image job', ['post_id' => $post->id]);
-            GeneratePromotionImageJob::dispatch($post->id);
-        }
-        if (in_array(FunnelPromotionPost::TYPE_VIDEO, $types, true)) {
-            Log::info('[Promotion] dispatchGeneration: dispatching video job', ['post_id' => $post->id, 'sync' => $waitForVideo]);
-            if ($waitForVideo) {
-                GeneratePromotionVideoJob::dispatchSync($post->id);
-            } else {
-                GeneratePromotionVideoJob::dispatch($post->id);
-            }
-        }
+
+        return app(PlatformFormatCatalog::class)->format($formatKey);
     }
 
     /**
@@ -442,18 +522,18 @@ class FunnelPromotionController extends Controller
     {
         return array_values(array_map(function (array $p): array {
             return [
-                'id'                  => (string) ($p['presenter_id'] ?? ''),
-                'name'                => (string) ($p['name'] ?? 'Presenter'),
-                'thumbnail_url'       => (string) ($p['thumbnail_url'] ?? $p['image_url'] ?? ''),
+                'id' => (string) ($p['presenter_id'] ?? ''),
+                'name' => (string) ($p['name'] ?? 'Presenter'),
+                'thumbnail_url' => (string) ($p['thumbnail_url'] ?? $p['image_url'] ?? ''),
                 'talking_preview_url' => (string) ($p['talking_preview_url'] ?? $p['preview_url'] ?? ''),
-                'image_url'           => (string) ($p['image_url'] ?? $p['thumbnail_url'] ?? ''),
+                'image_url' => (string) ($p['image_url'] ?? $p['thumbnail_url'] ?? ''),
             ];
         }, array_filter($presenters, fn ($p) => is_array($p) && ! empty($p['presenter_id']))));
     }
 
     private function authorizeFunnel(Funnel $funnel): void
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
 
         abort_unless((int) $user->id === (int) $funnel->user_id, 403);
@@ -461,7 +541,7 @@ class FunnelPromotionController extends Controller
 
     private function authorizePost(Request $request, Funnel $funnel, FunnelPromotionPost $post): void
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         abort_unless(
@@ -472,6 +552,8 @@ class FunnelPromotionController extends Controller
 
     private function duplicatePost(FunnelPromotionPost $post): FunnelPromotionPost
     {
+        $originalMetadata = (array) ($post->metadata ?? []);
+
         $copy = $post->replicate([
             'status',
             'scheduled_for',
@@ -485,10 +567,13 @@ class FunnelPromotionController extends Controller
         $copy->scheduled_for = null;
         $copy->published_at = null;
         $copy->last_error = null;
-        $copy->metadata = [
-            'duplicated_from' => $post->id,
-            'created_from' => 'duplicate',
-        ];
+        $copy->metadata = array_merge(
+            Arr::except($originalMetadata, ['generation_progress', 'publish_result']),
+            [
+                'duplicated_from' => $post->id,
+                'created_from' => 'duplicate',
+            ],
+        );
         $copy->save();
 
         $newPrimaryId = null;
@@ -508,13 +593,13 @@ class FunnelPromotionController extends Controller
 
         $this->varyDuplicatedContentForRepublish($copy);
 
-        $copy->load('primaryAsset');
+        $copy->load(['primaryAsset', 'assets']);
 
         if (app(PromotionGenerationCoordinator::class)->isGenerationComplete($copy)) {
             $copy->update(['status' => FunnelPromotionPost::STATUS_READY]);
         }
 
-        return $copy->fresh(['primaryAsset']);
+        return $copy->fresh(['primaryAsset', 'assets']);
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\FetchMentionsCommand;
+use App\Console\Commands\ProcessCampaignEmailSequencesCommand;
 use App\Console\Commands\RefreshMarketplaceTrendingCommand;
 use App\Jobs\DispatchDuePromotionPostsJob;
 use Illuminate\Foundation\Inspiring;
@@ -15,7 +16,10 @@ Artisan::command('inspire', function () {
 Schedule::command(FetchMentionsCommand::class)->everyFifteenMinutes();
 
 // Dispatch scheduled promotion posts every minute.
-Schedule::job(new DispatchDuePromotionPostsJob())->everyMinute();
+Schedule::job(new DispatchDuePromotionPostsJob)->everyMinute();
+
+// Send due in-app campaign email swipes every minute.
+Schedule::command(ProcessCampaignEmailSequencesCommand::class)->everyMinute();
 
 // Refresh Opportunity Finder trending cache daily (ClickBank + marketplace keywords).
 Schedule::command(RefreshMarketplaceTrendingCommand::class)->dailyAt('06:00');

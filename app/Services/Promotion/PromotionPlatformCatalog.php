@@ -79,6 +79,7 @@ final class PromotionPlatformCatalog
             'tiktok' => 'TikTok',
             'linkedin' => 'LinkedIn',
             'pinterest' => 'Pinterest',
+            'threads' => 'Threads',
             default => ucfirst($platform),
         };
     }

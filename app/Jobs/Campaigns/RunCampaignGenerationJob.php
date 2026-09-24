@@ -198,10 +198,10 @@ class RunCampaignGenerationJob implements ShouldBeUnique, ShouldQueue
         $progress->update($campaign, 'pages', $campaign->type === 'webinar'
             ? 'Building webinar registration & bonus pages from knowledge…'
             : 'Building squeeze, thank-you, quiz & bonus from knowledge…', 30, [
-            'detail' => $campaign->type === 'webinar'
-                ? 'Registration page copy from knowledge — opt-in goes straight to webinar room'
-                : 'Using squeeze strategy + lead magnet download URL',
-        ]);
+                'detail' => $campaign->type === 'webinar'
+                    ? 'Registration page copy from knowledge — opt-in goes straight to webinar room'
+                    : 'Using squeeze strategy + lead magnet download URL',
+            ]);
 
         if ($campaign->type === 'webinar') {
             $content->buildInitialWebinarPages(
@@ -209,6 +209,11 @@ class RunCampaignGenerationJob implements ShouldBeUnique, ShouldQueue
                 $campaign->offer_data ?? ['product_name' => $campaign->name],
                 (bool) ($this->payload['force'] ?? false),
             );
+
+            $builder = app(CampaignBuilderService::class);
+            $offer = $campaign->offer_data ?? ['product_name' => $campaign->name];
+            $builder->buildWebinarFunnels($campaign->fresh(), $offer);
+            $generationState->mark($campaign, 'webinar');
         } else {
             $content->buildInitialSalesPages(
                 $campaign,
@@ -220,12 +225,12 @@ class RunCampaignGenerationJob implements ShouldBeUnique, ShouldQueue
         $generationState->mark($campaign, 'pages');
 
         $progress->complete($campaign, $campaign->type === 'webinar'
-            ? 'Webinar registration & bonus pages generated'
+            ? 'Webinar pages + registration & pitch funnels ready'
             : '4 funnel pages generated', [
-            'detail' => $campaign->type === 'webinar'
-                ? 'Registration · Bonus'
-                : 'Squeeze · Thank you · Quiz · Bonus',
-        ]);
+                'detail' => $campaign->type === 'webinar'
+                    ? 'Branded squeeze · Registration funnel · Pitch/replay room · Bonus page'
+                    : 'Squeeze · Thank you · Quiz · Bonus',
+            ]);
     }
 
     protected function runBonusesSuggest(Campaign $campaign, CampaignGenerationProgressService $progress, CampaignGenerationStateService $generationState, BonusGeneratorService $bonusGenerator): void

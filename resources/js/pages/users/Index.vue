@@ -182,7 +182,7 @@ function deleteUser(user: UserRow): void {
 <template>
     <Head title="User Management" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4">
         <!-- Header -->
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="min-w-0">
@@ -204,8 +204,8 @@ function deleteUser(user: UserRow): void {
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -233,8 +233,8 @@ function deleteUser(user: UserRow): void {
             </div>
 
             <div v-if="users.data.length === 0" class="flex flex-col items-center justify-center gap-4 px-6 py-14 text-center">
-                <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                    <Icon icon="heroicons:user-group" class="size-7 text-teal-600/60" />
+                <div class="flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                    <Icon icon="heroicons:user-group" class="size-7 text-blue-600/60" />
                 </div>
                 <div>
                     <p class="font-semibold text-foreground">No users found</p>
@@ -246,7 +246,7 @@ function deleteUser(user: UserRow): void {
             <div v-else class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="border-b border-border/60 bg-teal-50/20">
+                        <tr class="border-b border-border/60 bg-blue-50/20">
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">User</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Username</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Email</th>
@@ -257,10 +257,10 @@ function deleteUser(user: UserRow): void {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border/60">
-                        <tr v-for="user in users.data" :key="user.id" class="transition-colors hover:bg-teal-50/20">
+                        <tr v-for="user in users.data" :key="user.id" class="transition-colors hover:bg-blue-50/20">
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-3">
-                                    <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-teal-500/10 text-[0.65rem] font-bold text-teal-700">
+                                    <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-[0.65rem] font-bold text-blue-700">
                                         {{ avatarInitials(user.name) }}
                                     </div>
                                     <span class="font-medium text-foreground">{{ user.name }}</span>
@@ -269,7 +269,7 @@ function deleteUser(user: UserRow): void {
                             <td class="px-4 py-3 text-muted-foreground">@{{ user.username }}</td>
                             <td class="px-4 py-3 text-foreground">{{ user.email }}</td>
                             <td v-if="rolesEnabled" class="px-4 py-3">
-                                <Badge variant="outline" class="border-teal-200 bg-teal-50 text-[0.65rem] text-teal-700">
+                                <Badge variant="outline" class="border-blue-200 bg-blue-50 text-[0.65rem] text-blue-700">
                                     {{ roleLabel(user.role) }}
                                 </Badge>
                             </td>
@@ -277,14 +277,14 @@ function deleteUser(user: UserRow): void {
                                 <Badge
                                     variant="outline"
                                     class="text-[0.65rem]"
-                                    :class="user.email_verified_at ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
+                                    :class="user.email_verified_at ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
                                 >
                                     {{ user.email_verified_at ? 'Verified' : 'Pending' }}
                                 </Badge>
                                 <Badge
                                     v-if="isProtectedAdmin(user)"
                                     variant="outline"
-                                    class="ml-1 border-cyan-200 bg-cyan-50 text-[0.65rem] text-cyan-700"
+                                    class="ml-1 border-blue-200 bg-blue-50 text-[0.65rem] text-blue-700"
                                 >
                                     Admin
                                 </Badge>
@@ -324,7 +324,7 @@ function deleteUser(user: UserRow): void {
                         :key="link.label"
                         :disabled="!link.url"
                         class="inline-flex h-7 min-w-7 items-center justify-center rounded-lg border px-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                        :class="link.active ? 'border-teal-600 bg-teal-600 text-white' : 'border-border/60 bg-white text-foreground hover:bg-teal-50'"
+                        :class="link.active ? 'chip-brand-active' : 'border-border/60 bg-white text-foreground hover:bg-blue-50'"
                         @click="link.url && router.get(link.url, {}, { preserveState: true })"
                         v-html="link.label"
                     />
@@ -335,7 +335,7 @@ function deleteUser(user: UserRow): void {
         <!-- Create dialog -->
         <Dialog :open="showCreate" @update:open="(v) => { if (!v) closeCreate(); else showCreate = true; }">
             <DialogContent class="gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-xl sm:max-w-lg">
-                <div class="bg-linear-to-br from-teal-50 via-cyan-50/60 to-white px-6 pt-6 pb-3">
+                <div class="bg-linear-to-br from-blue-50 via-blue-50/60 to-white px-6 pt-6 pb-3">
                     <DialogHeader class="text-left">
                         <DialogTitle>Create user</DialogTitle>
                         <DialogDescription class="text-xs">Add a new workspace user with email and password.</DialogDescription>
@@ -390,7 +390,7 @@ function deleteUser(user: UserRow): void {
         <!-- Edit dialog -->
         <Dialog :open="!!editingUser" @update:open="(v) => { if (!v) closeEdit(); }">
             <DialogContent class="gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-xl sm:max-w-lg">
-                <div class="bg-linear-to-br from-teal-50 via-cyan-50/60 to-white px-6 pt-6 pb-3">
+                <div class="bg-linear-to-br from-blue-50 via-blue-50/60 to-white px-6 pt-6 pb-3">
                     <DialogHeader class="text-left">
                         <DialogTitle>Edit user</DialogTitle>
                         <DialogDescription class="text-xs">{{ editingUser?.email }}</DialogDescription>
@@ -412,7 +412,7 @@ function deleteUser(user: UserRow): void {
                         <Input v-model="editForm.email" type="email" required />
                         <p v-if="editForm.errors.email" class="text-xs text-destructive">{{ editForm.errors.email }}</p>
                     </div>
-                    <div class="rounded-xl border border-border/60 bg-teal-50/20 p-3 space-y-3">
+                    <div class="rounded-xl border border-border/60 bg-blue-50/20 p-3 space-y-3">
                         <p class="text-xs font-medium text-foreground">Change password</p>
                         <p class="text-xs text-muted-foreground">Leave blank to keep the current password.</p>
                         <div class="space-y-1">

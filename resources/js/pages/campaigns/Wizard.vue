@@ -66,6 +66,18 @@ type CampaignPayload = {
     bonus_suggestions: Array<Record<string, string>>;
     bonus_type: string | null;
     esp_upload?: { ok?: boolean; message?: string; uploaded?: number; provider?: string } | null;
+    autoresponders?: Array<{
+        id: number;
+        integration_account_id: number;
+        provider_list_config?: Record<string, unknown>;
+        enabled: boolean;
+        account?: { id: number; name: string; provider: string } | null;
+    }>;
+    email_sequence?: {
+        enabled: boolean;
+        schedules: Array<{ campaign_email_id: number; delay_days: number; send_time: string }>;
+    };
+    email_sequence_stats?: { pending: number; sent: number; failed: number };
     lead_magnet: Record<string, unknown> | null;
     pages: Array<{ id?: number; page_type: string; content: Record<string, unknown> }>;
     bonuses: Array<{ id: number; uuid: string; title: string; bonus_type: string; content: string | null; meta?: Record<string, unknown> | null }>;
@@ -241,29 +253,7 @@ function stepIsGenerated(step: string): boolean {
     return props.campaign?.generation_state?.[step]?.generated === true;
 }
 
-function generationStepStale(step: string | undefined): boolean {
-    if (!step) return false;
-    if (stepIsGenerated(step)) return true;
-    if (step === 'lead_magnet_suggest' && flow.hasLeadMagnetSuggestions.value) return true;
-    if ((step === 'lead_magnet') && leadMagnetHasContent.value) return true;
-    if (step === 'pages' && funnelPagesReady.value) return true;
-    if ((step === 'bonuses' || step === 'bonuses_suggest') && bonusesReady.value) return true;
-    if (step === 'emails' && emailsReady.value) return true;
-    if (step === 'webinar' && webinarReady.value) return true;
-    if (step === 'knowledge' && knowledgeReady.value) return true;
-    if (step === 'quick_start') {
-        return emailsReady.value && funnelPagesReady.value
-            && (props.campaign?.type !== 'webinar' || webinarReady.value);
-    }
-
-    return false;
-}
-
-const isGenerationRunning = computed(() => {
-    if (liveGeneration.value?.status !== 'running') return false;
-
-    return !generationStepStale(liveGeneration.value?.step);
-});
+const isGenerationRunning = computed(() => liveGeneration.value?.status === 'running');
 
 const generationModalOpen = computed({
     get: () => isGenerationRunning.value || liveGeneration.value?.status === 'failed',
@@ -320,27 +310,84 @@ const lockedLeadMagnetId = computed(() =>
 );
 
 let generationPollTimer: ReturnType<typeof setInterval> | null = null;
+let generationPollInFlight = false;
+let generationReloadInFlight = false;
+let lastPolledGenerationStatus: string | null = props.campaign?.generation?.status ?? null;
+
+function reloadCampaignAfterGeneration(options?: { toastMessage?: string | null }) {
+    if (generationReloadInFlight || !props.campaign) return;
+    generationReloadInFlight = true;
+    stopGenerationPolling();
+    pinnedSection.value = null;
+    if (options?.toastMessage) {
+        toast.success(options.toastMessage);
+    }
+    router.reload({
+        only: ['campaign', 'bonusLibrary'],
+        preserveScroll: true,
+        onSuccess: () => {
+            generationReloadInFlight = false;
+            liveGeneration.value = props.campaign?.generation ?? null;
+            lastPolledGenerationStatus = liveGeneration.value?.status ?? null;
+            maybeOpenAffiliateLinkDialog();
+            // Local UI flags that depend on freshly loaded content
+            const c = props.campaign;
+            if (c) {
+                const rich = (Array.isArray(c.bonuses[0]?.meta?.pages) && (c.bonuses[0].meta.pages as unknown[]).length > 0)
+                    || (Array.isArray(c.bonuses[0]?.meta?.slides) && (c.bonuses[0].meta.slides as unknown[]).length > 0);
+                if (rich) {
+                    showBonusBuilder.value = false;
+                }
+                if ((c.bonus_suggestions?.length ?? 0) >= 3) {
+                    bonusIdeasForType.value = true;
+                }
+                if (Array.isArray(c.lead_magnet?.suggestions) && (c.lead_magnet?.suggestions as unknown[]).length > 0) {
+                    leadMagnetSuggestTriggered.value = true;
+                }
+            }
+        },
+        onError: () => {
+            generationReloadInFlight = false;
+        },
+        onFinish: () => {
+            generationReloadInFlight = false;
+        },
+    });
+}
 
 async function pollGenerationStatus() {
-    if (!props.campaign) return;
+    if (!props.campaign || generationPollInFlight || generationReloadInFlight) return;
+    generationPollInFlight = true;
     try {
         const res = await fetch(`/campaigns/${props.campaign.id}/generation-status`, {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            cache: 'no-store',
         });
         if (!res.ok) return;
-        liveGeneration.value = await res.json();
-        if (liveGeneration.value?.status === 'completed') {
-            stopGenerationPolling();
-            pinnedSection.value = null;
-            toast.success(liveGeneration.value.message ?? 'Generation complete');
-            router.reload({ only: ['campaign'], preserveScroll: true, onSuccess: () => maybeOpenAffiliateLinkDialog() });
-        } else if (liveGeneration.value?.status === 'failed') {
+        const next = await res.json() as GenerationState;
+        const prevStatus = lastPolledGenerationStatus;
+        liveGeneration.value = next;
+        lastPolledGenerationStatus = next?.status ?? null;
+
+        if (next?.status === 'completed') {
+            reloadCampaignAfterGeneration({
+                toastMessage: next.message ?? 'Generation complete',
+            });
+        } else if (next?.status === 'failed') {
             stopGenerationPolling();
             pinnedSection.value = null;
             router.reload({ only: ['campaign'], preserveScroll: true });
+        } else if (
+            (next?.status === 'idle' || !next?.status)
+            && (prevStatus === 'running' || props.campaign.generation?.status === 'running')
+        ) {
+            // Job finished and progress was cleared — still refresh props so content appears.
+            reloadCampaignAfterGeneration();
         }
     } catch {
         /* ignore transient poll errors */
+    } finally {
+        generationPollInFlight = false;
     }
 }
 
@@ -360,18 +407,15 @@ function stopGenerationPolling() {
 watch(
     () => props.campaign?.generation,
     (g) => {
-        if (g?.status === 'running' && generationStepStale(g?.step)) {
-            liveGeneration.value = null;
-            stopGenerationPolling();
-            pinnedSection.value = null;
-
-            return;
-        }
         liveGeneration.value = g ?? null;
+        lastPolledGenerationStatus = g?.status ?? null;
+
         if (g?.status === 'running') {
             if (g.step) pinSectionForGeneration(g.step);
             startGenerationPolling();
+            return;
         }
+
         if (g?.status === 'completed' || g?.status === 'failed' || !g) {
             if (g?.status !== 'running') pinnedSection.value = null;
             stopGenerationPolling();
@@ -413,6 +457,14 @@ const libraryShowAll = ref(false);
 const libraryBonuses = ref<LibraryBonus[]>(props.bonusLibrary ?? []);
 const librarySearching = ref(false);
 const expandedBonusPreview = ref<string | null>(null);
+
+watch(
+    () => props.bonusLibrary,
+    (list) => {
+        libraryBonuses.value = list ?? [];
+    },
+    { deep: true },
+);
 
 const selectableBonuses = computed(() => {
     const map = new Map<string, LibraryBonus>();
@@ -571,7 +623,7 @@ watch(
         bonusIdeasForType.value = (c.bonus_suggestions?.length ?? 0) >= 3
             && c.bonus_type === selectedBonusType.value;
     },
-    { immediate: true },
+    { immediate: true, deep: true },
 );
 
 const bonusHasRichContent = computed(() => {
@@ -1015,8 +1067,172 @@ const trackedLinkTotalClicks = computed(() =>
 );
 
 const copiedTrackedLinkId = ref<number | null>(null);
-const publishEspAccountId = ref<number | ''>('');
-const publishEspTag = ref('');
+
+const espProviderIcon: Record<string, string> = {
+    mailchimp: 'simple-icons:mailchimp',
+    getresponse: 'simple-icons:getresponse',
+    activecampaign: 'simple-icons:activecampaign',
+    convertkit: 'simple-icons:convertkit',
+    aweber: 'logos:aweber',
+    drip: 'simple-icons:drip',
+    brevo: 'simple-icons:brevo',
+};
+
+function providerIcon(provider: string): string {
+    return espProviderIcon[provider.toLowerCase()] ?? 'heroicons:envelope';
+}
+
+const selectedAutoresponderIds = ref<number[]>([]);
+const savingAutoresponders = ref(false);
+
+watch(
+    () => props.campaign?.autoresponders,
+    (rows) => {
+        selectedAutoresponderIds.value = (rows ?? [])
+            .filter((row) => row.enabled)
+            .map((row) => row.integration_account_id);
+    },
+    { immediate: true },
+);
+
+function saveAutoresponders() {
+    if (!props.campaign) return;
+
+    savingAutoresponders.value = true;
+    router.patch(
+        `/campaigns/${props.campaign.id}/autoresponders`,
+        {
+            integrations: selectedAutoresponderIds.value.map((id) => ({
+                integration_account_id: id,
+                enabled: true,
+            })),
+        },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                savingAutoresponders.value = false;
+            },
+            onSuccess: () => toast.success('Autoresponder settings saved.'),
+        },
+    );
+}
+
+type EmailSequenceSchedule = {
+    campaign_email_id: number;
+    delay_days: number;
+    send_time: string;
+};
+
+const DEFAULT_EMAIL_SCHEDULES: Array<{ delay_days: number; send_time: string }> = [
+    { delay_days: 0, send_time: '09:00' },
+    { delay_days: 1, send_time: '09:00' },
+    { delay_days: 2, send_time: '10:00' },
+    { delay_days: 4, send_time: '09:00' },
+    { delay_days: 6, send_time: '09:00' },
+    { delay_days: 8, send_time: '10:00' },
+    { delay_days: 10, send_time: '09:00' },
+];
+
+function defaultScheduleForIndex(index: number): { delay_days: number; send_time: string } {
+    return DEFAULT_EMAIL_SCHEDULES[index] ?? { delay_days: Math.max(0, index * 2), send_time: '09:00' };
+}
+
+const emailSequenceEnabled = ref(false);
+const emailSequenceSchedules = ref<EmailSequenceSchedule[]>([]);
+const savingEmailSequence = ref(false);
+const emailSequenceTouched = ref(false);
+
+function syncEmailSequenceSchedulesFromCampaign() {
+    const campaign = props.campaign;
+    if (!campaign) return;
+
+    const existing = campaign.email_sequence?.schedules ?? [];
+
+    emailSequenceSchedules.value = campaign.emails.map((email, index) => {
+        const found = existing.find((row) => row.campaign_email_id === email.id);
+        const defaults = defaultScheduleForIndex(index);
+
+        return {
+            campaign_email_id: email.id,
+            delay_days: found?.delay_days ?? defaults.delay_days,
+            send_time: found?.send_time ?? defaults.send_time,
+        };
+    });
+}
+
+watch(
+    () => props.campaign?.id,
+    () => {
+        emailSequenceTouched.value = false;
+        emailSequenceEnabled.value = props.campaign?.email_sequence?.enabled ?? false;
+        syncEmailSequenceSchedulesFromCampaign();
+    },
+    { immediate: true },
+);
+
+watch(
+    () => props.campaign?.emails,
+    () => {
+        syncEmailSequenceSchedulesFromCampaign();
+    },
+    { deep: true },
+);
+
+watch(
+    () => props.campaign?.email_sequence?.enabled,
+    (enabled) => {
+        if (!emailSequenceTouched.value) {
+            emailSequenceEnabled.value = enabled ?? false;
+        }
+    },
+);
+
+function setEmailSequenceEnabled(value: boolean) {
+    emailSequenceTouched.value = true;
+    emailSequenceEnabled.value = value;
+}
+
+function toggleEmailSequenceEnabled() {
+    setEmailSequenceEnabled(!emailSequenceEnabled.value);
+}
+
+function scheduleForEmail(emailId: number, index = 0): EmailSequenceSchedule {
+    let row = emailSequenceSchedules.value.find((schedule) => schedule.campaign_email_id === emailId);
+    if (!row) {
+        const defaults = defaultScheduleForIndex(index);
+        row = { campaign_email_id: emailId, delay_days: defaults.delay_days, send_time: defaults.send_time };
+        emailSequenceSchedules.value.push(row);
+    }
+
+    return row;
+}
+
+function saveEmailSequence() {
+    if (!props.campaign) return;
+
+    savingEmailSequence.value = true;
+    router.patch(
+        `/campaigns/${props.campaign.id}/email-sequence`,
+        {
+            enabled: emailSequenceEnabled.value,
+            schedules: emailSequenceSchedules.value,
+        },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                savingEmailSequence.value = false;
+            },
+            onSuccess: () => {
+                emailSequenceTouched.value = false;
+                toast.success(
+                    emailSequenceEnabled.value
+                        ? 'Auto-email sequence enabled.'
+                        : 'Auto-email sequence saved (disabled).',
+                );
+            },
+        },
+    );
+}
 
 async function copyTrackedLink(url: string, id: number) {
     try {
@@ -1032,10 +1248,7 @@ async function copyTrackedLink(url: string, id: number) {
 }
 
 function publishCampaign() {
-    post('publish', {
-        integration_account_id: publishEspAccountId.value || undefined,
-        esp_tag: publishEspTag.value.trim() || undefined,
-    });
+    post('publish');
 }
 
 onMounted(() => {
@@ -1082,7 +1295,7 @@ onMounted(() => {
 <template>
     <Head :title="campaign ? campaign.name : 'New Campaign'" />
 
-    <div class="mx-auto flex w-full max-w-7xl gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl gap-3 p-3 md:gap-4 md:p-4">
         <!-- Sidebar -->
         <aside v-if="campaign" class="hidden w-56 shrink-0 lg:block">
             <div class="sticky top-4 space-y-3">
@@ -1094,14 +1307,14 @@ onMounted(() => {
                         type="button"
                         class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors"
                         :class="[
-                            section === s.id ? 'bg-teal-600 text-white shadow-sm' : '',
-                            !s.unlocked && section !== s.id ? 'cursor-not-allowed opacity-45' : section !== s.id ? 'hover:bg-teal-50' : '',
+                            section === s.id ? 'chip-brand-active' : '',
+                            !s.unlocked && section !== s.id ? 'cursor-not-allowed opacity-45' : section !== s.id ? 'hover:bg-blue-50' : '',
                         ]"
                         @click="goToSection(s.id)"
                     >
                         <Icon :icon="s.unlocked ? s.icon : 'heroicons:lock-closed'" class="size-4 shrink-0" />
                         <span class="flex-1 truncate">{{ s.label.replace(/^\d+\.\s/, '') }}</span>
-                        <Icon v-if="s.complete" icon="heroicons:check-circle" class="size-4 shrink-0 text-green-500" :class="section === s.id ? 'text-green-200' : ''" />
+                        <Icon v-if="s.complete" icon="heroicons:check-circle" class="size-4 shrink-0 text-blue-500" :class="section === s.id ? 'text-blue-200' : ''" />
                     </button>
                 </div>
                 <div class="rounded-xl border border-border/60 bg-white p-3 shadow-sm">
@@ -1111,7 +1324,7 @@ onMounted(() => {
                     </div>
                     <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                         <div
-                            class="h-full rounded-full bg-linear-to-r from-teal-600 to-cyan-400 transition-all"
+                            class="h-full rounded-full fill-brand-gradient transition-all"
                             :style="{ width: `${wizardProgressPercent(campaign.wizard_step)}%` }"
                         />
                     </div>
@@ -1125,27 +1338,27 @@ onMounted(() => {
             <div v-if="campaign" class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div class="flex min-w-0 flex-1 items-start gap-3">
-                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
-                            <Icon :icon="campaignTypeIcon(campaign.type)" class="size-5 text-teal-600" />
+                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10">
+                            <Icon :icon="campaignTypeIcon(campaign.type)" class="size-5 text-blue-600" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h1 class="truncate text-xl font-bold tracking-tight md:text-2xl">{{ campaign.name }}</h1>
-                                <Badge variant="outline" class="capitalize text-[0.65rem]" :class="campaign.type === 'webinar' ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-teal-200 bg-teal-50 text-teal-700'">
+                                <Badge variant="outline" class="capitalize text-[0.65rem]" :class="campaign.type === 'webinar' ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-blue-200 bg-blue-50 text-blue-700'">
                                     {{ campaign.type }}
                                 </Badge>
-                                <Badge variant="outline" class="capitalize text-[0.65rem]" :class="campaign.status === 'published' ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-amber-200 bg-amber-50 text-amber-700'">
+                                <Badge variant="outline" class="capitalize text-[0.65rem]" :class="campaign.status === 'published' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-amber-200 bg-amber-50 text-amber-700'">
                                     {{ campaign.status }}
                                 </Badge>
-                                <Badge v-if="isGenerationRunning" variant="outline" class="border-teal-200 bg-teal-50 text-[0.65rem] text-teal-700">Generating…</Badge>
+                                <Badge v-if="isGenerationRunning" variant="outline" class="border-blue-200 bg-blue-50 text-[0.65rem] text-blue-700">Generating…</Badge>
                                 <Badge v-else-if="processing" variant="outline" class="border-amber-200 bg-amber-50 text-[0.65rem] text-amber-700">{{ processing }}…</Badge>
-                                <Badge v-if="knowledgeReady" variant="outline" class="border-cyan-200 bg-cyan-50 text-[0.65rem] text-cyan-700">Knowledge ready</Badge>
+                                <Badge v-if="knowledgeReady" variant="outline" class="border-blue-200 bg-blue-50 text-[0.65rem] text-blue-700">Knowledge ready</Badge>
                             </div>
                             <p class="mt-0.5 truncate text-sm text-muted-foreground">{{ campaign.slug }}</p>
                             <div class="mt-2 flex max-w-md items-center gap-2">
                                 <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                                     <div
-                                        class="h-full rounded-full bg-linear-to-r from-teal-600 to-cyan-400 transition-all"
+                                        class="h-full rounded-full fill-brand-gradient transition-all"
                                         :style="{ width: `${wizardProgressPercent(campaign.wizard_step)}%` }"
                                     />
                                 </div>
@@ -1153,22 +1366,22 @@ onMounted(() => {
                             </div>
                             <div class="mt-2 flex flex-wrap gap-1.5">
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
-                                    <Icon icon="heroicons:gift" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:gift" class="size-3 text-blue-600" />
                                     {{ campaign.bonuses.length }} bonuses
                                 </span>
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
-                                    <Icon icon="heroicons:envelope" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:envelope" class="size-3 text-blue-600" />
                                     {{ campaign.emails.length }} emails
                                 </span>
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
-                                    <Icon icon="heroicons:shield-check" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:shield-check" class="size-3 text-blue-600" />
                                     {{ campaign.tracked_links.length }} links
                                 </span>
                                 <span
                                     v-if="campaign.type === 'webinar'"
                                     class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground"
                                 >
-                                    <Icon icon="heroicons:video-camera" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:video-camera" class="size-3 text-blue-600" />
                                     {{ campaign.funnels.length }} funnels
                                 </span>
                             </div>
@@ -1233,12 +1446,12 @@ onMounted(() => {
                     type="button"
                     class="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs transition-colors"
                     :class="[
-                        section === s.id ? 'bg-teal-600 font-medium text-white shadow-sm' : '',
-                        !s.unlocked ? 'cursor-not-allowed opacity-40' : section !== s.id ? 'hover:bg-teal-50 text-foreground' : '',
+                        section === s.id ? 'chip-brand-active font-medium' : '',
+                        !s.unlocked ? 'cursor-not-allowed opacity-40' : section !== s.id ? 'hover:bg-blue-50 text-foreground' : '',
                     ]"
                     @click="goToSection(s.id)"
                 >
-                    <Icon v-if="s.complete" icon="heroicons:check-circle" class="size-3.5 text-green-500" :class="section === s.id ? 'text-green-200' : ''" />
+                    <Icon v-if="s.complete" icon="heroicons:check-circle" class="size-3.5 text-blue-500" :class="section === s.id ? 'text-blue-200' : ''" />
                     <Icon v-else-if="!s.unlocked" icon="heroicons:lock-closed" class="size-3.5" />
                     <span>{{ s.label.replace(/^\d+\.\s/, '') }}</span>
                 </button>
@@ -1262,10 +1475,10 @@ onMounted(() => {
                 @complete="onCreateSetupComplete"
             />
 
-            <Card v-if="!campaign && !createSetupDone" class="border border-dashed border-teal-200/60 bg-white shadow-sm">
+            <Card v-if="!campaign && !createSetupDone" class="border border-dashed border-blue-200/60 bg-white shadow-sm">
                 <CardContent class="py-16 text-center">
-                    <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                        <Icon icon="heroicons:rocket-launch" class="size-7 text-teal-600/60" />
+                    <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                        <Icon icon="heroicons:rocket-launch" class="size-7 text-blue-600/60" />
                     </div>
                     <p class="font-semibold text-foreground">Choose your campaign type</p>
                     <p class="mt-1 text-sm text-muted-foreground">Sales funnel or webinar — pick in the dialog above.</p>
@@ -1285,9 +1498,9 @@ onMounted(() => {
                             </CardDescription>
                         </div>
                         <div class="flex flex-wrap gap-2">
-                            <Badge variant="outline" class="capitalize border-teal-200 bg-teal-50 text-teal-700">{{ createForm.type }} funnel</Badge>
+                            <Badge variant="outline" class="capitalize border-blue-200 bg-blue-50 text-blue-700">{{ createForm.type }} funnel</Badge>
                             <Badge variant="outline" class="border-border/60">{{ offerIntakeMode === 'keyword' ? 'Keyword search' : 'Direct links' }}</Badge>
-                            <Button v-if="!campaign" variant="ghost" size="sm" class="text-teal-700 hover:text-teal-800" @click="restartCreateSetup">Change</Button>
+                            <Button v-if="!campaign" variant="ghost" size="sm" class="text-blue-700 hover:text-blue-800" @click="restartCreateSetup">Change</Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -1322,7 +1535,7 @@ onMounted(() => {
                             </p>
                         </div>
 
-                        <p v-if="keywordSearching" class="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50/50 p-4 text-sm text-teal-800">
+                        <p v-if="keywordSearching" class="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-sm text-blue-800">
                             <Icon icon="heroicons:arrow-path" class="size-4 shrink-0 animate-spin" />
                             Searching marketplaces…
                         </p>
@@ -1342,7 +1555,7 @@ onMounted(() => {
                                 v-for="(r, i) in keywordResults"
                                 :key="i"
                                 type="button"
-                                class="flex w-full items-start gap-3 rounded-xl border border-border/60 bg-white p-3 text-left shadow-sm transition-colors hover:border-teal-300 hover:bg-teal-50/40"
+                                class="flex w-full items-start gap-3 rounded-xl border border-border/60 bg-white p-3 text-left shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/40"
                                 @click="pickKeywordOffer(r)"
                             >
                                 <Badge variant="secondary" class="shrink-0 uppercase text-[10px]">{{ r.marketplace }}</Badge>
@@ -1361,15 +1574,15 @@ onMounted(() => {
                             </button>
                         </div>
 
-                        <div v-if="selectedKeywordOffer" class="rounded-lg border border-green-200 bg-green-50/50 p-4 text-sm space-y-3">
+                        <div v-if="selectedKeywordOffer" class="rounded-lg border border-blue-200 bg-blue-50/50 p-4 text-sm space-y-3">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0 flex-1 space-y-1">
-                                    <p class="text-xs font-medium uppercase tracking-wide text-green-700">Selected product</p>
+                                    <p class="text-xs font-medium uppercase tracking-wide text-blue-700">Selected product</p>
                                     <div class="flex flex-wrap items-center gap-2">
                                         <Badge variant="secondary" class="uppercase text-[10px]">{{ selectedKeywordOffer.marketplace }}</Badge>
-                                        <p class="font-semibold text-green-900">{{ selectedKeywordOffer.title }}</p>
+                                        <p class="font-semibold text-blue-900">{{ selectedKeywordOffer.title }}</p>
                                     </div>
-                                    <p class="text-xs text-green-700 break-all">{{ selectedKeywordOffer.url }}</p>
+                                    <p class="text-xs text-blue-700 break-all">{{ selectedKeywordOffer.url }}</p>
                                 </div>
                                 <Button size="sm" variant="outline" class="shrink-0" @click="clearKeywordOfferSelection">
                                     Change
@@ -1413,14 +1626,14 @@ onMounted(() => {
                     </div>
                     <div
                         v-if="quickStartAwaitingAffiliate"
-                        class="rounded-lg border border-teal-200 bg-teal-50/60 p-4 text-sm text-teal-900"
+                        class="rounded-lg border border-blue-200 bg-blue-50/60 p-4 text-sm text-blue-900"
                     >
                         <p class="font-medium">Your sales funnel is ready — one last step</p>
-                        <p class="mt-1 text-teal-800/90">Add your affiliate hop link so thank-you bridge, bonus page, and tracked links use your commission URL.</p>
+                        <p class="mt-1 text-blue-800/90">Add your affiliate hop link so thank-you bridge, bonus page, and tracked links use your commission URL.</p>
                         <Button class="mt-3" size="sm" variant="brand" @click="affiliateLinkDialogOpen = true">Add affiliate link</Button>
                     </div>
                     <p v-if="extractError" class="text-xs text-amber-600">{{ extractError }}</p>
-                    <div v-if="createForm.offer_data.product_name" class="rounded-xl border border-border/60 bg-teal-50/30 p-3 text-sm">
+                    <div v-if="createForm.offer_data.product_name" class="rounded-xl border border-border/60 bg-blue-50/30 p-3 text-sm">
                         <p class="font-medium">{{ createForm.offer_data.product_name }}</p>
                         <p class="text-muted-foreground">{{ createForm.offer_data.headline }}</p>
                     </div>
@@ -1438,7 +1651,7 @@ onMounted(() => {
                         <template v-else>Sales page URL and affiliate hop link are both required.</template>
                     </p>
 
-                    <div v-if="offerAnalysis" class="rounded-lg border border-teal-200 bg-teal-50/50 p-4 text-sm space-y-2">
+                    <div v-if="offerAnalysis" class="rounded-lg border border-blue-200 bg-blue-50/50 p-4 text-sm space-y-2">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-semibold">Quick analysis</span>
                             <Badge>Score {{ offerAnalysis.offer_score ?? '—' }}/100</Badge>
@@ -1463,9 +1676,9 @@ onMounted(() => {
                     <CardContent class="space-y-4">
                         <div
                             v-if="knowledgeBuilding || processing === 'build-knowledge'"
-                            class="flex items-center gap-3 rounded-lg border border-teal-200 bg-teal-50/50 p-4"
+                            class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4"
                         >
-                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-teal-600" />
+                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-blue-600" />
                             <div>
                                 <p class="font-medium">{{ liveGeneration?.message ?? 'Building knowledge base…' }}</p>
                                 <p class="text-xs text-muted-foreground">
@@ -1473,16 +1686,16 @@ onMounted(() => {
                                 </p>
                             </div>
                         </div>
-                        <div v-else-if="knowledgeReady" class="space-y-3 rounded-lg border border-green-200 bg-green-50/50 p-4 text-sm">
-                            <p class="font-medium text-green-700">✓ Knowledge ready — lead magnet and funnel pages use this dossier</p>
+                        <div v-else-if="knowledgeReady" class="space-y-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4 text-sm">
+                            <p class="font-medium text-blue-700">✓ Knowledge ready — lead magnet and funnel pages use this dossier</p>
                             <Collapsible>
-                                <CollapsibleTrigger class="text-teal-600 underline">View pass 1 research</CollapsibleTrigger>
+                                <CollapsibleTrigger class="text-blue-600 underline">View pass 1 research</CollapsibleTrigger>
                                 <CollapsibleContent>
                                     <pre class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs">{{ JSON.stringify(campaign.knowledge?.pass1, null, 2) }}</pre>
                                 </CollapsibleContent>
                             </Collapsible>
                             <Collapsible>
-                                <CollapsibleTrigger class="text-teal-600 underline">View pass 2 asset plan</CollapsibleTrigger>
+                                <CollapsibleTrigger class="text-blue-600 underline">View pass 2 asset plan</CollapsibleTrigger>
                                 <CollapsibleContent>
                                     <pre class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs">{{ JSON.stringify(campaign.knowledge?.pass2, null, 2) }}</pre>
                                 </CollapsibleContent>
@@ -1491,7 +1704,7 @@ onMounted(() => {
                         <div v-else-if="!flow.offerComplete.value" class="rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-sm text-amber-800">
                             Complete Step 1 first — add your affiliate link and save the offer.
                         </div>
-                        <div v-else class="space-y-3 rounded-xl border border-dashed border-teal-200/60 bg-teal-50/20 p-4">
+                        <div v-else class="space-y-3 rounded-xl border border-dashed border-blue-200/60 bg-blue-50/20 p-4">
                             <p class="text-sm text-muted-foreground">
                                 Knowledge builds automatically when you land here. If nothing started, click below.
                             </p>
@@ -1506,10 +1719,12 @@ onMounted(() => {
                 <!-- LEAD MAGNET -->
                 <Card v-show="section === 'lead_magnet'" class="border border-border/60 bg-white shadow-sm">
                     <CardHeader>
-                        <CardTitle>Step 3 — Lead Magnet</CardTitle>
+                        <CardTitle>
+                            {{ campaign.type === 'webinar' ? 'Lead Magnet (optional)' : 'Step 3 — Lead Magnet' }}
+                        </CardTitle>
                         <CardDescription>
                             <template v-if="campaign.type === 'webinar'">
-                                Optional for webinar campaigns — skip if you only need registration → room → offer.
+                                Webinar campaigns work without a lead magnet. Most users go straight to registration → pitch room → offer.
                             </template>
                             <template v-else>
                                 {{ leadMagnetReady
@@ -1519,29 +1734,44 @@ onMounted(() => {
                         </CardDescription>
                     </CardHeader>
                     <CardContent class="space-y-4">
-                        <div v-if="campaign.type === 'webinar' && leadMagnetSkipped && !leadMagnetHasContent" class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                            Lead magnet skipped — you can still generate one later if you want a downloadable bonus.
+                        <div
+                            v-if="campaign.type === 'webinar' && !leadMagnetReady"
+                            class="rounded-xl border border-blue-200 bg-blue-50/40 p-4"
+                        >
+                            <p class="text-sm font-medium text-blue-900">Recommended for webinars: skip this step</p>
+                            <p class="mt-1 text-xs text-blue-800/90">
+                                Your funnel is registration → webinar room → affiliate offer. A PDF lead magnet is optional extra.
+                            </p>
+                            <Button
+                                variant="brand"
+                                size="sm"
+                                class="mt-3"
+                                :disabled="!!processing || isGenerationRunning"
+                                @click="post('lead-magnet/skip')"
+                            >
+                                Skip lead magnet — continue to funnel pages
+                            </Button>
                         </div>
-                        <div v-if="campaign.type === 'webinar' && !leadMagnetReady" class="flex flex-wrap gap-2">
+                        <div v-if="campaign.type === 'webinar' && leadMagnetSkipped && !leadMagnetHasContent" class="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-sm text-blue-800">
+                            ✓ Lead magnet skipped — continue to Funnel Pages.
+                        </div>
+                        <div v-if="campaign.type === 'webinar' && !leadMagnetReady && !leadMagnetSkipped" class="flex flex-wrap gap-2">
                             <Button variant="outline" size="sm" :disabled="!!processing || isGenerationRunning" @click="post('lead-magnet/suggest')">
-                                Generate optional lead magnet
-                            </Button>
-                            <Button variant="ghost" size="sm" :disabled="!!processing || isGenerationRunning" @click="post('lead-magnet/skip')">
-                                Skip — not needed for webinar
+                                Or generate an optional lead magnet
                             </Button>
                         </div>
-                        <div v-if="leadMagnetReady && !isGenerationRunning" class="rounded-lg border border-green-200 bg-green-50/50 p-3 text-sm text-green-700">
+                        <div v-if="leadMagnetReady && !isGenerationRunning" class="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-sm text-blue-700">
                             ✓ Lead magnet ready — showing your generated document below
                         </div>
-                        <div v-if="isGenerationRunning && liveGeneration?.step === 'lead_magnet'" class="flex items-center gap-3 rounded-lg border border-teal-200 bg-teal-50/50 p-4">
-                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-teal-600" />
+                        <div v-if="isGenerationRunning && liveGeneration?.step === 'lead_magnet'" class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-blue-600" />
                             <p class="font-medium">{{ liveGeneration?.message ?? 'Generating lead magnet…' }}</p>
                         </div>
                         <div v-if="leadMagnetReady && !isGenerationRunning" class="flex flex-wrap gap-2">
                             <Button variant="outline" size="sm" :disabled="isGenerationRunning" @click="generateLeadMagnet('enhance')">Enhance depth</Button>
                             <Button variant="outline" size="sm" :disabled="isGenerationRunning" @click="generateLeadMagnet('restart')">Regenerate from scratch</Button>
                         </div>
-                        <div v-if="leadMagnetLog.length && !leadMagnetReady" class="rounded-xl border border-border/60 bg-teal-50/20 p-3 text-xs space-y-1">
+                        <div v-if="leadMagnetLog.length && !leadMagnetReady" class="rounded-xl border border-border/60 bg-blue-50/20 p-3 text-xs space-y-1">
                             <p class="font-medium">AI passes completed</p>
                             <p v-for="(log, i) in leadMagnetLog" :key="i" class="text-muted-foreground">
                                 {{ log.step }} <span v-if="log.model">· {{ log.model }}</span>
@@ -1569,7 +1799,7 @@ onMounted(() => {
                                 <span class="font-medium text-foreground">Offer:</span>
                                 {{ campaign.offer_data.product_name }}
                             </p>
-                            <p v-if="isGenerationRunning" class="text-xs text-teal-700">
+                            <p v-if="isGenerationRunning" class="text-xs text-blue-700">
                                 Generating <strong>{{ lockedLeadMagnetId ? (campaign.lead_magnet?.suggestions as Array<Record<string, string>>).find(s => s.id === lockedLeadMagnetId)?.title : 'selected idea' }}</strong> — other options locked until complete.
                             </p>
                             <label
@@ -1577,9 +1807,9 @@ onMounted(() => {
                                 :key="String(s.id)"
                                 class="flex gap-3 rounded-xl border border-border/60 bg-white p-4 shadow-sm transition-colors"
                                 :class="[
-                                    isGenerationRunning && s.id !== lockedLeadMagnetId ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:border-teal-200 hover:bg-teal-50/30',
-                                    s.id === lockedLeadMagnetId && isGenerationRunning ? 'ring-2 ring-teal-500 bg-teal-50/40 border-teal-300' : '',
-                                    selectedLeadMagnetId === s.id && !isGenerationRunning ? 'border-teal-300 bg-teal-50/20' : '',
+                                    isGenerationRunning && s.id !== lockedLeadMagnetId ? 'opacity-40 pointer-events-none' : 'cursor-pointer hover:border-blue-200 hover:bg-blue-50/30',
+                                    s.id === lockedLeadMagnetId && isGenerationRunning ? 'ring-2 ring-blue-500 bg-blue-50/40 border-blue-300' : '',
+                                    selectedLeadMagnetId === s.id && !isGenerationRunning ? 'border-blue-300 bg-blue-50/20' : '',
                                 ]"
                             >
                                 <input
@@ -1590,7 +1820,7 @@ onMounted(() => {
                                     class="mt-1"
                                 />
                                 <div class="min-w-0 flex-1 space-y-2">
-                                    <p v-if="s.offer_anchor" class="text-[10px] font-semibold uppercase tracking-wide text-teal-700">
+                                    <p v-if="s.offer_anchor" class="text-[10px] font-semibold uppercase tracking-wide text-blue-700">
                                         {{ s.offer_anchor }}
                                     </p>
                                     <p class="font-semibold text-sm leading-snug">{{ s.title }}</p>
@@ -1598,14 +1828,14 @@ onMounted(() => {
                                         <Badge variant="secondary" class="text-[10px]">{{ s.format_label || s.format }}</Badge>
                                         <Badge variant="outline" class="text-[10px]">{{ s.deliverable || 'Downloadable asset' }}</Badge>
                                     </div>
-                                    <p v-if="s.preview" class="text-xs font-medium text-teal-800">
+                                    <p v-if="s.preview" class="text-xs font-medium text-blue-800">
                                         Will generate: {{ s.preview }}
                                     </p>
                                     <p v-if="s.description" class="text-xs text-muted-foreground">{{ s.description }}</p>
                                     <ul v-if="Array.isArray(s.outline_bullets) && s.outline_bullets.length" class="text-xs text-muted-foreground list-disc space-y-0.5 pl-4">
                                         <li v-for="b in (s.outline_bullets as string[]).slice(0, 5)" :key="b">{{ b }}</li>
                                     </ul>
-                                    <p v-if="s.why_it_converts" class="text-[11px] text-teal-700/90 italic">
+                                    <p v-if="s.why_it_converts" class="text-[11px] text-blue-700/90 italic">
                                         Why it converts: {{ s.why_it_converts }}
                                     </p>
                                 </div>
@@ -1627,10 +1857,10 @@ onMounted(() => {
                                     Enhanced ×{{ campaign.lead_magnet?.enhance_pass }}
                                 </Badge>
                             </p>
-                            <a v-if="campaign.lead_magnet?.download_url" :href="String(campaign.lead_magnet.download_url)" target="_blank" class="text-sm text-teal-600 underline">Open printable version / Save as PDF</a>
+                            <a v-if="campaign.lead_magnet?.download_url" :href="String(campaign.lead_magnet.download_url)" target="_blank" class="text-sm text-blue-600 underline">Open printable version / Save as PDF</a>
                             <div class="lead-magnet-preview mt-4 max-h-[32rem] space-y-6 overflow-auto rounded-lg border bg-white p-4">
                                 <div v-for="p in (campaign.lead_magnet?.pages as Array<Record<string,string>>)" :key="p.page" class="border-b pb-6 last:border-0">
-                                    <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-teal-600">Page {{ p.page }}</p>
+                                    <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-600">Page {{ p.page }}</p>
                                     <h3 class="mb-3 text-lg font-bold text-slate-900">{{ p.title }}</h3>
                                     <div class="lm-render prose prose-sm max-w-none" v-html="p.body_html" />
                                 </div>
@@ -1646,8 +1876,8 @@ onMounted(() => {
                         <CardDescription>Visual page editor — click elements on the page to edit, with live preview.</CardDescription>
                     </CardHeader>
                     <CardContent class="space-y-4">
-                        <div v-if="processing === 'build-pages' && !funnelPagesReady" class="flex items-center gap-3 rounded-lg border border-teal-200 bg-teal-50/50 p-4">
-                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-teal-600" />
+                        <div v-if="processing === 'build-pages' && !funnelPagesReady" class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-blue-600" />
                             <p class="font-medium">
                                 {{ campaign.type === 'webinar'
                                     ? 'Generating webinar registration & bonus pages…'
@@ -1660,7 +1890,7 @@ onMounted(() => {
                         <div v-else-if="!funnelPagesReady && campaign.type === 'webinar'" class="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
                             Complete knowledge base first — registration copy comes from your offer research.
                         </div>
-                        <div v-else-if="funnelPagesReady" class="rounded-lg border border-green-200 bg-green-50/50 p-3 text-sm text-green-700">
+                        <div v-else-if="funnelPagesReady" class="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-sm text-blue-700">
                             ✓ Funnel pages saved — open the visual editor to customize
                         </div>
                         <Button
@@ -1687,7 +1917,7 @@ onMounted(() => {
 
                         <div v-if="!editingPage" class="space-y-3">
                         <div v-for="pageType in funnelPageTypes" :key="pageType" class="overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm">
-                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-teal-50/20 px-4 py-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-blue-50/20 px-4 py-3">
                                 <div>
                                     <p class="font-medium text-sm">{{ salesFunnelPageMeta[pageType]?.title }}</p>
                                     <p v-if="pageByType(pageType).headline || pageByType(pageType).title" class="text-xs text-muted-foreground truncate max-w-md">
@@ -1733,31 +1963,149 @@ onMounted(() => {
                     </CardContent>
                 </Card>
 
+                <!-- AUTORESPONDERS -->
+                <Card v-show="section === 'autoresponders'" class="border border-border/60 bg-white shadow-sm">
+                    <CardHeader>
+                        <CardTitle>Autoresponders</CardTitle>
+                        <CardDescription>
+                            Choose which connected ESP accounts receive new opt-ins from this campaign. Leads are also saved on your
+                            <Link href="/leads" class="text-blue-600 underline">Leads</Link> page.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div v-if="!funnelPagesReady" class="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
+                            Generate funnel pages first — autoresponders apply when visitors opt in on your squeeze page.
+                        </div>
+                        <template v-else>
+                            <div v-if="integrationAccounts.length === 0" class="flex flex-col items-center gap-3 rounded-xl border border-dashed py-10 text-muted-foreground">
+                                <Icon icon="heroicons:puzzle-piece" class="size-10 opacity-30" />
+                                <p class="text-sm">No ESP connected yet.</p>
+                                <Button as-child size="sm" variant="outline">
+                                    <Link href="/integrations">Connect an ESP</Link>
+                                </Button>
+                            </div>
+                            <div v-else class="space-y-4">
+                                <p class="text-xs text-muted-foreground">
+                                    Selected accounts will subscribe each new lead when they submit the squeeze form.
+                                    <Link href="/integrations" class="text-blue-600 underline">Manage accounts →</Link>
+                                </p>
+                                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                    <label
+                                        v-for="account in integrationAccounts"
+                                        :key="account.id"
+                                        class="flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition-colors"
+                                        :class="selectedAutoresponderIds.includes(account.id)
+                                            ? 'border-blue-500 bg-blue-500/5'
+                                            : 'hover:border-border/80'"
+                                    >
+                                        <input
+                                            v-model="selectedAutoresponderIds"
+                                            type="checkbox"
+                                            class="sr-only"
+                                            :value="account.id"
+                                        />
+                                        <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                                            <Icon :icon="providerIcon(account.provider)" class="size-5" />
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-sm font-medium truncate">{{ account.name }}</p>
+                                            <p class="text-xs text-muted-foreground capitalize">{{ account.provider }}</p>
+                                        </div>
+                                        <Icon
+                                            v-if="selectedAutoresponderIds.includes(account.id)"
+                                            icon="heroicons:check-circle"
+                                            class="size-5 shrink-0 text-blue-600"
+                                        />
+                                        <Icon
+                                            v-else
+                                            icon="heroicons:plus-circle"
+                                            class="size-5 shrink-0 text-muted-foreground/50"
+                                        />
+                                    </label>
+                                </div>
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ selectedAutoresponderIds.length
+                                            ? `${selectedAutoresponderIds.length} account${selectedAutoresponderIds.length === 1 ? '' : 's'} selected`
+                                            : 'No accounts selected — leads will still be captured in-app.' }}
+                                    </p>
+                                    <Button
+                                        variant="brand"
+                                        size="sm"
+                                        class="gap-1.5"
+                                        :disabled="savingAutoresponders"
+                                        @click="saveAutoresponders"
+                                    >
+                                        <Icon icon="heroicons:check" class="size-3.5" />
+                                        {{ savingAutoresponders ? 'Saving…' : 'Save autoresponders' }}
+                                    </Button>
+                                </div>
+                            </div>
+                        </template>
+                    </CardContent>
+                </Card>
+
                 <!-- WEBINAR -->
                 <Card v-show="section === 'webinar' && campaign.type === 'webinar'" class="border border-border/60 bg-white shadow-sm">
                     <CardHeader>
                         <CardTitle>Webinar Funnels</CardTitle>
                         <CardDescription>
-                            Two funnels: <strong>Registration</strong> captures email (ESP sync) → <strong>Pitch & replay</strong> is the webinar room with video, chat, CTA, and replay.
-                            Campaign squeeze page is your branded entry; both funnels are also available as standalone URLs.
+                            Two connected funnels power your webinar campaign — registration captures the lead, pitch room delivers video + CTA.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div v-if="processing === 'generate-webinar-funnels'" class="mb-4 flex items-center gap-3 rounded-xl border border-teal-200 bg-teal-50/50 p-4">
-                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-teal-600" />
+                    <CardContent class="space-y-4">
+                        <div class="rounded-xl border border-border/60 bg-muted/20 p-4 text-xs text-muted-foreground">
+                            <p class="mb-2 font-semibold uppercase tracking-wide text-foreground">Visitor flow</p>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-lg bg-white px-2.5 py-1 shadow-sm">Campaign squeeze</span>
+                                <Icon icon="heroicons:arrow-right" class="size-3.5 text-blue-600" />
+                                <span class="rounded-lg bg-white px-2.5 py-1 shadow-sm">Registration funnel</span>
+                                <Icon icon="heroicons:arrow-right" class="size-3.5 text-blue-600" />
+                                <span class="rounded-lg bg-white px-2.5 py-1 shadow-sm">Pitch &amp; replay room</span>
+                                <Icon icon="heroicons:arrow-right" class="size-3.5 text-blue-600" />
+                                <span class="rounded-lg bg-white px-2.5 py-1 shadow-sm">Affiliate offer</span>
+                            </div>
+                        </div>
+
+                        <div v-if="processing === 'generate-webinar-funnels'" class="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-blue-600" />
                             <span>Creating registration + pitch/replay funnels…</span>
                         </div>
-                        <div v-else-if="!webinarReady" class="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800 mb-4">
-                            Complete funnel pages first — both webinar funnels are created automatically.
+                        <div v-else-if="webinarReady" class="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-sm text-blue-800">
+                            ✓ Both funnels ready — add your video URL in the pitch room editor.
                         </div>
-                        <div v-for="f in campaign.funnels" :key="f.id" class="mt-3 space-y-2 rounded-xl border border-border/60 bg-white p-4 text-sm shadow-sm">
+                        <div v-else-if="funnelPagesReady" class="space-y-3">
+                            <div class="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
+                                Funnel pages are ready. Create both webinar funnels to connect registration to the pitch room.
+                            </div>
+                            <Button
+                                variant="brand"
+                                size="sm"
+                                :disabled="!!processing || isGenerationRunning"
+                                @click="post('generate-webinar-funnels')"
+                            >
+                                Create registration + pitch funnels
+                            </Button>
+                        </div>
+                        <div v-else class="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
+                            Complete funnel pages first — both webinar funnels are created automatically when pages generate.
+                        </div>
+
+                        <div v-if="campaign.public_pages?.squeeze" class="rounded-lg border border-border/60 bg-white p-3 text-xs">
+                            <p class="font-medium text-foreground">Campaign entry page</p>
+                            <a :href="campaign.public_pages.squeeze" target="_blank" class="mt-1 block truncate text-blue-600 hover:underline">
+                                {{ campaign.public_pages.squeeze }}
+                            </a>
+                        </div>
+
+                        <div v-for="f in campaign.funnels" :key="f.id" class="space-y-2 rounded-xl border border-border/60 bg-white p-4 text-sm shadow-sm">
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <div class="flex items-start gap-3">
-                                    <div class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-teal-500/15 bg-teal-500/10">
-                                        <Icon :icon="f.role === 'pitch' ? 'heroicons:video-camera' : 'heroicons:user-plus'" class="size-4 text-teal-600" />
+                                    <div class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-blue-500/15 bg-blue-500/10">
+                                        <Icon :icon="f.role === 'pitch' ? 'heroicons:video-camera' : 'heroicons:user-plus'" class="size-4 text-blue-600" />
                                     </div>
                                     <div>
-                                        <Badge v-if="f.role_label" variant="outline" class="mb-1 border-teal-200 bg-teal-50 text-[10px] uppercase text-teal-700">{{ f.role_label }}</Badge>
+                                        <Badge v-if="f.role_label" variant="outline" class="mb-1 border-blue-200 bg-blue-50 text-[10px] uppercase text-blue-700">{{ f.role_label }}</Badge>
                                         <p class="font-medium">{{ f.name }}</p>
                                         <p class="text-xs text-muted-foreground">
                                             {{ f.role === 'pitch' ? 'Video · chat · CTA · replay' : 'Email capture → pitch room' }}
@@ -1771,8 +2119,8 @@ onMounted(() => {
                                 </Button>
                             </div>
                             <div class="text-xs space-y-1">
-                                <p v-if="f.optin_url"><span class="font-medium">Registration URL:</span> <a :href="f.optin_url" target="_blank" class="text-teal-600 underline break-all">{{ f.optin_url }}</a></p>
-                                <p v-if="f.webinar_room_url"><span class="font-medium">Pitch / replay room:</span> <a :href="f.webinar_room_url" target="_blank" class="text-teal-600 underline break-all">{{ f.webinar_room_url }}</a></p>
+                                <p v-if="f.optin_url"><span class="font-medium">Registration URL:</span> <a :href="f.optin_url" target="_blank" class="text-blue-600 underline break-all">{{ f.optin_url }}</a></p>
+                                <p v-if="f.webinar_room_url"><span class="font-medium">Pitch / replay room:</span> <a :href="f.webinar_room_url" target="_blank" class="text-blue-600 underline break-all">{{ f.webinar_room_url }}</a></p>
                             </div>
                         </div>
                         <Button
@@ -1797,7 +2145,7 @@ onMounted(() => {
                     <CardContent class="space-y-5">
                         <!-- Done state -->
                         <template v-if="bonusesReady && !showBonusBuilder">
-                            <div class="rounded-lg border border-green-200 bg-green-50/50 p-3 text-sm text-green-700">
+                            <div class="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-sm text-blue-700">
                                 ✓ Bonus saved for this campaign
                             </div>
                             <div v-if="!bonusHasRichContent" class="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
@@ -1863,7 +2211,7 @@ onMounted(() => {
                                 </Collapsible>
                             </div>
 
-                            <div class="rounded-xl border border-border/60 bg-teal-50/20 p-4 space-y-3">
+                            <div class="rounded-xl border border-border/60 bg-blue-50/20 p-4 space-y-3">
                                 <div>
                                     <p class="text-sm font-medium">Bonuses on your public page</p>
                                     <p class="text-xs text-muted-foreground">Showing {{ visibleSelectableBonuses.length }} of {{ filteredSelectableBonuses.length }} — tap to include on <span class="font-mono text-[0.65rem]">/p/bonus</span>.</p>
@@ -1897,17 +2245,17 @@ onMounted(() => {
                                         :key="b.uuid"
                                         role="button"
                                         tabindex="0"
-                                        class="group relative flex cursor-pointer gap-4 rounded-xl border-2 bg-white p-4 text-left transition-all outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                                        class="group relative flex cursor-pointer gap-4 rounded-xl border-2 bg-white p-4 text-left transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                                         :class="featuredBonusUuids.includes(b.uuid)
-                                            ? 'border-teal-500 bg-teal-50/40 shadow-sm'
-                                            : 'border-border hover:border-teal-300 hover:shadow-sm'"
+                                            ? 'border-blue-500 bg-blue-50/40 shadow-sm'
+                                            : 'border-border hover:border-blue-300 hover:shadow-sm'"
                                         @click="toggleFeaturedBonus(b.uuid)"
                                         @keydown.enter.prevent="toggleFeaturedBonus(b.uuid)"
                                         @keydown.space.prevent="toggleFeaturedBonus(b.uuid)"
                                     >
                                         <div
                                             v-if="featuredBonusUuids.includes(b.uuid)"
-                                            class="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-teal-600 text-white shadow"
+                                            class="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full chip-brand-active shadow"
                                         >
                                             <Icon icon="heroicons:check" class="size-4" />
                                         </div>
@@ -1934,7 +2282,7 @@ onMounted(() => {
                                                 as-child
                                                 variant="link"
                                                 size="sm"
-                                                class="mt-2 h-auto p-0 text-teal-600"
+                                                class="mt-2 h-auto p-0 text-blue-600"
                                                 @click.stop
                                             >
                                                 <a :href="bonusViewerUrl(b.meta)!" target="_blank" rel="noopener">
@@ -1971,12 +2319,12 @@ onMounted(() => {
                             <div v-if="campaign.bonuses.length > 0 && !bonusHasRichContent" class="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
                                 Your saved bonus uses an older text format. Pick a type below to generate a proper ebook or mini course — nothing runs until you click Generate.
                             </div>
-                            <div v-if="processing === 'bonuses/suggest'" class="flex items-center gap-3 rounded-lg border border-teal-200 bg-teal-50/50 p-4">
-                                <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-teal-600" />
+                            <div v-if="processing === 'bonuses/suggest'" class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+                                <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-blue-600" />
                                 <p class="font-medium">Generating 3 ideas for {{ selectedBonusType === 'mini_course' ? 'mini course' : 'ebook' }}…</p>
                             </div>
-                            <div v-else-if="processing === 'bonuses/generate' || (isGenerationRunning && ['bonuses'].includes(String(liveGeneration?.step)))" class="flex items-center gap-3 rounded-lg border border-teal-200 bg-teal-50/50 p-4">
-                                <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-teal-600" />
+                            <div v-else-if="processing === 'bonuses/generate' || (isGenerationRunning && ['bonuses'].includes(String(liveGeneration?.step)))" class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+                                <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-blue-600" />
                                 <p class="font-medium">Building your {{ selectedBonusType === 'mini_course' ? 'mini course' : 'ebook' }}…</p>
                             </div>
 
@@ -1990,13 +2338,13 @@ onMounted(() => {
                                         type="button"
                                         class="rounded-xl border-2 p-5 text-left transition-all"
                                         :class="[
-                                            t.disabled ? 'cursor-not-allowed opacity-45 border-dashed' : 'hover:border-teal-400 hover:shadow-sm cursor-pointer',
-                                            bonusTypeChosen && selectedBonusType === t.id && !t.disabled ? 'border-teal-500 bg-teal-50/50 shadow-sm' : 'border-border',
+                                            t.disabled ? 'cursor-not-allowed opacity-45 border-dashed' : 'hover:border-blue-400 hover:shadow-sm cursor-pointer',
+                                            bonusTypeChosen && selectedBonusType === t.id && !t.disabled ? 'border-blue-500 bg-blue-50/50 shadow-sm' : 'border-border',
                                         ]"
                                         :disabled="t.disabled || isGenerationRunning || !!processing"
                                         @click="!t.disabled && t.id !== 'mini_app' && selectBonusType(t.id as 'ebook' | 'mini_course')"
                                     >
-                                        <Icon :icon="t.icon" class="mb-3 size-8 text-teal-600" />
+                                        <Icon :icon="t.icon" class="mb-3 size-8 text-blue-600" />
                                         <p class="font-semibold">{{ t.label }}</p>
                                         <p class="mt-1 text-xs text-muted-foreground">{{ t.description }}</p>
                                         <Badge v-if="t.disabled" variant="secondary" class="mt-2">Soon</Badge>
@@ -2031,18 +2379,18 @@ onMounted(() => {
                                         type="button"
                                         class="group relative flex flex-col overflow-hidden rounded-xl border-2 text-left transition-all"
                                         :class="selectedBonusId === String(b.id)
-                                            ? 'border-teal-500 bg-teal-50/30 shadow-md ring-2 ring-teal-200'
-                                            : 'border-border bg-white hover:border-teal-300 hover:shadow-sm'"
+                                            ? 'border-blue-500 bg-blue-50/30 shadow-md ring-2 ring-blue-200'
+                                            : 'border-border bg-white hover:border-blue-300 hover:shadow-sm'"
                                         :disabled="!!processing || isGenerationRunning"
                                         @click="onBonusPick(String(b.id))"
                                     >
                                         <div
                                             v-if="selectedBonusId === String(b.id)"
-                                            class="absolute right-3 top-3 z-10 flex size-7 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg"
+                                            class="absolute right-3 top-3 z-10 flex size-7 items-center justify-center rounded-full chip-brand-active shadow-lg"
                                         >
                                             <Icon icon="heroicons:check" class="size-4" />
                                         </div>
-                                        <div class="flex justify-center bg-linear-to-b from-teal-50/30 to-white px-4 pb-2 pt-5">
+                                        <div class="flex justify-center bg-linear-to-b from-blue-50/30 to-white px-4 pb-2 pt-5">
                                             <BonusCoverArt
                                                 :title="b.title"
                                                 :subtitle="String(b.promise || b.why_it_helps || '')"
@@ -2051,7 +2399,7 @@ onMounted(() => {
                                             />
                                         </div>
                                         <div class="flex flex-1 flex-col gap-2 p-4 pt-2">
-                                            <p v-if="b.offer_anchor" class="text-[10px] font-semibold uppercase tracking-wide text-teal-700">
+                                            <p v-if="b.offer_anchor" class="text-[10px] font-semibold uppercase tracking-wide text-blue-700">
                                                 {{ b.offer_anchor }}
                                             </p>
                                             <p class="font-semibold text-sm leading-snug">{{ b.title }}</p>
@@ -2086,14 +2434,14 @@ onMounted(() => {
                 <Card v-show="section === 'emails'" class="border border-border/60 bg-white shadow-sm">
                     <CardHeader>
                         <CardTitle>Step 6 — Email Swipes</CardTitle>
-                        <CardDescription>Email swipes from your knowledge base — review and copy below.</CardDescription>
+                        <CardDescription>Sequential follow-up emails from your knowledge base — each builds on the last to drive link clicks.</CardDescription>
                     </CardHeader>
                     <CardContent class="space-y-4">
-                        <div v-if="processing === 'generate-emails' && !emailsReady" class="flex items-center gap-3 rounded-lg border border-teal-200 bg-teal-50/50 p-4">
-                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-teal-600" />
+                        <div v-if="processing === 'generate-emails' && !emailsReady" class="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4">
+                            <Icon icon="heroicons:arrow-path" class="size-5 animate-spin text-blue-600" />
                             <p class="font-medium">Generating email swipes…</p>
                         </div>
-                        <div v-else-if="emailsReady" class="rounded-lg border border-green-200 bg-green-50/50 p-3 text-sm text-green-700">
+                        <div v-else-if="emailsReady" class="rounded-lg border border-blue-200 bg-blue-50/50 p-3 text-sm text-blue-700">
                             ✓ {{ campaign.emails.length }} emails saved
                         </div>
                         <Button
@@ -2114,14 +2462,110 @@ onMounted(() => {
                         >
                             Regenerate all emails
                         </Button>
-                        <div v-for="e in campaign.emails" :key="e.id" class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">
+                        <div v-if="emailsReady" class="space-y-4 rounded-xl border border-border/60 bg-blue-50/20 p-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div class="space-y-1">
+                                    <p class="text-sm font-medium">Auto-email captured leads</p>
+                                    <p class="text-xs text-muted-foreground">
+                                        Optional — send swipes from the app on a schedule. When enabled, set delay and send time on each swipe below.
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <Label for="email-sequence-toggle" class="text-xs text-muted-foreground">Enable</Label>
+                                    <button
+                                        id="email-sequence-toggle"
+                                        type="button"
+                                        role="switch"
+                                        :aria-checked="emailSequenceEnabled"
+                                        class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                                        :class="emailSequenceEnabled ? 'bg-blue-600' : 'bg-slate-200'"
+                                        @click="toggleEmailSequenceEnabled"
+                                    >
+                                        <span
+                                            class="pointer-events-none inline-block size-5 transform rounded-full bg-white shadow ring-0 transition-transform"
+                                            :class="emailSequenceEnabled ? 'translate-x-5' : 'translate-x-0.5'"
+                                        />
+                                    </button>
+                                    <span class="text-xs font-medium" :class="emailSequenceEnabled ? 'text-blue-700' : 'text-muted-foreground'">
+                                        {{ emailSequenceEnabled ? 'On' : 'Off' }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <p
+                                v-if="emailSequenceEnabled"
+                                class="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-blue-800"
+                            >
+                                Each swipe below has <strong>Send after opt-in (days)</strong> and <strong>Send at (time)</strong> fields.
+                                Day 0 = same day as opt-in.
+                            </p>
+
+                            <div v-if="campaign.email_sequence_stats" class="flex flex-wrap gap-3 text-xs">
+                                <span class="rounded-full bg-muted px-2.5 py-1 tabular-nums">
+                                    {{ campaign.email_sequence_stats.pending }} pending
+                                </span>
+                                <span class="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700 tabular-nums">
+                                    {{ campaign.email_sequence_stats.sent }} sent
+                                </span>
+                                <span
+                                    v-if="campaign.email_sequence_stats.failed"
+                                    class="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 tabular-nums"
+                                >
+                                    {{ campaign.email_sequence_stats.failed }} failed
+                                </span>
+                            </div>
+
+                            <div class="flex justify-end">
+                                <Button
+                                    variant="brand"
+                                    size="sm"
+                                    :disabled="savingEmailSequence"
+                                    @click="saveEmailSequence"
+                                >
+                                    {{ savingEmailSequence ? 'Saving…' : 'Save email sequence' }}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div v-for="(e, emailIndex) in campaign.emails" :key="e.id" class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">
                             <div class="flex items-start gap-2">
-                                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                                    <Icon icon="heroicons:envelope" class="size-4 text-teal-600" />
+                                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                                    <Icon icon="heroicons:envelope" class="size-4 text-blue-600" />
                                 </div>
                                 <div class="min-w-0 flex-1">
-                                    <p class="font-medium text-sm">{{ e.subject }}</p>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <Badge variant="outline" class="text-[0.65rem] uppercase tracking-wide">
+                                            Email {{ emailIndex + 1 }} of {{ campaign.emails.length }}
+                                        </Badge>
+                                        <p class="font-medium text-sm">{{ e.subject }}</p>
+                                    </div>
                                     <pre class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">{{ e.body }}</pre>
+                                </div>
+                            </div>
+                            <div
+                                v-if="emailSequenceEnabled"
+                                class="mt-4 grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-2"
+                            >
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Send after opt-in (days)</Label>
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        max="365"
+                                        placeholder="0"
+                                        :model-value="scheduleForEmail(e.id, emailIndex).delay_days"
+                                        @update:model-value="scheduleForEmail(e.id, emailIndex).delay_days = Number($event) || 0"
+                                    />
+                                    <p class="text-[0.65rem] text-muted-foreground">0 = same day at this time (or shortly after opt-in if they sign up later).</p>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs">Send at (time)</Label>
+                                    <Input
+                                        type="time"
+                                        :model-value="scheduleForEmail(e.id, emailIndex).send_time"
+                                        @update:model-value="scheduleForEmail(e.id, emailIndex).send_time = String($event)"
+                                    />
+                                    <p class="text-[0.65rem] text-muted-foreground">Uses your server timezone.</p>
                                 </div>
                             </div>
                         </div>
@@ -2165,14 +2609,14 @@ onMounted(() => {
                                     :href="url"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    class="group flex items-start gap-3 rounded-xl border bg-white p-3 transition-colors hover:border-teal-200 hover:bg-teal-50/30"
+                                    class="group flex items-start gap-3 rounded-xl border bg-white p-3 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
                                 >
-                                    <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
+                                    <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                                         <Icon icon="heroicons:globe-alt" class="size-4" />
                                     </div>
                                     <div class="min-w-0">
                                         <p class="text-sm font-medium capitalize">{{ publicPageLabels[key] ?? key.replace('_', ' ') }}</p>
-                                        <p class="truncate text-xs text-teal-600 group-hover:underline">{{ url }}</p>
+                                        <p class="truncate text-xs text-blue-600 group-hover:underline">{{ url }}</p>
                                     </div>
                                     <Icon icon="heroicons:arrow-top-right-on-square" class="ml-auto size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                                 </a>
@@ -2201,12 +2645,12 @@ onMounted(() => {
                                             <p class="font-medium text-sm">{{ l.label || 'Tracked link' }}</p>
                                             <span
                                                 class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums"
-                                                :class="l.click_count > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-muted text-muted-foreground'"
+                                                :class="l.click_count > 0 ? 'bg-blue-50 text-blue-700' : 'bg-muted text-muted-foreground'"
                                             >
                                                 {{ l.click_count }} {{ l.click_count === 1 ? 'click' : 'clicks' }}
                                             </span>
                                         </div>
-                                        <a :href="l.public_url" target="_blank" rel="noopener noreferrer" class="block truncate text-xs text-teal-600 hover:underline">{{ l.public_url }}</a>
+                                        <a :href="l.public_url" target="_blank" rel="noopener noreferrer" class="block truncate text-xs text-blue-600 hover:underline">{{ l.public_url }}</a>
                                         <p class="truncate text-xs text-muted-foreground">→ {{ l.destination_url }}</p>
                                     </div>
                                     <Button
@@ -2224,33 +2668,6 @@ onMounted(() => {
                                     </Button>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="space-y-3 rounded-xl border border-border/60 bg-teal-50/20 p-4">
-                            <div>
-                                <p class="text-sm font-medium">Upload email swipes to ESP</p>
-                                <p class="text-xs text-muted-foreground">Optional — pushes generated swipes as drafts when you publish. Connect accounts at <Link href="/integrations" class="text-teal-600 underline">Integrations</Link>.</p>
-                            </div>
-                            <div v-if="integrationAccounts.length" class="grid gap-3 sm:grid-cols-2">
-                                <div class="space-y-1.5">
-                                    <Label class="text-xs">ESP account</Label>
-                                    <select v-model="publishEspAccountId" class="h-10 w-full rounded-xl border border-border/60 bg-white px-3 text-sm shadow-sm">
-                                        <option value="">Don't upload on publish</option>
-                                        <option v-for="acc in integrationAccounts" :key="acc.id" :value="acc.id">
-                                            {{ acc.name }} ({{ acc.provider }})
-                                        </option>
-                                    </select>
-                                </div>
-                                <div class="space-y-1.5">
-                                    <Label class="text-xs">Tag / folder label (optional)</Label>
-                                    <Input v-model="publishEspTag" placeholder="e.g. launch-week" />
-                                </div>
-                            </div>
-                            <p v-else class="text-xs text-muted-foreground">No ESP connected — publish still works; swipes stay copy-only.</p>
-                            <p v-if="campaign.esp_upload" class="text-xs" :class="campaign.esp_upload.ok ? 'text-emerald-700' : 'text-amber-700'">
-                                Last upload: {{ campaign.esp_upload.message }}
-                                <span v-if="campaign.esp_upload.uploaded"> ({{ campaign.esp_upload.uploaded }} emails)</span>
-                            </p>
                         </div>
 
                         <Button variant="brand" :disabled="!!processing" @click="publishCampaign">Publish campaign</Button>

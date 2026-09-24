@@ -22,7 +22,7 @@ function isExternal(href: string): boolean {
             <SidebarMenu>
                 <SidebarMenuItem v-for="item in items" :key="item.title">
                     <SidebarMenuButton
-                        class="h-8 rounded-lg px-3 text-xs text-teal-200/40 hover:bg-sidebar-accent/60 hover:text-teal-100/70 transition-colors"
+                        class="h-8 rounded-lg px-3 text-xs text-blue-200/40 hover:bg-sidebar-accent/60 hover:text-blue-100/70 transition-colors"
                         as-child
                     >
                         <Link v-if="!isExternal(item.href)" :href="item.href" class="flex items-center gap-2.5">

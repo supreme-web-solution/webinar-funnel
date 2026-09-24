@@ -9,6 +9,7 @@ export const PROMOTION_PLATFORM_META: Record<string, PromotionPlatformMeta> = {
     twitter: { label: 'X (Twitter)', icon: 'simple-icons:x' },
     youtube: { label: 'YouTube', icon: 'simple-icons:youtube' },
     reddit: { label: 'Reddit', icon: 'simple-icons:reddit' },
+    threads: { label: 'Threads', icon: 'simple-icons:threads' },
 };
 
 export function promotionPlatformLabel(platform: string): string {

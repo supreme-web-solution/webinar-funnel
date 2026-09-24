@@ -11,7 +11,6 @@ use App\Models\FunnelPage;
 use App\Models\IntegrationAccount;
 use App\Models\Lead;
 use App\Models\LeadEvent;
-use App\Models\Template;
 use App\Models\TemplateVersion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -169,8 +168,6 @@ class CampaignLeadCaptureService
             'chat_mode' => 'simulated',
         ]);
 
-        $this->syncUserIntegrations($funnel, (int) $campaign->user_id);
-
         $meta = $campaign->meta ?? [];
         $meta['primary_lead_funnel_id'] = $funnel->id;
         $campaign->update(['meta' => $meta]);
@@ -192,6 +189,15 @@ class CampaignLeadCaptureService
 
     public function syncIntegrationsForFunnel(Funnel $funnel, int $userId): void
     {
+        if ($funnel->campaign_id) {
+            $campaign = Campaign::query()->find($funnel->campaign_id);
+            if ($campaign) {
+                app(CampaignAutoresponderService::class)->syncToLeadFunnel($campaign);
+
+                return;
+            }
+        }
+
         $this->syncUserIntegrations($funnel, $userId);
     }
 
@@ -216,6 +222,19 @@ class CampaignLeadCaptureService
             ->first();
     }
 
+    public function resolveLeadFunnelForSync(Campaign $campaign): ?Funnel
+    {
+        if ($campaign->type === Campaign::TYPE_WEBINAR) {
+            return $this->campaignBuilder->primaryOptinFunnel($campaign)
+                ?? $this->campaignBuilder->primaryWebinarFunnel($campaign);
+        }
+
+        return $this->findOptinCaptureFunnel($campaign) ?? $this->ensureOptinFunnel($campaign);
+    }
+
+    /**
+     * @deprecated Used only for non-campaign funnels.
+     */
     protected function syncUserIntegrations(Funnel $funnel, int $userId): void
     {
         $accountIds = IntegrationAccount::query()

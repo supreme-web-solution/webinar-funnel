@@ -8,12 +8,13 @@ use App\Models\Campaign;
 use App\Models\Funnel;
 use App\Models\FunnelAdCampaign;
 use App\Models\FunnelAdCreative;
+use App\Models\User;
 use App\Services\Ads\AdBudgetRules;
 use App\Services\Ads\AdCampaignService;
+use App\Services\Ads\AdGenerationService;
 use App\Services\Ads\AdLaunchErrorFormatter;
 use App\Services\Ads\AdPlatformRules;
-use App\Services\Ads\AdGenerationService;
-use App\Services\Campaigns\CampaignTrafficHubService;
+use App\Services\Traffic\TrafficHubResolver;
 use App\Services\Zernio\ZernioClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,45 +26,62 @@ class FunnelAdCampaignController extends Controller
 {
     public function __construct(
         private readonly AdGenerationService $generator,
-        private readonly AdCampaignService   $campaignService,
-        private readonly ZernioClient        $zernio,
+        private readonly AdCampaignService $campaignService,
+        private readonly ZernioClient $zernio,
     ) {}
 
     // ─── Page ────────────────────────────────────────────────────────────────
 
-    public function index(Request $request, Funnel $funnel, ?Campaign $campaign = null): Response
+    public function index(Request $request, Funnel $funnel, ?Campaign $campaign = null): Response|RedirectResponse
     {
         $this->authorize($funnel);
 
+        if (! $campaign && $funnel->campaign_id) {
+            $linked = Campaign::query()
+                ->where('id', $funnel->campaign_id)
+                ->where('user_id', auth()->id())
+                ->first();
+
+            if ($linked) {
+                return redirect()->route('campaigns.traffic.ads', $linked);
+            }
+        }
+
         $campaigns = FunnelAdCampaign::query()
-            ->where('funnel_id', $funnel->id)
+            ->when($campaign, fn ($q) => $q->where(function ($inner) use ($campaign, $funnel) {
+                $inner->where('campaign_id', $campaign->id)->orWhere('funnel_id', $funnel->id);
+            }), fn ($q) => $q->where('funnel_id', $funnel->id))
             ->with(['creatives' => fn ($q) => $q->orderByDesc('created_at')])
             ->latest()
             ->get();
 
         $funnel->loadMissing('user');
+        $hubResolver = app(TrafficHubResolver::class);
+        $isStandalone = $hubResolver->isStandaloneContext($funnel, $campaign);
+
+        $adRoutes = $campaign
+            ? $this->campaignAdRoutes($campaign)
+            : ($isStandalone ? $this->standaloneAdRoutes() : [
+                'store' => route('funnels.ads.store', $funnel),
+                'posts' => route('funnels.promotion.posts.index', $funnel),
+            ]);
 
         return Inertia::render('funnels/ads/Campaigns', [
-            'funnel'           => [
+            'funnel' => [
                 'id' => $funnel->id,
                 'name' => $funnel->name,
                 'status' => $funnel->status,
                 'default_destination_url' => $funnel->publicOptinUrl(),
             ],
-            'campaigns'        => $campaigns->map(fn ($c) => $this->campaignResource($c))->values(),
-            'adPlatforms'      => FunnelAdCampaign::AD_PLATFORMS,
+            'campaigns' => $campaigns->map(fn ($c) => $this->campaignResource($c))->values(),
+            'adPlatforms' => FunnelAdCampaign::AD_PLATFORMS,
             'launchableAdPlatforms' => FunnelAdCampaign::launchableAdPlatforms(),
             'unsupportedAdPlatforms' => FunnelAdCampaign::unsupportedAdPlatforms(),
-            'adGoals'          => FunnelAdCampaign::GOALS,
-            'ctaButtons'       => FunnelAdCreative::CTA_BUTTONS,
-            'adsEnabled'       => $this->zernio->isConfigured(),
-            'routes'           => [
-                'store'   => route('funnels.ads.store', $funnel),
-                'posts'   => $campaign
-                    ? route('campaigns.traffic.promotion.posts', $campaign)
-                    : route('funnels.promotion.posts.index', $funnel),
-            ],
-            'campaignHub' => $campaign ? app(CampaignTrafficHubService::class)->hubPayload($campaign) : null,
+            'adGoals' => FunnelAdCampaign::GOALS,
+            'ctaButtons' => FunnelAdCreative::CTA_BUTTONS,
+            'adsEnabled' => $this->zernio->isConfigured(),
+            'routes' => $adRoutes,
+            'campaignHub' => $hubResolver->payload($funnel, $campaign),
             'savedAdAccountIds' => $request->user()->resolvedPlatformAdAccountIds(),
             'adAccountsSettingsUrl' => route('settings.ad-accounts.edit'),
             'minBudgetAmount' => AdBudgetRules::minAmount('USD'),
@@ -75,32 +93,32 @@ class FunnelAdCampaignController extends Controller
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
 
-    public function store(Request $request, Funnel $funnel): RedirectResponse
+    public function store(Request $request, Funnel $funnel, ?Campaign $trafficCampaign = null): RedirectResponse
     {
         $this->authorize($funnel);
 
         $validated = $request->validate([
-            'name'             => ['required', 'string', 'max:120'],
-            'goal'             => ['required', 'string', 'in:'.implode(',', array_keys(FunnelAdCampaign::GOALS))],
-            'platforms'        => ['required', 'array', 'min:1'],
-            'platforms.*'      => ['string', 'in:'.implode(',', array_keys(FunnelAdCampaign::AD_PLATFORMS))],
+            'name' => ['required', 'string', 'max:120'],
+            'goal' => ['required', 'string', 'in:'.implode(',', array_keys(FunnelAdCampaign::GOALS))],
+            'platforms' => ['required', 'array', 'min:1'],
+            'platforms.*' => ['string', 'in:'.implode(',', array_keys(FunnelAdCampaign::AD_PLATFORMS))],
             'platform_ad_account_ids' => ['required', 'array'],
             'platform_ad_account_ids.*' => ['nullable', 'string', 'max:120'],
             'zernio_social_account_id' => ['nullable', 'string', 'max:120'],
-            'budget_amount'    => ['required', 'numeric', 'min:0.01'],
-            'budget_currency'  => ['nullable', 'string', 'size:3'],
-            'budget_type'      => ['required', 'in:daily,lifetime'],
-            'start_date'       => ['nullable', 'date'],
-            'end_date'         => ['nullable', 'date', 'after_or_equal:start_date'],
-            'product_url'      => ['nullable', 'url', 'max:2048'],
-            'industry'         => ['nullable', 'string', 'max:120'],
+            'budget_amount' => ['required', 'numeric', 'min:0.01'],
+            'budget_currency' => ['nullable', 'string', 'size:3'],
+            'budget_type' => ['required', 'in:daily,lifetime'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'product_url' => ['nullable', 'url', 'max:2048'],
+            'industry' => ['nullable', 'string', 'max:120'],
             'goal_description' => ['nullable', 'string', 'max:500'],
-            'targeting'        => ['nullable', 'array'],
-            'meta_pixel_id'    => ['nullable', 'string', 'max:120'],
+            'targeting' => ['nullable', 'array'],
+            'meta_pixel_id' => ['nullable', 'string', 'max:120'],
             'meta_conversion_event' => ['nullable', 'string', 'max:60'],
         ]);
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         $validatedIds = is_array($validated['platform_ad_account_ids'] ?? null) ? $validated['platform_ad_account_ids'] : [];
@@ -131,21 +149,22 @@ class FunnelAdCampaignController extends Controller
             ]);
         }
 
-        $campaign = FunnelAdCampaign::create(array_merge($validated, [
-            'funnel_id'            => $funnel->id,
-            'user_id'              => $user->id,
-            'status'               => FunnelAdCampaign::STATUS_DRAFT,
+        $adCampaign = FunnelAdCampaign::create(array_merge($validated, [
+            'funnel_id' => $funnel->id,
+            'campaign_id' => $trafficCampaign?->id ?? $funnel->campaign_id,
+            'user_id' => $user->id,
+            'status' => FunnelAdCampaign::STATUS_DRAFT,
             'platform_ad_account_ids' => $platformIds,
-            'budget_currency'      => $currency,
+            'budget_currency' => $currency,
         ]));
 
         $user->savePlatformAdAccountIds($platformIds);
 
-        return redirect()->route('funnels.ads.index', $funnel)
+        return redirect($this->adsIndexUrl($funnel, $trafficCampaign))
             ->with('success', 'Campaign created. Now add creatives.');
     }
 
-    public function update(Request $request, Funnel $funnel, FunnelAdCampaign $campaign): RedirectResponse
+    public function update(Request $request, Funnel $funnel, FunnelAdCampaign $campaign, ?Campaign $trafficCampaign = null): RedirectResponse
     {
         $this->authorize($funnel);
         $this->authorizeOwns($campaign);
@@ -155,24 +174,24 @@ class FunnelAdCampaignController extends Controller
         }
 
         $validated = $request->validate([
-            'name'             => ['sometimes', 'string', 'max:120'],
-            'goal'             => ['sometimes', 'string', 'in:'.implode(',', array_keys(FunnelAdCampaign::GOALS))],
-            'platforms'        => ['sometimes', 'array'],
+            'name' => ['sometimes', 'string', 'max:120'],
+            'goal' => ['sometimes', 'string', 'in:'.implode(',', array_keys(FunnelAdCampaign::GOALS))],
+            'platforms' => ['sometimes', 'array'],
             'platform_ad_account_ids' => ['sometimes', 'array'],
             'platform_ad_account_ids.*' => ['nullable', 'string', 'max:120'],
             'zernio_social_account_id' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'budget_amount'    => ['sometimes', 'numeric', 'min:0.01'],
-            'budget_currency'  => ['sometimes', 'nullable', 'string', 'size:3'],
-            'budget_type'      => ['sometimes', 'in:daily,lifetime'],
-            'start_date'       => ['nullable', 'date'],
-            'end_date'         => ['nullable', 'date'],
-            'product_url'      => ['nullable', 'url', 'max:2048'],
-            'industry'         => ['nullable', 'string', 'max:120'],
+            'budget_amount' => ['sometimes', 'numeric', 'min:0.01'],
+            'budget_currency' => ['sometimes', 'nullable', 'string', 'size:3'],
+            'budget_type' => ['sometimes', 'in:daily,lifetime'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+            'product_url' => ['nullable', 'url', 'max:2048'],
+            'industry' => ['nullable', 'string', 'max:120'],
             'goal_description' => ['nullable', 'string', 'max:500'],
-            'targeting'        => ['nullable', 'array'],
-            'meta_pixel_id'    => ['nullable', 'string', 'max:120'],
+            'targeting' => ['nullable', 'array'],
+            'meta_pixel_id' => ['nullable', 'string', 'max:120'],
             'meta_conversion_event' => ['nullable', 'string', 'max:60'],
-            'status'           => ['sometimes', 'string', 'in:draft,ready,paused'],
+            'status' => ['sometimes', 'string', 'in:draft,ready,paused'],
         ]);
 
         $platforms = is_array($validated['platforms'] ?? null) ? $validated['platforms'] : ($campaign->platforms ?? []);
@@ -232,7 +251,7 @@ class FunnelAdCampaignController extends Controller
         return back()->with('success', 'Campaign updated.');
     }
 
-    public function destroy(Request $request, Funnel $funnel, FunnelAdCampaign $campaign): RedirectResponse
+    public function destroy(Request $request, Funnel $funnel, FunnelAdCampaign $campaign, ?Campaign $trafficCampaign = null): RedirectResponse
     {
         $this->authorize($funnel);
         $this->authorizeOwns($campaign);
@@ -243,12 +262,12 @@ class FunnelAdCampaignController extends Controller
         return back()->with('success', 'Campaign deleted.');
     }
 
-    public function duplicate(Request $request, Funnel $funnel, FunnelAdCampaign $campaign): RedirectResponse
+    public function duplicate(Request $request, Funnel $funnel, FunnelAdCampaign $campaign, ?Campaign $trafficCampaign = null): RedirectResponse
     {
         $this->authorize($funnel);
         $this->authorizeOwns($campaign);
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         $copy = $campaign->replicate([
@@ -264,6 +283,7 @@ class FunnelAdCampaignController extends Controller
             : FunnelAdCampaign::STATUS_DRAFT;
         $copy->user_id = $user->id;
         $copy->funnel_id = $funnel->id;
+        $copy->campaign_id = $trafficCampaign?->id ?? $campaign->campaign_id ?? $funnel->campaign_id;
         $copy->save();
 
         foreach ($campaign->creatives as $creative) {
@@ -280,7 +300,7 @@ class FunnelAdCampaignController extends Controller
             $newCreative->save();
         }
 
-        return redirect()->route('funnels.ads.index', $funnel)
+        return redirect($this->adsIndexUrl($funnel, $trafficCampaign))
             ->with('success', 'Campaign duplicated. Edit settings or regenerate creatives, then launch.')
             ->with('duplicated_campaign_id', $copy->id);
     }
@@ -306,18 +326,18 @@ class FunnelAdCampaignController extends Controller
         $this->authorizeOwns($campaign);
 
         $validated = $request->validate([
-            'hooks'          => ['required', 'array', 'min:1', 'max:5'],
-            'hooks.*'        => ['string', 'max:255'],
+            'hooks' => ['required', 'array', 'min:1', 'max:5'],
+            'hooks.*' => ['string', 'max:255'],
             'generate_images' => ['boolean'],
-            'format'         => ['nullable', 'string', 'in:square,story,landscape,reel'],
+            'format' => ['nullable', 'string', 'in:square,story,landscape,reel'],
         ]);
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         $maxCreatives = max(1, (int) config('promotion.ads.max_generated_creatives', 5));
-        $hooks    = array_values(array_slice($validated['hooks'], 0, $maxCreatives));
-        $format   = $validated['format'] ?? 'square';
+        $hooks = array_values(array_slice($validated['hooks'], 0, $maxCreatives));
+        $format = $validated['format'] ?? 'square';
         $genImages = (bool) ($validated['generate_images'] ?? true);
         $variants = array_values(array_slice(
             $this->generator->generateCopyVariants($campaign, $funnel, $hooks),
@@ -338,17 +358,17 @@ class FunnelAdCampaignController extends Controller
             }
 
             $creative = FunnelAdCreative::create([
-                'campaign_id'  => $campaign->id,
-                'funnel_id'    => $funnel->id,
-                'user_id'      => $user->id,
-                'headline'     => $variant['headline'] ?? '',
+                'campaign_id' => $campaign->id,
+                'funnel_id' => $funnel->id,
+                'user_id' => $user->id,
+                'headline' => $variant['headline'] ?? '',
                 'primary_text' => $variant['primary_text'] ?? '',
-                'description'  => $variant['description'] ?? '',
-                'cta_button'   => $variant['cta_button'] ?? 'LEARN_MORE',
-                'asset_url'    => $imageUrl,
-                'asset_type'   => $imageUrl ? 'image' : null,
-                'format'       => $format,
-                'status'       => FunnelAdCreative::STATUS_DRAFT,
+                'description' => $variant['description'] ?? '',
+                'cta_button' => $variant['cta_button'] ?? 'LEARN_MORE',
+                'asset_url' => $imageUrl,
+                'asset_type' => $imageUrl ? 'image' : null,
+                'format' => $format,
+                'status' => FunnelAdCreative::STATUS_DRAFT,
             ]);
 
             $creatives[] = $creative->toArray();
@@ -368,7 +388,7 @@ class FunnelAdCampaignController extends Controller
             'format' => ['nullable', 'string', 'in:square,story,landscape,reel'],
         ]);
 
-        $format   = $validated['format'] ?? $creative->format ?? 'square';
+        $format = $validated['format'] ?? $creative->format ?? 'square';
         $imageUrl = $this->generator->generateAdImage(
             $campaign,
             $creative->headline ?? '',
@@ -391,21 +411,21 @@ class FunnelAdCampaignController extends Controller
         $this->authorizeOwns($campaign);
 
         $validated = $request->validate([
-            'headline'     => ['nullable', 'string', 'max:255'],
+            'headline' => ['nullable', 'string', 'max:255'],
             'primary_text' => ['nullable', 'string', 'max:2000'],
-            'description'  => ['nullable', 'string', 'max:255'],
-            'cta_button'   => ['nullable', 'string', 'in:'.implode(',', array_keys(FunnelAdCreative::CTA_BUTTONS))],
-            'format'       => ['nullable', 'string', 'in:square,story,landscape,reel'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'cta_button' => ['nullable', 'string', 'in:'.implode(',', array_keys(FunnelAdCreative::CTA_BUTTONS))],
+            'format' => ['nullable', 'string', 'in:square,story,landscape,reel'],
         ]);
 
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = $request->user();
 
         $creative = FunnelAdCreative::create(array_merge($validated, [
             'campaign_id' => $campaign->id,
-            'funnel_id'   => $funnel->id,
-            'user_id'     => $user->id,
-            'status'      => FunnelAdCreative::STATUS_DRAFT,
+            'funnel_id' => $funnel->id,
+            'user_id' => $user->id,
+            'status' => FunnelAdCreative::STATUS_DRAFT,
         ]));
 
         return response()->json(['creative' => $creative->toArray()], 201);
@@ -417,12 +437,12 @@ class FunnelAdCampaignController extends Controller
         $this->authorizeOwns($campaign);
 
         $validated = $request->validate([
-            'headline'     => ['nullable', 'string', 'max:255'],
+            'headline' => ['nullable', 'string', 'max:255'],
             'primary_text' => ['nullable', 'string', 'max:2000'],
-            'description'  => ['nullable', 'string', 'max:255'],
-            'cta_button'   => ['nullable', 'string', 'in:'.implode(',', array_keys(FunnelAdCreative::CTA_BUTTONS))],
-            'format'       => ['nullable', 'string', 'in:square,story,landscape,reel'],
-            'status'       => ['nullable', 'string', 'in:draft,active,paused'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'cta_button' => ['nullable', 'string', 'in:'.implode(',', array_keys(FunnelAdCreative::CTA_BUTTONS))],
+            'format' => ['nullable', 'string', 'in:square,story,landscape,reel'],
+            'status' => ['nullable', 'string', 'in:draft,active,paused'],
         ]);
 
         $creative->update($validated);
@@ -441,7 +461,7 @@ class FunnelAdCampaignController extends Controller
 
     // ─── Launch & Sync ───────────────────────────────────────────────────────
 
-    public function launch(Request $request, Funnel $funnel, FunnelAdCampaign $campaign): RedirectResponse
+    public function launch(Request $request, Funnel $funnel, FunnelAdCampaign $campaign, ?Campaign $trafficCampaign = null): RedirectResponse
     {
         $this->authorize($funnel);
         $this->authorizeOwns($campaign);
@@ -501,7 +521,7 @@ class FunnelAdCampaignController extends Controller
         return back()->with('success', 'Campaign is launching. This page will update automatically.');
     }
 
-    public function syncPerformance(Request $request, Funnel $funnel, FunnelAdCampaign $campaign): RedirectResponse
+    public function syncPerformance(Request $request, Funnel $funnel, FunnelAdCampaign $campaign, ?Campaign $trafficCampaign = null): RedirectResponse
     {
         $this->authorize($funnel);
         $this->authorizeOwns($campaign);
@@ -533,42 +553,42 @@ class FunnelAdCampaignController extends Controller
     private function campaignResource(FunnelAdCampaign $campaign): array
     {
         return [
-            'id'                   => $campaign->id,
-            'name'                 => $campaign->name,
-            'goal'                 => $campaign->goal,
-            'platforms'            => $campaign->platforms,
-            'status'               => $campaign->status,
-            'budget_amount'        => $campaign->budget_amount,
-            'budget_type'          => $campaign->budget_type,
-            'budget_currency'      => AdBudgetRules::normalizeCurrency($campaign->budget_currency),
-            'start_date'           => $campaign->start_date?->toDateString(),
-            'end_date'             => $campaign->end_date?->toDateString(),
-            'product_url'          => $campaign->product_url,
-            'industry'             => $campaign->industry,
-            'goal_description'     => $campaign->goal_description,
-            'targeting'            => $campaign->targeting,
+            'id' => $campaign->id,
+            'name' => $campaign->name,
+            'goal' => $campaign->goal,
+            'platforms' => $campaign->platforms,
+            'status' => $campaign->status,
+            'budget_amount' => $campaign->budget_amount,
+            'budget_type' => $campaign->budget_type,
+            'budget_currency' => AdBudgetRules::normalizeCurrency($campaign->budget_currency),
+            'start_date' => $campaign->start_date?->toDateString(),
+            'end_date' => $campaign->end_date?->toDateString(),
+            'product_url' => $campaign->product_url,
+            'industry' => $campaign->industry,
+            'goal_description' => $campaign->goal_description,
+            'targeting' => $campaign->targeting,
             'platform_ad_account_ids' => $campaign->platform_ad_account_ids,
             'zernio_social_account_id' => $campaign->zernio_social_account_id,
-            'meta_pixel_id'          => $campaign->meta_pixel_id,
-            'meta_conversion_event'  => $campaign->meta_conversion_event,
-            'ai_research'          => $campaign->ai_research,
-            'performance'          => $campaign->performance,
-            'last_synced_at'       => $campaign->last_synced_at?->toISOString(),
-            'last_error'           => $campaign->last_error,
-            'launch_errors'        => $this->resolvedLaunchErrors($campaign->launch_errors),
-            'created_at'           => $campaign->created_at?->toISOString(),
-            'creatives'            => $campaign->creatives->map(fn ($c) => [
-                'id'           => $c->id,
-                'headline'     => $c->headline,
+            'meta_pixel_id' => $campaign->meta_pixel_id,
+            'meta_conversion_event' => $campaign->meta_conversion_event,
+            'ai_research' => $campaign->ai_research,
+            'performance' => $campaign->performance,
+            'last_synced_at' => $campaign->last_synced_at?->toISOString(),
+            'last_error' => $campaign->last_error,
+            'launch_errors' => $this->resolvedLaunchErrors($campaign->launch_errors),
+            'created_at' => $campaign->created_at?->toISOString(),
+            'creatives' => $campaign->creatives->map(fn ($c) => [
+                'id' => $c->id,
+                'headline' => $c->headline,
                 'primary_text' => $c->primary_text,
-                'description'  => $c->description,
-                'cta_button'   => $c->cta_button,
-                'asset_url'    => $c->asset_url,
-                'asset_type'   => $c->asset_type,
-                'format'       => $c->format,
-                'status'       => $c->status,
-                'is_winner'    => $c->is_winner,
-                'performance'  => $c->performance,
+                'description' => $c->description,
+                'cta_button' => $c->cta_button,
+                'asset_url' => $c->asset_url,
+                'asset_type' => $c->asset_type,
+                'format' => $c->format,
+                'status' => $c->status,
+                'is_winner' => $c->is_winner,
+                'performance' => $c->performance,
                 'zernio_ad_id' => $c->zernio_ad_id,
                 'platform_ad_ids' => $c->platform_ad_ids,
             ])->values()->all(),
@@ -577,14 +597,14 @@ class FunnelAdCampaignController extends Controller
 
     private function authorize(Funnel $funnel): void
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
         abort_unless((int) $user->id === (int) $funnel->user_id, 403);
     }
 
     private function authorizeOwns(FunnelAdCampaign $campaign): void
     {
-        /** @var \App\Models\User $user */
+        /** @var User $user */
         $user = auth()->user();
         abort_unless((int) $user->id === (int) $campaign->user_id, 403);
     }
@@ -626,5 +646,61 @@ class FunnelAdCampaignController extends Controller
         }
 
         return AdLaunchErrorFormatter::summarizeFailures($failures);
+    }
+
+    protected function adsIndexUrl(Funnel $funnel, ?Campaign $trafficCampaign = null): string
+    {
+        if ($trafficCampaign) {
+            return route('campaigns.traffic.ads', $trafficCampaign);
+        }
+
+        return route('funnels.ads.index', $funnel);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function standaloneAdRoutes(): array
+    {
+        $id = ['adCampaign' => '__ID__'];
+
+        return [
+            'store' => route('traffic.workspace.ads.store'),
+            'posts' => route('traffic.workspace.promotion.posts'),
+            'update' => route('traffic.workspace.ads.update', $id),
+            'duplicate' => route('traffic.workspace.ads.duplicate', $id),
+            'destroy' => route('traffic.workspace.ads.destroy', $id),
+            'research' => route('traffic.workspace.ads.research', $id),
+            'creatives_generate' => route('traffic.workspace.ads.creatives.generate', $id),
+            'creatives_store' => route('traffic.workspace.ads.creatives.store', $id),
+            'creatives_update' => route('traffic.workspace.ads.creatives.update', ['adCampaign' => '__ID__', 'creative' => '__CID__']),
+            'creatives_destroy' => route('traffic.workspace.ads.creatives.destroy', ['adCampaign' => '__ID__', 'creative' => '__CID__']),
+            'creatives_image' => route('traffic.workspace.ads.creatives.image', ['adCampaign' => '__ID__', 'creative' => '__CID__']),
+            'creatives_toggle' => route('traffic.workspace.ads.creatives.toggle', ['adCampaign' => '__ID__', 'creative' => '__CID__']),
+            'launch' => route('traffic.workspace.ads.launch', $id),
+            'sync' => route('traffic.workspace.ads.sync', $id),
+        ];
+    }
+
+    protected function campaignAdRoutes(Campaign $campaign): array
+    {
+        $id = ['campaign' => $campaign->id, 'adCampaign' => '__ID__'];
+
+        return [
+            'store' => route('campaigns.traffic.ads.store', $campaign),
+            'posts' => route('campaigns.traffic.promotion.posts', $campaign),
+            'update' => route('campaigns.traffic.ads.update', $id),
+            'duplicate' => route('campaigns.traffic.ads.duplicate', $id),
+            'destroy' => route('campaigns.traffic.ads.destroy', $id),
+            'research' => route('campaigns.traffic.ads.research', $id),
+            'creatives_generate' => route('campaigns.traffic.ads.creatives.generate', $id),
+            'creatives_store' => route('campaigns.traffic.ads.creatives.store', $id),
+            'creatives_update' => route('campaigns.traffic.ads.creatives.update', ['campaign' => $campaign->id, 'adCampaign' => '__ID__', 'creative' => '__CID__']),
+            'creatives_destroy' => route('campaigns.traffic.ads.creatives.destroy', ['campaign' => $campaign->id, 'adCampaign' => '__ID__', 'creative' => '__CID__']),
+            'creatives_image' => route('campaigns.traffic.ads.creatives.image', ['campaign' => $campaign->id, 'adCampaign' => '__ID__', 'creative' => '__CID__']),
+            'creatives_toggle' => route('campaigns.traffic.ads.creatives.toggle', ['campaign' => $campaign->id, 'adCampaign' => '__ID__', 'creative' => '__CID__']),
+            'launch' => route('campaigns.traffic.ads.launch', $id),
+            'sync' => route('campaigns.traffic.ads.sync', $id),
+        ];
     }
 }

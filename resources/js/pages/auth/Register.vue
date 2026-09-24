@@ -12,7 +12,7 @@ import { store } from '@/routes/register';
 
 defineOptions({
     layout: {
-        title: 'Create an account',
+        title: 'Create your account',
         description: 'Start building your affiliate business in minutes',
     },
 });
@@ -25,11 +25,11 @@ defineOptions({
         v-bind="store.form()"
         :reset-on-success="['password', 'password_confirmation']"
         v-slot="{ errors, processing }"
-        class="flex flex-col gap-6"
+        class="flex flex-col gap-5"
     >
-        <div class="grid gap-6">
+        <div class="grid gap-5">
             <div class="grid gap-2">
-                <Label for="name">Name</Label>
+                <Label for="name">Full name</Label>
                 <Input
                     id="name"
                     type="text"
@@ -38,7 +38,8 @@ defineOptions({
                     :tabindex="1"
                     autocomplete="name"
                     name="name"
-                    placeholder="Full name"
+                    placeholder="Jane Smith"
+                    class="h-11 rounded-xl border-border/70 bg-white shadow-sm"
                 />
                 <InputError :message="errors.name" />
             </div>
@@ -53,6 +54,7 @@ defineOptions({
                     autocomplete="email"
                     name="email"
                     placeholder="email@example.com"
+                    class="h-11 rounded-xl border-border/70 bg-white shadow-sm"
                 />
                 <InputError :message="errors.email" />
             </div>
@@ -65,7 +67,8 @@ defineOptions({
                     :tabindex="3"
                     autocomplete="new-password"
                     name="password"
-                    placeholder="Password"
+                    placeholder="Create a password"
+                    class="h-11 rounded-xl border-border/70 bg-white shadow-sm"
                 />
                 <InputError :message="errors.password" />
             </div>
@@ -78,14 +81,17 @@ defineOptions({
                     :tabindex="4"
                     autocomplete="new-password"
                     name="password_confirmation"
-                    placeholder="Confirm password"
+                    placeholder="Confirm your password"
+                    class="h-11 rounded-xl border-border/70 bg-white shadow-sm"
                 />
                 <InputError :message="errors.password_confirmation" />
             </div>
 
             <Button
                 type="submit"
-                class="mt-2 w-full"
+                variant="brand"
+                size="lg"
+                class="mt-1 w-full rounded-xl"
                 tabindex="5"
                 :disabled="processing"
                 data-test="register-user-button"
@@ -95,14 +101,15 @@ defineOptions({
             </Button>
         </div>
 
-        <div class="text-center text-sm text-muted-foreground">
+        <p class="text-center text-sm text-muted-foreground">
             Already have an account?
             <TextLink
                 :href="login()"
-                class="underline underline-offset-4"
+                class="font-medium text-blue-700 hover:text-blue-800"
                 :tabindex="6"
-                >Log in</TextLink
             >
-        </div>
+                Log in
+            </TextLink>
+        </p>
     </Form>
 </template>

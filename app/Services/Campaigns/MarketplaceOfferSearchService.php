@@ -42,8 +42,14 @@ class MarketplaceOfferSearchService
             if ($clickbank !== []) {
                 $results = [...$results, ...$clickbank];
                 $sources[] = 'clickbank_apify';
-            } elseif ($this->lastApifyError) {
-                $errors[] = 'ClickBank needs Apify (browser automation — its marketplace is a React app that Jina cannot search). '.$this->lastApifyError;
+            } else {
+                $cached = $this->searchTrendingCache($keyword, 'clickbank');
+                if ($cached !== []) {
+                    $results = $this->mergeResults($results, $cached);
+                    $sources[] = 'clickbank_cache';
+                } elseif ($this->lastApifyError) {
+                    $errors[] = 'ClickBank live search unavailable — showing cached or other marketplace results. '.$this->lastApifyError;
+                }
             }
         }
 
@@ -93,8 +99,68 @@ class MarketplaceOfferSearchService
     }
 
     /**
-     * @return array{ok: bool, results: array<int, array<string, mixed>>, search_links: array<int, array<string, mixed>>, error: string|null, sources: array<int, string>, refreshed_at?: string|null}
+     * Weekly promote pick from the daily trending cache (for dashboard, etc.).
+     *
+     * @return array{top_pick: array<string, mixed>|null, refreshed_at: string|null, results: array<int, array<string, mixed>>}
      */
+    public function weeklyPromotePick(): array
+    {
+        $cached = Cache::get('marketplace.trending');
+        if (! is_array($cached)) {
+            return ['top_pick' => null, 'refreshed_at' => null, 'results' => []];
+        }
+
+        return [
+            'top_pick' => $cached['top_pick'] ?? null,
+            'refreshed_at' => $cached['refreshed_at'] ?? null,
+            'results' => is_array($cached['results'] ?? null) ? $cached['results'] : [],
+        ];
+    }
+
+    /**
+     * Filter cached trending offers by keyword (fallback when live ClickBank fails).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function searchTrendingCache(string $keyword, ?string $marketplace = null): array
+    {
+        $cached = Cache::get('marketplace.trending');
+        if (! is_array($cached) || ($cached['results'] ?? []) === []) {
+            return [];
+        }
+
+        $needle = Str::lower(trim($keyword));
+        if ($needle === '') {
+            return [];
+        }
+
+        $matches = [];
+        foreach ($cached['results'] as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            if ($marketplace !== null && strtolower((string) ($row['marketplace'] ?? '')) !== $marketplace) {
+                continue;
+            }
+
+            $haystack = Str::lower(implode(' ', array_filter([
+                (string) ($row['title'] ?? ''),
+                (string) ($row['why'] ?? ''),
+                (string) ($row['search_keyword'] ?? ''),
+                (string) ($row['promote_reason'] ?? ''),
+            ])));
+
+            if (str_contains($haystack, $needle)) {
+                $row['source'] = 'clickbank_cache';
+                $row['search_keyword'] = $row['search_keyword'] ?? $keyword;
+                $matches[] = $row;
+            }
+        }
+
+        return $matches;
+    }
+
     public function trending(): array
     {
         $cached = Cache::get('marketplace.trending');

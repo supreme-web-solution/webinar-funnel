@@ -4,10 +4,15 @@ namespace App\Services\Promotion;
 
 use App\Jobs\PublishPromotionPostJob;
 use App\Models\FunnelPromotionPost;
+use App\Services\Content\PlatformFormatCatalog;
 use Illuminate\Support\Facades\Log;
 
 final class PromotionGenerationCoordinator
 {
+    public function __construct(
+        private readonly PlatformFormatCatalog $formatCatalog,
+    ) {}
+
     /**
      * @return list<string>
      */
@@ -37,10 +42,25 @@ final class PromotionGenerationCoordinator
         }
 
         if ($post->content_type === FunnelPromotionPost::TYPE_IMAGE) {
-            $hasImage = is_string($post->primaryAsset?->url) && $post->primaryAsset->url !== '';
-            if (! $hasImage) {
-                $errors[] = 'Image is not ready yet';
+            $formatKey = data_get($post->metadata, 'format_key') ?? data_get($post->generation_context, 'content_format');
+            $formatSpec = is_string($formatKey) && $formatKey !== '' ? $this->formatCatalog->format($formatKey) : null;
+
+            if ($this->formatCatalog->usesMultiSlideImages($formatSpec)) {
+                $payload = is_array($post->metadata['format_payload'] ?? null) ? $post->metadata['format_payload'] : [];
+                $slideImages = collect($payload['slides'] ?? [])
+                    ->filter(fn ($slide) => is_array($slide) && is_string($slide['image_url'] ?? null) && $slide['image_url'] !== '')
+                    ->count();
+                $minSlides = min(2, $this->formatCatalog->slideLimits($formatSpec)['min']);
+                if ($slideImages < $minSlides) {
+                    $errors[] = 'Multi-slide images are not ready yet (need at least '.$minSlides.')';
+                }
+            } else {
+                $hasImage = is_string($post->primaryAsset?->url) && $post->primaryAsset->url !== '';
+                if (! $hasImage) {
+                    $errors[] = 'Image is not ready yet';
+                }
             }
+
             if ($needsText && ! $hasText) {
                 $errors[] = 'Caption text is not ready yet';
             }

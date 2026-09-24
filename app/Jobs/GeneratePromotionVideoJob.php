@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\FunnelPromotionAsset;
 use App\Models\FunnelPromotionPost;
+use App\Services\Content\FormatContentGenerationService;
 use App\Services\Promotion\PromotionVideoGenerationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -39,6 +40,29 @@ class GeneratePromotionVideoJob implements ShouldQueue
 
         $scriptAsset->update(['status' => FunnelPromotionAsset::STATUS_PROCESSING]);
         $videoAsset->update(['status' => FunnelPromotionAsset::STATUS_PROCESSING]);
+
+        if (trim((string) $post->text_body) === '') {
+            $formatKey = $post->metadata['format_key']
+                ?? $post->generation_context['content_format']
+                ?? null;
+
+            if (is_string($formatKey) && $formatKey !== '') {
+                $formatResult = app(FormatContentGenerationService::class)
+                    ->generate($post->funnel, $post);
+
+                $metadata = $post->metadata ?? [];
+                if (! empty($formatResult['format_payload'] ?? null)) {
+                    $metadata['format_payload'] = $formatResult['format_payload'];
+                }
+
+                $post->update([
+                    'text_body' => $formatResult['text_body'] ?? null,
+                    'hashtags' => $formatResult['hashtags'] ?? $post->hashtags,
+                    'metadata' => $metadata,
+                ]);
+                $post->refresh();
+            }
+        }
 
         $result = $service->generate($post->funnel, $post);
         if (! ($result['success'] ?? false)) {

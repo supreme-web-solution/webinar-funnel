@@ -175,10 +175,32 @@ const PLATFORM_CATALOG: Record<string, Omit<PlatformInfo, 'key' | 'purpose'>> = 
         connectLabel: 'Connect LinkedIn',
         billingNote: 'You may need to pick a LinkedIn organization after OAuth.',
     },
+    threads: {
+        label: 'Threads',
+        icon: 'simple-icons:threads',
+        iconColor: '#ffffff',
+        redirectHref: '/settings/social-traffic/threads/redirect',
+        connectLabel: 'Connect Threads',
+        billingNote: 'Uses your Meta/Instagram account linkage in Zernio.',
+    },
+    pinterest: {
+        label: 'Pinterest',
+        icon: 'simple-icons:pinterest',
+        iconColor: '#e60023',
+        redirectHref: '/settings/social-traffic/pinterest/redirect',
+        connectLabel: 'Connect Pinterest',
+    },
 };
 
 const trafficPlatformKeys = computed(() => props.trafficPlatforms ?? ['reddit', 'youtube', 'x']);
-const postingPlatformKeys = computed(() => props.postingPlatforms ?? ['facebook', 'instagram', 'tiktok', 'linkedin']);
+const postingPlatformKeys = computed(() => props.postingPlatforms ?? [
+    'facebook',
+    'instagram',
+    'tiktok',
+    'linkedin',
+    'threads',
+    'pinterest',
+]);
 
 function buildPlatforms(keys: string[], purpose: PlatformInfo['purpose']): PlatformInfo[] {
     return keys.map((key) => {
@@ -235,6 +257,8 @@ function disconnect(id: number, platform: string): void {
 }
 
 function displayPlatformName(platform: string): string {
+    const catalog = platformIcon(platform);
+    if (catalog?.label) return catalog.label;
     if (platform === 'twitter') return 'X (Twitter)';
     return platform.charAt(0).toUpperCase() + platform.slice(1);
 }
@@ -249,7 +273,7 @@ function displayPlatformName(platform: string): string {
         <Heading
             variant="small"
             title="Connected social accounts"
-            description="Traffic AI uses Reddit, YouTube, and X for auto-replies. Facebook, Instagram, and others are used for promotion posts and paid ads."
+            description="Connect platforms for promotion posts (Instagram, TikTok, Threads, Pinterest, LinkedIn, YouTube…) and Traffic AI auto-replies (Reddit, YouTube, X)."
         />
 
         <Card v-if="appUrlMismatch" class="border-amber-500/40 bg-amber-500/5">
@@ -310,13 +334,16 @@ function displayPlatformName(platform: string): string {
         <div class="space-y-3">
             <div>
                 <h2 class="text-sm font-semibold">Posting &amp; paid ads</h2>
+                <p class="text-xs text-muted-foreground mt-0.5">
+                    Connect accounts to publish promotion posts from the content matrix (Reels, carousels, Pins, Threads, etc.).
+                </p>
             </div>
            
             <Card
                 v-for="platform in postingPlatforms"
                 :key="platform.key"
                 class="border shadow-sm"
-                :class="connectedAccount(platform.key) ? 'border-green-500/40 bg-green-500/5' : ''"
+                :class="connectedAccount(platform.key) ? 'border-blue-500/40 bg-blue-500/5' : ''"
             >
                 <CardContent class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
                     <div class="flex shrink-0 size-10 items-center justify-center rounded-xl bg-muted">
@@ -329,7 +356,7 @@ function displayPlatformName(platform: string): string {
                             <Badge
                                 v-if="connectedAccount(platform.key)"
                                 variant="outline"
-                                class="text-[0.6rem] h-5 border-green-500/50 text-green-600 dark:text-green-400"
+                                class="text-[0.6rem] h-5 border-blue-500/50 text-blue-600 dark:text-blue-400"
                             >
                                 Connected<span v-if="connectedAccount(platform.key)?.platform_username"> as {{ connectedAccount(platform.key)?.platform_username }}</span>
                             </Badge>
@@ -384,7 +411,7 @@ function displayPlatformName(platform: string): string {
                 v-for="platform in trafficPlatforms"
                 :key="platform.key"
                 class="border shadow-sm"
-                :class="connectedAccount(platform.key) ? 'border-green-500/40 bg-green-500/5' : ''"
+                :class="connectedAccount(platform.key) ? 'border-blue-500/40 bg-blue-500/5' : ''"
             >
                 <CardContent class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4">
                     <div class="flex shrink-0 size-10 items-center justify-center rounded-xl bg-muted">
@@ -397,7 +424,7 @@ function displayPlatformName(platform: string): string {
                             <Badge
                                 v-if="connectedAccount(platform.key)"
                                 variant="outline"
-                                class="text-[0.6rem] h-5 border-green-500/50 text-green-600 dark:text-green-400"
+                                class="text-[0.6rem] h-5 border-blue-500/50 text-blue-600 dark:text-blue-400"
                             >
                                 Connected<span v-if="connectedAccount(platform.key)?.platform_username"> as {{ connectedAccount(platform.key)?.platform_username }}</span>
                             </Badge>

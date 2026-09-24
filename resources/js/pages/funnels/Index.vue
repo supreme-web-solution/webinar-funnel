@@ -76,7 +76,7 @@ function fmtDate(iso: string): string {
 }
 
 function statusBadgeClass(status: string): string {
-    if (status === 'published') return 'border-teal-200 bg-teal-50 text-teal-700';
+    if (status === 'published') return 'border-blue-200 bg-blue-50 text-blue-700';
     if (status === 'archived') return 'border-slate-200 bg-slate-50 text-slate-700';
     return 'border-amber-200 bg-amber-50 text-amber-700';
 }
@@ -92,7 +92,7 @@ function funnelIcon(funnel: FunnelItem): string {
 <template>
     <Head title="Webinars" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4">
         <!-- Header -->
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="min-w-0">
@@ -124,8 +124,8 @@ function funnelIcon(funnel: FunnelItem): string {
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -150,8 +150,8 @@ function funnelIcon(funnel: FunnelItem): string {
                     type="button"
                     class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
                     :class="activeFilter === tab.key
-                        ? 'bg-teal-600 text-white shadow-sm'
-                        : 'border border-border/60 bg-muted/20 text-muted-foreground hover:bg-teal-50 hover:text-teal-800'"
+                        ? 'chip-brand-active'
+                        : 'border border-border/60 bg-muted/20 text-muted-foreground hover:bg-blue-50 hover:text-blue-800'"
                     @click="activeFilter = tab.key"
                 >
                     {{ tab.label }}
@@ -162,10 +162,10 @@ function funnelIcon(funnel: FunnelItem): string {
         <!-- Empty: no funnels -->
         <div
             v-if="stats.total === 0"
-            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-teal-200/60 bg-white px-6 py-14 text-center shadow-sm"
+            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-blue-200/60 bg-white px-6 py-14 text-center shadow-sm"
         >
-            <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                <Icon icon="heroicons:video-camera" class="size-7 text-teal-600/60" />
+            <div class="flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                <Icon icon="heroicons:video-camera" class="size-7 text-blue-600/60" />
             </div>
             <div>
                 <p class="font-semibold text-foreground">No webinars yet</p>
@@ -190,7 +190,7 @@ function funnelIcon(funnel: FunnelItem): string {
         >
             <Icon icon="heroicons:magnifying-glass" class="size-8 text-muted-foreground/40" />
             <p class="text-sm text-muted-foreground">No funnels match your filter.</p>
-            <Button variant="ghost" size="sm" class="text-teal-700" @click="search = ''; activeFilter = 'all'">
+            <Button variant="ghost" size="sm" class="text-blue-700" @click="search = ''; activeFilter = 'all'">
                 Clear filters
             </Button>
         </div>
@@ -200,18 +200,18 @@ function funnelIcon(funnel: FunnelItem): string {
             <article
                 v-for="funnel in filtered"
                 :key="funnel.id"
-                class="group overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-teal-200/60 hover:shadow-md"
+                class="group overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-blue-200/60 hover:shadow-md"
             >
                 <div class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="flex min-w-0 flex-1 items-start gap-3">
-                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
-                            <Icon :icon="funnelIcon(funnel)" class="size-5 text-teal-600" />
+                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10">
+                            <Icon :icon="funnelIcon(funnel)" class="size-5 text-blue-600" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <Link
                                     :href="`/funnels/${funnel.id}/edit`"
-                                    class="truncate text-sm font-semibold text-foreground hover:text-teal-800 hover:underline"
+                                    class="truncate text-sm font-semibold text-foreground hover:text-blue-800 hover:underline"
                                 >
                                     {{ funnel.name }}
                                 </Link>
@@ -229,15 +229,15 @@ function funnelIcon(funnel: FunnelItem): string {
                             <p class="mt-0.5 truncate font-mono text-[0.65rem] text-muted-foreground">/{{ funnel.slug }}</p>
                             <div class="mt-2 flex flex-wrap gap-1.5">
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
-                                    <Icon icon="heroicons:users" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:users" class="size-3 text-blue-600" />
                                     {{ funnel.leads_count }} leads
                                 </span>
                                 <span v-if="funnel.campaign_name" class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
-                                    <Icon icon="heroicons:rocket-launch" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:rocket-launch" class="size-3 text-blue-600" />
                                     {{ funnel.campaign_name }}
                                 </span>
                                 <span v-if="funnel.template" class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] capitalize text-muted-foreground">
-                                    <Icon icon="heroicons:rectangle-stack" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:rectangle-stack" class="size-3 text-blue-600" />
                                     {{ funnel.template.name }}
                                 </span>
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
@@ -267,7 +267,7 @@ function funnelIcon(funnel: FunnelItem): string {
                                 Edit
                             </Link>
                         </Button>
-                        <Button as-child size="sm" variant="ghost" class="text-muted-foreground hover:text-teal-700">
+                        <Button as-child size="sm" variant="ghost" class="text-muted-foreground hover:text-blue-700">
                             <Link :href="`/funnels/${funnel.id}/chat`">
                                 <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-3.5" />
                             </Link>

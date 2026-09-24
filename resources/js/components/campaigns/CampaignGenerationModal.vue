@@ -117,16 +117,16 @@ function closeModal() {
             <!-- Header -->
             <div
                 class="relative px-6 pt-6 pb-4"
-                :class="isFailed ? 'bg-linear-to-br from-red-50 to-white' : 'bg-linear-to-br from-teal-50 via-cyan-50/60 to-white'"
+                :class="isFailed ? 'bg-linear-to-br from-red-50 to-white' : 'bg-linear-to-br from-blue-50 via-blue-50/60 to-white'"
             >
-                <div class="pointer-events-none absolute -right-8 -top-8 size-32 rounded-full bg-teal-400/20 blur-2xl" />
-                <div class="pointer-events-none absolute -left-4 bottom-0 size-24 rounded-full bg-cyan-400/15 blur-xl" />
+                <div class="pointer-events-none absolute -right-8 -top-8 size-32 rounded-full bg-blue-400/20 blur-2xl" />
+                <div class="pointer-events-none absolute -left-4 bottom-0 size-24 rounded-full bg-blue-400/15 blur-xl" />
 
                 <DialogHeader class="relative text-left">
                     <div class="mb-3 flex items-center gap-3">
                         <div
                             class="flex size-11 items-center justify-center rounded-xl shadow-sm"
-                            :class="isFailed ? 'bg-red-100 text-red-600' : 'bg-white text-teal-600 ring-1 ring-teal-100'"
+                            :class="isFailed ? 'bg-red-100 text-red-600' : 'bg-white text-blue-600 ring-1 ring-blue-100'"
                         >
                             <Icon
                                 :icon="isFailed ? 'heroicons:exclamation-triangle' : 'heroicons:sparkles'"
@@ -146,9 +146,9 @@ function closeModal() {
                 </DialogHeader>
 
                 <!-- Live message -->
-                <div class="relative mt-1 min-h-12 rounded-xl border border-teal-200/60 bg-white/80 px-3 py-2.5 backdrop-blur-sm">
+                <div class="relative mt-1 min-h-12 rounded-xl border border-blue-200/60 bg-white/80 px-3 py-2.5 backdrop-blur-sm">
                     <p class="text-sm font-medium leading-snug text-foreground">
-                        {{ displayedMessage }}<span v-if="isRunning" class="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-teal-500 align-middle" />
+                        {{ displayedMessage }}<span v-if="isRunning" class="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-blue-500 align-middle" />
                     </p>
                     <p v-if="generation?.detail" class="mt-1 text-xs text-muted-foreground">
                         {{ generation.detail }}
@@ -160,12 +160,12 @@ function closeModal() {
                 <!-- Progress -->
                 <div v-if="isRunning" class="space-y-2">
                     <div class="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span class="font-medium text-teal-700">{{ phaseLabel }}</span>
+                        <span class="font-medium text-blue-700">{{ phaseLabel }}</span>
                         <span class="tabular-nums">{{ progress }}%</span>
                     </div>
-                    <div class="relative h-2 overflow-hidden rounded-full bg-teal-100/80">
+                    <div class="relative h-2 overflow-hidden rounded-full bg-blue-100/80">
                         <div
-                            class="absolute inset-y-0 left-0 rounded-full bg-linear-to-r from-teal-600 to-cyan-400 transition-all duration-700 ease-out"
+                            class="absolute inset-y-0 left-0 rounded-full fill-brand-gradient transition-all duration-700 ease-out"
                             :style="{ width: `${Math.max(progress, 6)}%` }"
                         />
                         <div class="absolute inset-0 animate-shimmer bg-linear-to-r from-transparent via-white/40 to-transparent" />
@@ -177,31 +177,31 @@ function closeModal() {
                 </div>
 
                 <!-- Skeleton preview -->
-                <div v-if="isRunning" class="space-y-2 rounded-xl border border-dashed border-teal-200/50 bg-teal-50/20 p-3">
+                <div v-if="isRunning" class="space-y-2 rounded-xl border border-dashed border-blue-200/50 bg-blue-50/20 p-3">
                     <p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Preview assembling</p>
                     <div v-for="n in skeletonLines" :key="n" class="space-y-1.5">
                         <div
-                            class="h-2.5 animate-pulse rounded-md bg-teal-200/50"
+                            class="h-2.5 animate-pulse rounded-md bg-blue-200/50"
                             :style="{ width: `${100 - n * 12}%`, animationDelay: `${n * 120}ms` }"
                         />
                     </div>
                     <div class="mt-2 flex gap-2">
-                        <div class="h-16 flex-1 animate-pulse rounded-lg bg-teal-100/50" />
-                        <div class="h-16 w-1/3 animate-pulse rounded-lg bg-teal-200/40" style="animation-delay: 200ms" />
+                        <div class="h-16 flex-1 animate-pulse rounded-lg bg-blue-100/50" />
+                        <div class="h-16 w-1/3 animate-pulse rounded-lg bg-blue-200/40" style="animation-delay: 200ms" />
                     </div>
                 </div>
 
                 <!-- Event stream -->
-                <div v-if="eventStream.length && isRunning" class="max-h-36 overflow-y-auto rounded-xl border border-border/60 bg-teal-50/30 p-2.5">
+                <div v-if="eventStream.length && isRunning" class="max-h-36 overflow-y-auto rounded-xl border border-border/60 bg-blue-50/30 p-2.5">
                     <p class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Activity</p>
                     <ul class="space-y-2">
                         <li
                             v-for="(ev, i) in eventStream"
                             :key="i"
                             class="flex gap-2 text-[11px] leading-snug"
-                            :class="i === 0 ? 'font-medium text-teal-800' : 'text-muted-foreground'"
+                            :class="i === 0 ? 'font-medium text-blue-800' : 'text-muted-foreground'"
                         >
-                            <Icon icon="heroicons:chevron-right" class="mt-0.5 size-3 shrink-0 text-teal-500/70" />
+                            <Icon icon="heroicons:chevron-right" class="mt-0.5 size-3 shrink-0 text-blue-500/70" />
                             <span>
                                 {{ ev.message }}
                                 <span v-if="ev.detail" class="block text-[10px] font-normal opacity-75">{{ ev.detail }}</span>

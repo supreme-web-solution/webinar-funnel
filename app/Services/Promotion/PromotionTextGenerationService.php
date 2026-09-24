@@ -4,75 +4,72 @@ namespace App\Services\Promotion;
 
 use App\Models\Funnel;
 use App\Models\FunnelPromotionPost;
-use Illuminate\Support\Facades\Http;
+use App\Services\Ai\OpenRouterService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PromotionTextGenerationService
 {
+    public function __construct(
+        private readonly OpenRouterService $openRouter,
+    ) {}
+
     /**
      * @return array{text_body: string, email_subject: string|null, email_body: string|null, hashtags: array<int, string>, source: string}
      */
     public function generate(Funnel $funnel, FunnelPromotionPost $post): array
     {
-        $apiKey = (string) config('services.openai.api_key', '');
-        $model  = (string) config('promotion.openai.text_model', 'gpt-4o-mini');
-
-        if ($apiKey === '') {
-            Log::info('[Promotion] PromotionTextGenerationService: no OpenAI key configured, using fallback', [
+        if (! $this->openRouter->isConfigured()) {
+            Log::info('[Promotion] PromotionTextGenerationService: no OpenRouter key configured, using fallback', [
                 'post_id' => $post->id,
             ]);
+
             return $this->fallback($funnel, $post);
         }
 
-        Log::info('[Promotion] PromotionTextGenerationService: calling OpenAI', [
+        $model = $this->openRouter->promotionTextModel();
+        $timeout = (int) config('promotion.openrouter.timeout', 90);
+
+        Log::info('[Promotion] PromotionTextGenerationService: calling OpenRouter', [
             'post_id' => $post->id,
-            'model'   => $model,
-            'topic'   => $post->topic,
+            'model' => $model,
+            'topic' => $post->topic,
         ]);
 
         try {
-            $response = Http::withToken($apiKey)
-                ->timeout((int) config('promotion.openai.timeout', 90))
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model'           => $model,
-                    'temperature'     => 0.8,
-                    'response_format' => ['type' => 'json_object'],
-                    'messages'        => [
-                        ['role' => 'system', 'content' => $this->systemPrompt()],
-                        ['role' => 'user',   'content' => $this->userPrompt($funnel, $post)],
-                    ],
+            $result = $this->openRouter->chatJson(
+                [
+                    ['role' => 'system', 'content' => $this->systemPrompt()],
+                    ['role' => 'user', 'content' => $this->userPrompt($funnel, $post)],
+                ],
+                $model,
+                $timeout,
+                null,
+                0.8,
+                true,
+            );
+
+            if (! $result['ok'] || ! is_array($result['data'])) {
+                Log::error('[Promotion] PromotionTextGenerationService: OpenRouter request failed', [
+                    'post_id' => $post->id,
+                    'error' => $result['error'] ?? 'Unknown error',
                 ]);
 
-            Log::info('[Promotion] PromotionTextGenerationService: OpenAI response', [
-                'post_id'     => $post->id,
-                'http_status' => $response->status(),
-                'successful'  => $response->successful(),
-            ]);
-
-            if (! $response->successful()) {
-                Log::error('[Promotion] PromotionTextGenerationService: OpenAI request failed', [
-                    'post_id'     => $post->id,
-                    'http_status' => $response->status(),
-                    'body'        => $response->body(),
-                ]);
                 return $this->fallback($funnel, $post);
             }
 
-            $content = (string) ($response->json('choices.0.message.content') ?? '');
-            $decoded = json_decode($content, true);
+            $decoded = $result['data'];
 
             Log::info('[Promotion] PromotionTextGenerationService: decoded response', [
-                'post_id'       => $post->id,
+                'post_id' => $post->id,
                 'has_text_body' => ! empty($decoded['text_body']),
-                'has_hashtags'  => ! empty($decoded['hashtags']),
-                'json_error'    => json_last_error() !== JSON_ERROR_NONE ? json_last_error_msg() : null,
+                'has_hashtags' => ! empty($decoded['hashtags']),
             ]);
 
-            $textBody     = trim((string) ($decoded['text_body'] ?? ''));
+            $textBody = trim((string) ($decoded['text_body'] ?? ''));
             $emailSubject = trim((string) ($decoded['email_subject'] ?? ''));
-            $emailBody    = trim((string) ($decoded['email_body'] ?? ''));
-            $hashtags     = collect($decoded['hashtags'] ?? [])
+            $emailBody = trim((string) ($decoded['email_body'] ?? ''));
+            $hashtags = collect($decoded['hashtags'] ?? [])
                 ->filter(fn ($tag) => is_string($tag) && trim($tag) !== '')
                 ->map(fn (string $tag) => Str::startsWith($tag, '#') ? $tag : '#'.preg_replace('/\s+/', '', $tag))
                 ->take(10)
@@ -80,25 +77,26 @@ class PromotionTextGenerationService
                 ->all();
 
             if ($textBody === '') {
-                Log::warning('[Promotion] PromotionTextGenerationService: empty text_body from OpenAI, using fallback', [
-                    'post_id'    => $post->id,
-                    'raw_content' => substr($content, 0, 500),
+                Log::warning('[Promotion] PromotionTextGenerationService: empty text_body from OpenRouter, using fallback', [
+                    'post_id' => $post->id,
                 ]);
+
                 return $this->fallback($funnel, $post);
             }
 
             return [
-                'text_body'     => Str::limit($textBody, 20000, ''),
+                'text_body' => Str::limit($textBody, 20000, ''),
                 'email_subject' => $emailSubject !== '' ? Str::limit($emailSubject, 255, '') : null,
-                'email_body'    => $emailBody    !== '' ? Str::limit($emailBody, 20000, '')  : null,
-                'hashtags'      => $hashtags,
-                'source'        => 'openai',
+                'email_body' => $emailBody !== '' ? Str::limit($emailBody, 20000, '') : null,
+                'hashtags' => $hashtags,
+                'source' => 'openrouter',
             ];
         } catch (\Throwable $e) {
             Log::error('[Promotion] PromotionTextGenerationService: exception', [
                 'post_id' => $post->id,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
+
             return $this->fallback($funnel, $post);
         }
     }
@@ -113,64 +111,58 @@ class PromotionTextGenerationService
         ?string $ctaUrl = null,
         ?string $ctaLabel = null,
     ): string {
-        $apiKey = (string) config('services.openai.api_key', '');
-        $model = (string) config('promotion.openai.text_model', 'gpt-4o-mini');
-
         $ctaUrl = $ctaUrl ?: '#';
         $ctaLabel = $ctaLabel ?: 'Learn more';
 
-        if ($apiKey === '') {
+        if (! $this->openRouter->isConfigured()) {
             return $this->fallbackVideoScript($funnel, $topic, $ctaUrl, $ctaLabel);
         }
 
         try {
             $settings = $funnel->settings;
-
-            $response = Http::withToken($apiKey)
-                ->timeout((int) config('promotion.openai.timeout', 90))
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => $model,
-                    'temperature' => 0.75,
-                    'response_format' => ['type' => 'json_object'],
-                    'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => 'You write spoken-word video scripts for AI avatar presenters. Return JSON only with key "script". The script must sound natural when read aloud, avoid markdown, and stay under 800 characters.',
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => json_encode([
-                                'funnel_name' => $funnel->name,
-                                'topic' => $topic,
-                                'cta_url' => $ctaUrl,
-                                'cta_label' => $ctaLabel,
-                                'webinar_title' => $settings?->webinar_title,
-                                'webinar_description' => $settings?->webinar_description,
-                                'extra_context' => $context['context'] ?? null,
-                                'requirements' => [
-                                    '45-60 seconds when spoken (~120-180 words)',
-                                    'hook in the first sentence',
-                                    'one clear takeaway',
-                                    'end with a spoken CTA',
-                                    'no bullet points or hashtags',
-                                ],
-                            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-                        ],
+            $result = $this->openRouter->chatJson(
+                [
+                    [
+                        'role' => 'system',
+                        'content' => 'You write spoken-word video scripts for AI avatar presenters. Return JSON only with key "script". The script must sound natural when read aloud, avoid markdown, and stay under 800 characters.',
                     ],
-                ]);
+                    [
+                        'role' => 'user',
+                        'content' => json_encode([
+                            'funnel_name' => $funnel->name,
+                            'topic' => $topic,
+                            'cta_url' => $ctaUrl,
+                            'cta_label' => $ctaLabel,
+                            'webinar_title' => $settings?->webinar_title,
+                            'webinar_description' => $settings?->webinar_description,
+                            'extra_context' => $context['context'] ?? null,
+                            'requirements' => [
+                                '45-60 seconds when spoken (~120-180 words)',
+                                'hook in the first sentence',
+                                'one clear takeaway',
+                                'end with a spoken CTA',
+                                'no bullet points or hashtags',
+                            ],
+                        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    ],
+                ],
+                $this->openRouter->promotionTextModel(),
+                (int) config('promotion.openrouter.timeout', 90),
+                null,
+                0.75,
+                true,
+            );
 
-            if (! $response->successful()) {
-                Log::warning('[Promotion] Video script OpenAI request failed', [
+            if (! $result['ok'] || ! is_array($result['data'])) {
+                Log::warning('[Promotion] Video script OpenRouter request failed', [
                     'topic' => $topic,
-                    'status' => $response->status(),
+                    'error' => $result['error'] ?? 'Unknown error',
                 ]);
 
                 return $this->fallbackVideoScript($funnel, $topic, $ctaUrl, $ctaLabel);
             }
 
-            $content = (string) ($response->json('choices.0.message.content') ?? '');
-            $decoded = json_decode($content, true);
-            $script = trim((string) ($decoded['script'] ?? ''));
+            $script = trim((string) ($result['data']['script'] ?? ''));
 
             if ($script === '') {
                 return $this->fallbackVideoScript($funnel, $topic, $ctaUrl, $ctaLabel);
@@ -242,18 +234,18 @@ class PromotionTextGenerationService
 
         $textBody = implode("\n\n", [
             "Most people struggle to turn attention into real funnel results around {$topic}.",
-            "Here is the shift that changes outcomes: focus your message on one concrete pain point, then show proof with a clear before/after.",
-            "In this campaign, lead with a bold hook, teach one practical move your audience can apply today, and end with a direct next step.",
+            'Here is the shift that changes outcomes: focus your message on one concrete pain point, then show proof with a clear before/after.',
+            'In this campaign, lead with a bold hook, teach one practical move your audience can apply today, and end with a direct next step.',
             "If you want a done-for-you framework, click {$ctaLabel}: {$ctaUrl}",
         ]);
 
         $emailSubject = "Quick win for {$topic} this week";
         $emailBody = implode("\n\n", [
-            "Hi there,",
-            "If your audience is seeing your posts but not taking action, the issue is usually messaging clarity and CTA strength.",
-            "This week, we are using a simple sequence: hook with a pain point, provide one tactical lesson, and invite the reader to the next step.",
+            'Hi there,',
+            'If your audience is seeing your posts but not taking action, the issue is usually messaging clarity and CTA strength.',
+            'This week, we are using a simple sequence: hook with a pain point, provide one tactical lesson, and invite the reader to the next step.',
             "Use this now: {$ctaUrl}",
-            "Talk soon,",
+            'Talk soon,',
             $funnel->name,
         ]);
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Campaign;
 use App\Models\TrackedLink;
+use App\Models\TrackedLinkClick;
 use App\Services\Campaigns\TrackedLinkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -15,8 +16,19 @@ class TrackedLinkController extends Controller
 {
     public function index(): Response
     {
+        $userId = auth()->id();
+        $linkIds = TrackedLink::query()
+            ->where('user_id', $userId)
+            ->whereNull('campaign_id')
+            ->pluck('id');
+
+        $clicksLast7Days = TrackedLinkClick::query()
+            ->whereIn('tracked_link_id', $linkIds)
+            ->where('created_at', '>=', now()->subDays(7))
+            ->count();
+
         $links = TrackedLink::query()
-            ->where('user_id', auth()->id())
+            ->where('user_id', $userId)
             ->whereNull('campaign_id')
             ->latest()
             ->get()
@@ -35,6 +47,7 @@ class TrackedLinkController extends Controller
 
         return Inertia::render('tracked-links/Index', [
             'links' => $links,
+            'clicks_last_7_days' => $clicksLast7Days,
         ]);
     }
 
@@ -116,6 +129,35 @@ class TrackedLinkController extends Controller
             ->orderByDesc('total')
             ->pluck('total', 'device');
 
+        $clicksByDay = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $start = now()->subDays($i)->startOfDay();
+            $end = $start->copy()->endOfDay();
+
+            $clicksByDay[] = [
+                'label' => $start->format('D'),
+                'date' => $start->toDateString(),
+                'clicks' => $trackedLink->clicks()
+                    ->whereBetween('created_at', [$start, $end])
+                    ->count(),
+            ];
+        }
+
+        $clicksLast7Days = array_sum(array_column($clicksByDay, 'clicks'));
+
+        $topReferrers = $trackedLink->clicks()
+            ->selectRaw('referrer, count(*) as total')
+            ->whereNotNull('referrer')
+            ->where('referrer', '!=', '')
+            ->groupBy('referrer')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get()
+            ->map(fn ($row) => [
+                'referrer' => $row->referrer,
+                'total' => (int) $row->total,
+            ]);
+
         return response()->json([
             'link' => [
                 'id' => $trackedLink->id,
@@ -124,10 +166,21 @@ class TrackedLinkController extends Controller
                 'click_count' => $trackedLink->click_count,
                 'public_url' => $trackedLink->publicUrl(),
                 'is_active' => $trackedLink->is_active,
+                'geo_rules' => $trackedLink->geo_rules,
+                'device_rules' => $trackedLink->device_rules,
             ],
+            'summary' => [
+                'clicks_last_7_days' => $clicksLast7Days,
+                'unique_countries' => $trackedLink->clicks()
+                    ->whereNotNull('country')
+                    ->distinct('country')
+                    ->count('country'),
+            ],
+            'clicks_by_day' => $clicksByDay,
             'recent_clicks' => $recentClicks,
             'by_country' => $byCountry,
             'by_device' => $byDevice,
+            'top_referrers' => $topReferrers,
         ]);
     }
 

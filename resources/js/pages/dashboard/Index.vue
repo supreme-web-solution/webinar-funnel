@@ -3,8 +3,10 @@ import { Icon } from '@iconify/vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import DashboardPerformanceChart, { type ChartDay } from '@/components/dashboard/DashboardPerformanceChart.vue';
+import PromoteThisWeekCard from '@/components/growth/PromoteThisWeekCard.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type { MarketplaceOffer } from '@/composables/useMarketplaceSearch';
 
 const props = defineProps<{
     metrics: {
@@ -34,6 +36,11 @@ const props = defineProps<{
         template?: { name: string } | null;
     }>;
     chartDays: ChartDay[];
+    promoteThisWeek?: {
+        top_pick: MarketplaceOffer | null;
+        refreshed_at: string | null;
+        alternates: MarketplaceOffer[];
+    };
 }>();
 
 const page = usePage();
@@ -59,7 +66,7 @@ function weekTrend(current: number, previous: number): { value: number; positive
 const leadTrend = computed(() => weekTrend(props.metrics.recentLeads, props.metrics.previousWeekLeads));
 const viewTrend = computed(() => weekTrend(props.metrics.recentViewCount, props.metrics.previousWeekViewCount));
 
-const recentItems = computed(() => props.recentFunnels.slice(0, 3));
+const recentItems = computed(() => props.recentFunnels.slice(0, 5));
 const topItems = computed(() => props.topFunnels.slice(0, 3));
 
 const quickLinks = [
@@ -112,22 +119,21 @@ function fmtDate(iso: string): string {
 <template>
     <Head title="Dashboard" />
 
-    <div class="mx-auto flex h-[calc(100dvh-3.5rem)] max-w-7xl flex-col gap-3 overflow-hidden p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 pb-6 md:gap-4 md:p-4 md:pb-8">
 
         <!-- Hero -->
-        <section class="relative shrink-0 overflow-hidden rounded-xl border border-teal-200/30 bg-linear-to-r from-slate-900 via-teal-950 to-slate-900 px-4 py-3 md:px-5 md:py-4">
-            <div class="pointer-events-none absolute -right-10 -top-10 size-32 rounded-full bg-teal-500/15 blur-2xl" />
-            <div class="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <section class="hero-banner shrink-0">
+            <div class="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div class="min-w-0">
-                    <p class="text-lg font-bold text-white md:text-xl">
+                    <p class="text-xl font-bold tracking-tight text-white md:text-2xl">
                         {{ greeting }}, {{ userName }}
                     </p>
-                    <p class="mt-0.5 max-w-xl text-xs text-teal-100/65 md:text-sm">
+                    <p class="mt-1 max-w-xl text-sm text-blue-50/90 md:text-[0.9375rem]">
                         Paste one offer — AI builds campaigns, bonuses, emails & traffic for you.
                     </p>
                 </div>
-                <div class="flex shrink-0 flex-wrap gap-2">
-                    <Button as-child variant="brand" size="sm">
+                <div class="relative flex shrink-0 flex-wrap gap-2">
+                    <Button as-child size="sm" class="btn-hero-inverted h-9">
                         <Link href="/campaigns/create">
                             <Icon icon="heroicons:rocket-launch" class="size-3.5" />
                             New Campaign
@@ -143,6 +149,15 @@ function fmtDate(iso: string): string {
             </div>
         </section>
 
+        <!-- Promote this week -->
+        <PromoteThisWeekCard
+            v-if="promoteThisWeek?.top_pick"
+            :top-pick="promoteThisWeek.top_pick"
+            :alternates="promoteThisWeek.alternates"
+            :refreshed-at="promoteThisWeek.refreshed_at"
+            compact
+        />
+
         <!-- KPI strip -->
         <div class="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
             <div
@@ -150,14 +165,14 @@ function fmtDate(iso: string): string {
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
                     <div class="flex items-baseline gap-1.5">
                         <span class="text-xl font-bold leading-none">{{ stat.value }}</span>
-                        <span v-if="stat.trend" class="text-[0.65rem] font-medium" :class="stat.trend.positive ? 'text-teal-600' : 'text-rose-500'">
+                        <span v-if="stat.trend" class="text-[0.65rem] font-medium" :class="stat.trend.positive ? 'text-blue-600' : 'text-rose-500'">
                             {{ stat.trend.positive ? '↑' : '↓' }}{{ stat.trend.value }}%
                         </span>
                         <span v-else class="text-[0.65rem] text-muted-foreground">{{ stat.sub }}</span>
@@ -167,36 +182,34 @@ function fmtDate(iso: string): string {
         </div>
 
         <!-- Bottom — separate cards -->
-        <div class="grid min-h-0 flex-1 gap-3 md:grid-cols-12 md:gap-4">
+        <div class="grid gap-3 md:grid-cols-12 md:gap-4">
 
             <!-- Weekly chart -->
-            <div class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-8">
-                <div class="mb-3 shrink-0">
+            <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-8">
+                <div class="mb-3">
                     <p class="text-sm font-semibold">Weekly performance</p>
                     <p class="text-[0.65rem] text-muted-foreground">
                         {{ weekLeadTotal }} leads · {{ weekViewTotal }} views this week
                     </p>
                 </div>
-                <div class="min-h-0 flex-1">
-                    <DashboardPerformanceChart :days="chartDays" />
-                </div>
+                <DashboardPerformanceChart :days="chartDays" />
             </div>
 
             <!-- Best funnels -->
-            <div class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-4">
-                <div class="mb-3 shrink-0">
+            <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-4 md:min-h-[260px]">
+                <div class="mb-3">
                     <p class="text-sm font-semibold">Best funnels</p>
                     <p class="text-[0.65rem] text-muted-foreground">Ranked by leads captured</p>
                 </div>
 
-                <div v-if="topItems.length === 0" class="flex flex-1 items-center justify-center rounded-lg bg-muted/20 px-3 py-6 text-center">
+                <div v-if="topItems.length === 0" class="flex items-center justify-center rounded-lg bg-muted/20 px-3 py-6 text-center">
                     <div>
                         <Icon icon="heroicons:chart-bar" class="mx-auto mb-2 size-7 text-muted-foreground/40" />
                         <p class="text-xs text-muted-foreground">No lead data yet</p>
                     </div>
                 </div>
 
-                <ul v-else class="flex flex-1 flex-col justify-center gap-3">
+                <ul v-else class="flex flex-col gap-3">
                     <li
                         v-for="(funnel, idx) in topItems"
                         :key="funnel.id"
@@ -204,45 +217,45 @@ function fmtDate(iso: string): string {
                     >
                         <span
                             class="flex size-6 shrink-0 items-center justify-center rounded-full text-[0.65rem] font-bold"
-                            :class="idx === 0 ? 'bg-teal-600 text-white' : 'bg-muted text-muted-foreground'"
+                            :class="idx === 0 ? 'chip-brand-active' : 'bg-muted text-muted-foreground'"
                         >{{ idx + 1 }}</span>
                         <div class="min-w-0 flex-1">
                             <p class="truncate text-xs font-medium">{{ funnel.name }}</p>
                             <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
                                 <div
-                                    class="h-full rounded-full bg-linear-to-r from-teal-600 to-cyan-400"
+                                    class="h-full rounded-full fill-brand-gradient"
                                     :style="{ width: topItems[0].leads_count > 0 ? `${Math.max(8, Math.round((funnel.leads_count / topItems[0].leads_count) * 100))}%` : '0%' }"
                                 />
                             </div>
                         </div>
-                        <span class="shrink-0 text-sm font-bold tabular-nums text-teal-700">{{ funnel.leads_count }}</span>
+                        <span class="shrink-0 text-sm font-bold tabular-nums text-blue-700">{{ funnel.leads_count }}</span>
                     </li>
                 </ul>
             </div>
 
             <!-- Latest activity -->
-            <div class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-8">
-                <div class="mb-3 flex shrink-0 items-center justify-between">
+            <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-8">
+                <div class="mb-3 flex items-center justify-between">
                     <div>
                         <p class="text-sm font-semibold">Latest</p>
                         <p class="text-[0.65rem] text-muted-foreground">Recent campaigns & funnels</p>
                     </div>
-                    <Link href="/campaigns" class="text-[0.65rem] font-medium text-teal-700 hover:underline">All campaigns</Link>
+                    <Link href="/campaigns" class="text-[0.65rem] font-medium text-blue-700 hover:underline">All campaigns</Link>
                 </div>
 
-                <div v-if="recentItems.length === 0" class="flex flex-1 items-center gap-3 rounded-lg bg-muted/15 px-3 py-4">
-                    <Icon icon="heroicons:rocket-launch" class="size-5 shrink-0 text-teal-600/50" />
+                <div v-if="recentItems.length === 0" class="flex items-center gap-3 rounded-lg bg-muted/15 px-3 py-4">
+                    <Icon icon="heroicons:rocket-launch" class="size-5 shrink-0 text-blue-600/50" />
                     <p class="text-xs text-muted-foreground">Start your first campaign to see activity here.</p>
                 </div>
 
-                <ul v-else class="min-h-0 flex-1 space-y-1 overflow-y-auto">
+                <ul v-else class="space-y-1">
                     <li v-for="funnel in recentItems" :key="funnel.id">
                         <Link
                             :href="`/funnels/${funnel.id}/edit`"
-                            class="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-teal-50/60"
+                            class="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-blue-50/60"
                         >
-                            <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                                <Icon icon="heroicons:rocket-launch" class="size-4 text-teal-600" />
+                            <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                                <Icon icon="heroicons:rocket-launch" class="size-4 text-blue-600" />
                             </div>
                             <div class="min-w-0 flex-1">
                                 <p class="truncate text-xs font-medium">{{ funnel.name }}</p>
@@ -251,7 +264,7 @@ function fmtDate(iso: string): string {
                             <Badge
                                 variant="outline"
                                 class="shrink-0 px-1.5 py-0 text-[0.6rem] capitalize"
-                                :class="funnel.status === 'published' ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
+                                :class="funnel.status === 'published' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
                             >
                                 {{ funnel.status }}
                             </Badge>
@@ -261,20 +274,20 @@ function fmtDate(iso: string): string {
             </div>
 
             <!-- Shortcuts -->
-            <div class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-4">
-                <div class="mb-3 shrink-0">
+            <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm md:col-span-4">
+                <div class="mb-3">
                     <p class="text-sm font-semibold">Shortcuts</p>
                     <p class="text-[0.65rem] text-muted-foreground">Jump to a tool</p>
                 </div>
-                <div class="flex flex-1 flex-col gap-2">
+                <div class="flex flex-col gap-2">
                     <Link
                         v-for="link in quickLinks"
                         :key="link.href"
                         :href="link.href"
-                        class="flex items-center gap-2.5 rounded-lg border border-border/50 bg-muted/15 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-teal-300/50 hover:bg-teal-50 hover:text-teal-800"
+                        class="flex items-center gap-2.5 rounded-lg border border-border/50 bg-muted/15 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-blue-300/50 hover:bg-blue-50 hover:text-blue-800"
                     >
-                        <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                            <Icon :icon="link.icon" class="size-3.5 text-teal-600" />
+                        <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                            <Icon :icon="link.icon" class="size-3.5 text-blue-600" />
                         </div>
                         {{ link.label }}
                     </Link>

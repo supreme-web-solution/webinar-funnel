@@ -138,13 +138,13 @@ const totalLabel = computed(() => {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-lg font-bold text-slate-900">{{ b.title }}</h2>
                         <div class="mt-2 flex flex-wrap items-center gap-2">
-                            <span class="rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{{ b.type_label }}</span>
-                            <span class="text-sm font-semibold text-emerald-700">{{ b.value_label }}</span>
+                            <span class="rounded-full bg-brand-gradient px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{{ b.type_label }}</span>
+                            <span class="text-sm font-semibold text-blue-700">{{ b.value_label }}</span>
                         </div>
                         <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ b.description }}</p>
                         <ul v-if="b.features.length" class="mt-3 space-y-1.5">
                             <li v-for="(f, i) in b.features" :key="i" class="flex gap-2 text-sm text-slate-700">
-                                <span class="mt-0.5 text-emerald-600">✓</span>
+                                <span class="mt-0.5 text-blue-600">✓</span>
                                 <span>{{ f }}</span>
                             </li>
                         </ul>

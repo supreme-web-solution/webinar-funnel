@@ -22,6 +22,7 @@ final class ZernioSocialAccountSync
         'tiktok' => 'tiktok',
         'linkedin' => 'linkedin',
         'pinterest' => 'pinterest',
+        'threads' => 'threads',
     ];
 
     public function __construct(

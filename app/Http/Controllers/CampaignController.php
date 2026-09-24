@@ -4,17 +4,21 @@ namespace App\Http\Controllers;
 
 use App\Jobs\Campaigns\RunCampaignGenerationJob;
 use App\Jobs\Campaigns\RunCampaignQuickStartJob;
-use App\Jobs\Campaigns\UploadCampaignSequenceJob;
 use App\Models\Campaign;
 use App\Models\CampaignLead;
 use App\Models\CampaignPage;
+use App\Models\Funnel;
 use App\Models\IntegrationAccount;
+use App\Services\Campaigns\CampaignAutoresponderService;
 use App\Services\Campaigns\CampaignBonusPresenterService;
 use App\Services\Campaigns\CampaignBuilderService;
+use App\Services\Campaigns\CampaignEmailSequenceService;
 use App\Services\Campaigns\CampaignGenerationProgressService;
-use App\Services\Campaigns\CampaignLeadCaptureService;
 use App\Services\Campaigns\CampaignGenerationStateService;
+use App\Services\Campaigns\CampaignLeadCaptureService;
 use App\Services\Campaigns\CampaignLinkResolverService;
+use App\Services\Campaigns\CampaignPublicUrlService;
+use App\Services\Campaigns\CampaignTrafficHubService;
 use App\Services\Campaigns\LeadMagnetPdfService;
 use App\Services\Campaigns\OfferIntakeService;
 use Illuminate\Http\JsonResponse;
@@ -139,7 +143,7 @@ class CampaignController extends Controller
             'offer_data' => $validated['offer_data'] ?? null,
         ]);
 
-        app(\App\Services\Campaigns\CampaignTrafficHubService::class)->ensureTrafficFunnel($campaign);
+        app(CampaignTrafficHubService::class)->ensureTrafficFunnel($campaign);
 
         return to_route('campaigns.edit', $campaign->id);
     }
@@ -180,7 +184,7 @@ class CampaignController extends Controller
             'meta' => ['quick_start' => true, 'source_keyword' => $validated['keyword'] ?? null],
         ]);
 
-        app(\App\Services\Campaigns\CampaignTrafficHubService::class)->ensureTrafficFunnel($campaign);
+        app(CampaignTrafficHubService::class)->ensureTrafficFunnel($campaign);
 
         if ($this->generationProgress->isRunning($campaign)) {
             return to_route('campaigns.edit', $campaign->id);
@@ -205,15 +209,27 @@ class CampaignController extends Controller
             'pages',
             'bonuses',
             'emails',
+            'integrations.integrationAccount',
             'funnels:id,campaign_id,name,slug,status',
             'trackedLinks',
         ]);
 
         $username = $campaign->user->username ?? 'user-'.$campaign->user_id;
-        $leadMagnet = $campaign->pages->firstWhere('page_type', 'lead_magnet');
         $this->generationState->syncFromContent($campaign);
+        $leadMagnet = $campaign->pages()->where('page_type', 'lead_magnet')->first();
         $this->repairThankYouDownloadUrl($campaign, $leadMagnet);
         $this->reconcileGenerationProgress($campaign, $leadMagnet);
+
+        // Always re-hydrate relations after sync/reconcile so Inertia gets fresh content.
+        $campaign->refresh()->load([
+            'pages',
+            'bonuses',
+            'emails',
+            'integrations.integrationAccount',
+            'funnels:id,campaign_id,name,slug,status',
+            'trackedLinks',
+        ]);
+        $leadMagnet = $campaign->pages->firstWhere('page_type', 'lead_magnet');
 
         return Inertia::render('campaigns/Wizard', [
             'campaign' => $this->campaignPayload($campaign, $username, $leadMagnet),
@@ -633,8 +649,8 @@ class CampaignController extends Controller
     {
         $this->authorizeCampaign($campaign);
 
-        $leadMagnet = $campaign->pages()->where('page_type', 'lead_magnet')->first();
         $this->generationState->syncFromContent($campaign);
+        $leadMagnet = $campaign->pages()->where('page_type', 'lead_magnet')->first();
         $this->reconcileGenerationProgress($campaign, $leadMagnet);
 
         $generation = $this->generationProgress->get($campaign);
@@ -646,12 +662,7 @@ class CampaignController extends Controller
     {
         $this->authorizeCampaign($campaign);
 
-        $validated = $request->validate([
-            'integration_account_id' => ['nullable', 'integer', 'exists:integration_accounts,id'],
-            'esp_tag' => ['nullable', 'string', 'max:120'],
-        ]);
-
-        app(\App\Services\Campaigns\CampaignTrafficHubService::class)->ensureTrafficFunnel($campaign);
+        app(CampaignTrafficHubService::class)->ensureTrafficFunnel($campaign);
 
         $campaign->update([
             'status' => 'published',
@@ -660,30 +671,60 @@ class CampaignController extends Controller
         ]);
 
         if ($campaign->type === Campaign::TYPE_WEBINAR) {
+            $builder = app(CampaignBuilderService::class);
+            $offer = $campaign->offer_data ?? ['product_name' => $campaign->name];
+            if ($builder->primaryOptinFunnel($campaign) === null || $builder->primaryWebinarFunnel($campaign) === null) {
+                $builder->buildWebinarFunnels($campaign->fresh(), $offer);
+            }
+
             $campaign->funnels()->update(['status' => 'published', 'published_at' => now()]);
         } else {
             $this->leadCapture->ensureOptinFunnel($campaign->fresh());
         }
 
-        $toastMessage = 'Campaign published.';
+        app(CampaignAutoresponderService::class)->syncToLeadFunnel($campaign->fresh());
 
-        if (! empty($validated['integration_account_id'])) {
-            $account = IntegrationAccount::query()
-                ->where('id', $validated['integration_account_id'])
-                ->where('user_id', auth()->id())
-                ->first();
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Campaign published.']);
 
-            if ($account && $campaign->emails()->exists()) {
-                UploadCampaignSequenceJob::dispatch(
-                    $campaign->id,
-                    $account->id,
-                    $validated['esp_tag'] ?? null,
-                );
-                $toastMessage = 'Campaign published — uploading email swipes to '.$account->name.'…';
-            }
-        }
+        return back();
+    }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => $toastMessage]);
+    public function updateAutoresponders(Request $request, Campaign $campaign): RedirectResponse
+    {
+        $this->authorizeCampaign($campaign);
+
+        $validated = $request->validate([
+            'integrations' => ['nullable', 'array'],
+            'integrations.*.integration_account_id' => ['required', 'integer'],
+            'integrations.*.provider_list_config' => ['nullable', 'array'],
+            'integrations.*.enabled' => ['nullable', 'boolean'],
+        ]);
+
+        app(CampaignAutoresponderService::class)->save(
+            $campaign,
+            $validated['integrations'] ?? [],
+        );
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Autoresponder settings saved.']);
+
+        return back();
+    }
+
+    public function updateEmailSequence(Request $request, Campaign $campaign): RedirectResponse
+    {
+        $this->authorizeCampaign($campaign);
+
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'schedules' => ['nullable', 'array'],
+            'schedules.*.campaign_email_id' => ['required', 'integer'],
+            'schedules.*.delay_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'schedules.*.send_time' => ['nullable', 'string', 'max:5'],
+        ]);
+
+        app(CampaignEmailSequenceService::class)->saveConfig($campaign, $validated);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => $validated['enabled'] ? 'Auto-email sequence enabled.' : 'Auto-email sequence saved (disabled).']);
 
         return back();
     }
@@ -760,9 +801,15 @@ class CampaignController extends Controller
         $gen = $this->generationProgress->get($campaign) ?? [];
         $step = (string) ($gen['step'] ?? '');
 
+        // Content may be saved before the job flips status to "completed".
+        // Mark completed (not idle) so the wizard poll reloads campaign props.
         if ($this->stepGenerationAlreadyComplete($campaign, $leadMagnet, $step)
             || $this->generationState->isGenerated($campaign, $step)) {
-            $this->generationProgress->idle($campaign);
+            $this->generationProgress->complete(
+                $campaign,
+                $this->reconcileCompleteMessage($step),
+                ['detail' => 'Synced from saved campaign content']
+            );
 
             return;
         }
@@ -777,6 +824,22 @@ class CampaignController extends Controller
                 );
             }
         }
+    }
+
+    protected function reconcileCompleteMessage(string $step): string
+    {
+        return match ($step) {
+            'knowledge' => 'Knowledge base ready',
+            'lead_magnet_suggest' => 'Lead magnet ideas ready',
+            'lead_magnet' => 'Lead magnet ready',
+            'pages' => 'Funnel pages ready',
+            'bonuses_suggest' => 'Bonus ideas ready',
+            'bonuses' => 'Bonus ready',
+            'emails' => 'Email swipes ready',
+            'webinar' => 'Webinar funnels ready',
+            'quick_start' => 'Campaign ready',
+            default => 'Generation complete',
+        };
     }
 
     /** @deprecated Use reconcileGenerationProgress */
@@ -898,6 +961,9 @@ class CampaignController extends Controller
             'bonus_suggestions' => $campaign->meta['bonus_suggestions'] ?? [],
             'bonus_type' => $campaign->meta['bonus_type'] ?? null,
             'esp_upload' => $campaign->meta['esp_upload'] ?? null,
+            'autoresponders' => app(CampaignAutoresponderService::class)->payloadForCampaign($campaign),
+            'email_sequence' => app(CampaignEmailSequenceService::class)->configForCampaign($campaign),
+            'email_sequence_stats' => app(CampaignEmailSequenceService::class)->statsForCampaign($campaign),
             'quick_start' => (bool) ($campaign->meta['quick_start'] ?? false),
             'generation' => $campaign->meta['generation'] ?? null,
             'generation_state' => $campaign->generation_state ?? [],
@@ -947,7 +1013,7 @@ class CampaignController extends Controller
      * @return array<string, mixed>
      */
     protected function funnelPayloadRow(
-        \App\Models\Funnel $f,
+        Funnel $f,
         string $username,
         Campaign $campaign,
         ?string $role = null,
@@ -981,9 +1047,11 @@ class CampaignController extends Controller
      */
     protected function publicPagesForPayload(Campaign $campaign, string $username): array
     {
+        $urls = app(CampaignPublicUrlService::class);
+
         $base = [
-            'squeeze' => route('public.campaign.page', ['username' => $username, 'slug' => $campaign->slug, 'page' => 'squeeze']),
-            'bonus' => route('public.campaign.page', ['username' => $username, 'slug' => $campaign->slug, 'page' => 'bonus']),
+            'squeeze' => $urls->pageUrl($campaign, $username, 'squeeze'),
+            'bonus' => $urls->pageUrl($campaign, $username, 'bonus'),
         ];
 
         if ($campaign->type === Campaign::TYPE_WEBINAR) {
@@ -1009,8 +1077,8 @@ class CampaignController extends Controller
 
         return [
             ...$base,
-            'thankyou' => route('public.campaign.page', ['username' => $username, 'slug' => $campaign->slug, 'page' => 'thankyou']),
-            'quiz' => route('public.campaign.page', ['username' => $username, 'slug' => $campaign->slug, 'page' => 'quiz']),
+            'thankyou' => $urls->pageUrl($campaign, $username, 'thankyou'),
+            'quiz' => $urls->pageUrl($campaign, $username, 'quiz'),
         ];
     }
 }

@@ -3,10 +3,12 @@
 namespace Tests\Feature\Funnels;
 
 use App\Models\Funnel;
+use App\Models\FunnelPromotionAsset;
 use App\Models\FunnelPromotionPost;
 use App\Models\FunnelSetting;
 use App\Models\SocialAccount;
 use App\Models\Template;
+use App\Models\TemplateVersion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -94,14 +96,14 @@ class FunnelPromotionFlowTest extends TestCase
     public function test_user_can_generate_topic_suggestions(): void
     {
         config([
-            'services.openai.api_key' => '',
+            'services.openrouter.api_key' => '',
             'promotion.default_sequence_size' => 10,
         ]);
 
         $user = User::factory()->create();
         $funnel = $this->makeFunnel($user);
 
-        \App\Models\TemplateVersion::query()->create([
+        TemplateVersion::query()->create([
             'template_id' => $funnel->template_id,
             'version' => 1,
             'is_current' => true,
@@ -211,11 +213,11 @@ class FunnelPromotionFlowTest extends TestCase
             'timezone' => 'UTC',
         ]);
 
-        $asset = \App\Models\FunnelPromotionAsset::query()->create([
+        $asset = FunnelPromotionAsset::query()->create([
             'promotion_post_id' => $post->id,
-            'asset_type' => \App\Models\FunnelPromotionAsset::TYPE_IMAGE,
+            'asset_type' => FunnelPromotionAsset::TYPE_IMAGE,
             'provider' => 'openai_image',
-            'status' => \App\Models\FunnelPromotionAsset::STATUS_READY,
+            'status' => FunnelPromotionAsset::STATUS_READY,
             'url' => 'https://example.com/image.png',
         ]);
         $post->update(['primary_asset_id' => $asset->id]);
@@ -238,6 +240,75 @@ class FunnelPromotionFlowTest extends TestCase
         $this->assertSame('Original post (copy)', $copy->topic);
         $this->assertNotNull($copy->primary_asset_id);
         $this->assertNotSame($post->primary_asset_id, $copy->primary_asset_id);
+    }
+
+    public function test_duplicate_preserves_carousel_format_and_all_slide_assets(): void
+    {
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+
+        $slides = [
+            ['headline' => 'Hook slide', 'body' => 'Body one', 'image_url' => 'https://example.com/slide-1.png'],
+            ['headline' => 'Tip slide', 'body' => 'Body two', 'image_url' => 'https://example.com/slide-2.png'],
+            ['headline' => 'CTA slide', 'body' => 'Body three', 'image_url' => 'https://example.com/slide-3.png'],
+        ];
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'LinkedIn carousel',
+            'content_type' => FunnelPromotionPost::TYPE_IMAGE,
+            'platforms' => ['linkedin'],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_PUBLISHED,
+            'text_body' => 'Carousel caption.',
+            'timezone' => 'UTC',
+            'generation_context' => ['content_format' => 'linkedin_pdf_carousel', 'include_text' => true],
+            'metadata' => [
+                'format_key' => 'linkedin_pdf_carousel',
+                'format_payload' => [
+                    'generator' => 'carousel',
+                    'slides' => $slides,
+                    'slide_count' => 3,
+                ],
+            ],
+        ]);
+
+        $firstAssetId = null;
+        foreach ($slides as $index => $slide) {
+            $asset = FunnelPromotionAsset::query()->create([
+                'promotion_post_id' => $post->id,
+                'asset_type' => FunnelPromotionAsset::TYPE_IMAGE,
+                'provider' => 'text_template',
+                'status' => FunnelPromotionAsset::STATUS_READY,
+                'url' => $slide['image_url'],
+                'meta' => ['slide_index' => $index],
+            ]);
+            if ($index === 0) {
+                $firstAssetId = $asset->id;
+            }
+        }
+        $post->update(['primary_asset_id' => $firstAssetId]);
+
+        $response = $this->actingAs($user)->post(
+            route('funnels.promotion.posts.duplicate', [$funnel, $post->fresh('assets')])
+        );
+
+        $response->assertRedirect();
+
+        $copy = FunnelPromotionPost::query()
+            ->where('funnel_id', $funnel->id)
+            ->where('id', '!=', $post->id)
+            ->with('assets')
+            ->first();
+
+        $this->assertNotNull($copy);
+        $this->assertSame(FunnelPromotionPost::STATUS_READY, $copy->status);
+        $this->assertSame('linkedin_pdf_carousel', data_get($copy->metadata, 'format_key'));
+        $this->assertSame('carousel', data_get($copy->metadata, 'format_payload.generator'));
+        $this->assertCount(3, data_get($copy->metadata, 'format_payload.slides', []));
+        $this->assertSame('https://example.com/slide-2.png', data_get($copy->metadata, 'format_payload.slides.1.image_url'));
+        $this->assertCount(3, $copy->assets);
     }
 
     public function test_publish_waits_for_instagram_platform_post_id(): void
@@ -314,11 +385,11 @@ class FunnelPromotionFlowTest extends TestCase
             'timezone' => 'UTC',
         ]);
 
-        $asset = \App\Models\FunnelPromotionAsset::query()->create([
+        $asset = FunnelPromotionAsset::query()->create([
             'promotion_post_id' => $post->id,
-            'asset_type' => \App\Models\FunnelPromotionAsset::TYPE_IMAGE,
+            'asset_type' => FunnelPromotionAsset::TYPE_IMAGE,
             'provider' => 'openai_image',
-            'status' => \App\Models\FunnelPromotionAsset::STATUS_READY,
+            'status' => FunnelPromotionAsset::STATUS_READY,
             'url' => 'https://example.com/image.png',
         ]);
         $post->update(['primary_asset_id' => $asset->id]);
@@ -394,11 +465,11 @@ class FunnelPromotionFlowTest extends TestCase
             'timezone' => 'UTC',
         ]);
 
-        $asset = \App\Models\FunnelPromotionAsset::query()->create([
+        $asset = FunnelPromotionAsset::query()->create([
             'promotion_post_id' => $post->id,
-            'asset_type' => \App\Models\FunnelPromotionAsset::TYPE_IMAGE,
+            'asset_type' => FunnelPromotionAsset::TYPE_IMAGE,
             'provider' => 'openai_image',
-            'status' => \App\Models\FunnelPromotionAsset::STATUS_READY,
+            'status' => FunnelPromotionAsset::STATUS_READY,
             'url' => 'https://example.com/image.png',
         ]);
         $post->update(['primary_asset_id' => $asset->id]);
@@ -472,11 +543,11 @@ class FunnelPromotionFlowTest extends TestCase
             'timezone' => 'UTC',
         ]);
 
-        $asset = \App\Models\FunnelPromotionAsset::query()->create([
+        $asset = FunnelPromotionAsset::query()->create([
             'promotion_post_id' => $post->id,
-            'asset_type' => \App\Models\FunnelPromotionAsset::TYPE_IMAGE,
+            'asset_type' => FunnelPromotionAsset::TYPE_IMAGE,
             'provider' => 'openai_image',
-            'status' => \App\Models\FunnelPromotionAsset::STATUS_READY,
+            'status' => FunnelPromotionAsset::STATUS_READY,
             'url' => 'https://example.com/image.png',
         ]);
         $post->update(['primary_asset_id' => $asset->id]);
@@ -545,11 +616,11 @@ class FunnelPromotionFlowTest extends TestCase
             'timezone' => 'UTC',
         ]);
 
-        $asset = \App\Models\FunnelPromotionAsset::query()->create([
+        $asset = FunnelPromotionAsset::query()->create([
             'promotion_post_id' => $post->id,
-            'asset_type' => \App\Models\FunnelPromotionAsset::TYPE_VIDEO,
+            'asset_type' => FunnelPromotionAsset::TYPE_VIDEO,
             'provider' => 'did',
-            'status' => \App\Models\FunnelPromotionAsset::STATUS_READY,
+            'status' => FunnelPromotionAsset::STATUS_READY,
             'url' => 'https://example.com/video.mp4',
         ]);
         $post->update(['primary_asset_id' => $asset->id]);
@@ -617,6 +688,100 @@ class FunnelPromotionFlowTest extends TestCase
             'cta_url' => 'https://example.com/offer',
             'cta_label' => 'Join now',
             'timezone' => 'UTC',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('funnels.promotion.posts.publish', [$funnel, $post]), [
+            'sync' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('funnel_promotion_posts', [
+            'id' => $post->id,
+            'status' => FunnelPromotionPost::STATUS_PUBLISHED,
+        ]);
+    }
+
+    public function test_publish_twitter_thread_uses_zernio_thread_items(): void
+    {
+        config([
+            'services.zernio.base_url' => 'https://zernio.test/api',
+            'services.zernio.api_key' => 'test_key',
+            'promotion.zernio.default_publish_endpoint' => '/v1/posts',
+            'promotion.zernio.twitter_thread_publish_mode' => 'chain',
+            'promotion.zernio.twitter_thread_delay_ms' => 0,
+        ]);
+
+        $chainIndex = 0;
+        $chainIds = ['tw_thread_root', 'tw_thread_2', 'tw_thread_3'];
+
+        Http::fake([
+            'https://zernio.test/api/v1/posts' => function ($request) use (&$chainIndex, $chainIds) {
+                $payload = $request->data();
+                $this->assertArrayNotHasKey('linkUrl', $payload);
+                $this->assertArrayHasKey('content', $payload);
+                $this->assertArrayNotHasKey('threadItems', $payload['platforms'][0]['platformSpecificData'] ?? []);
+
+                $externalId = $chainIds[$chainIndex] ?? 'tw_thread_extra';
+                if ($chainIndex > 0) {
+                    $this->assertSame(
+                        $chainIds[$chainIndex - 1],
+                        $payload['platforms'][0]['platformSpecificData']['replyToTweetId'] ?? null,
+                    );
+                } else {
+                    $this->assertArrayNotHasKey(
+                        'platformSpecificData',
+                        $payload['platforms'][0],
+                    );
+                }
+
+                $chainIndex++;
+
+                return Http::response([
+                    'post' => [
+                        '_id' => 'post_tw_thread_'.$chainIndex,
+                        'platforms' => [[
+                            'platform' => 'twitter',
+                            'platformPostId' => $externalId,
+                            'platformPostUrl' => 'https://twitter.com/example/status/'.$externalId,
+                            'status' => 'published',
+                        ]],
+                    ],
+                ], 201);
+            },
+        ]);
+
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'platform' => 'twitter',
+            'platform_username' => 'acct',
+            'zernio_account_id' => 'acct_tw',
+            'daily_post_limit' => 50,
+            'posts_today' => 0,
+        ]);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'Thread topic',
+            'content_type' => FunnelPromotionPost::TYPE_TEXT,
+            'platforms' => ['twitter'],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_READY,
+            'text_body' => "Tweet one hook\n\n---\n\nTweet two value\n\n---\n\nTweet three CTA",
+            'timezone' => 'UTC',
+            'metadata' => [
+                'format_key' => 'x_thread',
+                'format_payload' => [
+                    'generator' => 'thread',
+                    'thread_parts' => [
+                        'Tweet one hook',
+                        'Tweet two value',
+                        'Tweet three CTA',
+                    ],
+                ],
+            ],
         ]);
 
         $response = $this->actingAs($user)->post(route('funnels.promotion.posts.publish', [$funnel, $post]), [

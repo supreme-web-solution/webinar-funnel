@@ -89,6 +89,16 @@ class Campaign extends Model
         return $this->hasMany(CampaignLead::class);
     }
 
+    public function integrations(): HasMany
+    {
+        return $this->hasMany(CampaignIntegration::class);
+    }
+
+    public function emailSends(): HasMany
+    {
+        return $this->hasMany(CampaignEmailSend::class);
+    }
+
     protected static function booted(): void
     {
         static::deleting(function (Campaign $campaign): void {

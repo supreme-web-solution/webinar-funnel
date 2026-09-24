@@ -57,14 +57,14 @@ class TrackedLinkService
         $device = $this->detectDevice((string) $request->userAgent());
         $country = strtoupper((string) ($request->header('CF-IPCountry') ?: $request->input('country') ?: ''));
 
-        $deviceRules = is_array($link->device_rules) ? $link->device_rules : [];
-        if ($deviceRules !== [] && isset($deviceRules[$device]) && is_string($deviceRules[$device]) && $deviceRules[$device] !== '') {
-            $destination = $deviceRules[$device];
-        }
-
         $geoRules = is_array($link->geo_rules) ? $link->geo_rules : [];
         if ($country !== '' && $geoRules !== [] && isset($geoRules[$country]) && is_string($geoRules[$country]) && $geoRules[$country] !== '') {
             $destination = $geoRules[$country];
+        }
+
+        $deviceRules = is_array($link->device_rules) ? $link->device_rules : [];
+        if ($deviceRules !== [] && isset($deviceRules[$device]) && is_string($deviceRules[$device]) && $deviceRules[$device] !== '') {
+            $destination = $deviceRules[$device];
         }
 
         TrackedLinkClick::query()->create([

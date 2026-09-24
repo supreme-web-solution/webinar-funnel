@@ -18,7 +18,7 @@ class PromotionTopicSuggestionServiceTest extends TestCase
 
     public function test_fallback_topics_use_template_bullets_not_generic_webinar_title(): void
     {
-        config(['services.openai.api_key' => '']);
+        config(['services.openrouter.api_key' => '']);
 
         $user = User::factory()->create();
         $template = Template::query()->create([

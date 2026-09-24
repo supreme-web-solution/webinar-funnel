@@ -78,7 +78,7 @@ function wizardProgress(step: number): number {
 <template>
     <Head title="Campaigns" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4">
 
         <!-- Header -->
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -111,8 +111,8 @@ function wizardProgress(step: number): number {
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -137,8 +137,8 @@ function wizardProgress(step: number): number {
                     type="button"
                     class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
                     :class="filter === tab.key
-                        ? 'bg-teal-600 text-white shadow-sm'
-                        : 'border border-border/60 bg-muted/20 text-muted-foreground hover:bg-teal-50 hover:text-teal-800'"
+                        ? 'chip-brand-active'
+                        : 'border border-border/60 bg-muted/20 text-muted-foreground hover:bg-blue-50 hover:text-blue-800'"
                     @click="filter = tab.key"
                 >
                     {{ tab.label }}
@@ -149,10 +149,10 @@ function wizardProgress(step: number): number {
         <!-- Empty state -->
         <div
             v-if="filtered.length === 0"
-            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-teal-200/60 bg-white px-6 py-14 text-center shadow-sm"
+            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-blue-200/60 bg-white px-6 py-14 text-center shadow-sm"
         >
-            <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                <Icon icon="heroicons:rocket-launch" class="size-7 text-teal-600/60" />
+            <div class="flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                <Icon icon="heroicons:rocket-launch" class="size-7 text-blue-600/60" />
             </div>
             <div>
                 <p class="font-semibold text-foreground">No campaigns yet</p>
@@ -175,41 +175,41 @@ function wizardProgress(step: number): number {
             <article
                 v-for="c in filtered"
                 :key="c.id"
-                class="group overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-teal-200/60 hover:shadow-md"
+                class="group overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-blue-200/60 hover:shadow-md"
             >
                 <div class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="flex min-w-0 flex-1 items-start gap-3">
                         <div
-                            class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10"
+                            class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10"
                         >
-                            <Icon :icon="typeIcon(c.type)" class="size-5 text-teal-600" />
+                            <Icon :icon="typeIcon(c.type)" class="size-5 text-blue-600" />
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center gap-2">
                                 <Link
                                     :href="`/campaigns/${c.id}/edit`"
-                                    class="truncate text-sm font-semibold text-foreground hover:text-teal-800 hover:underline"
+                                    class="truncate text-sm font-semibold text-foreground hover:text-blue-800 hover:underline"
                                 >
                                     {{ c.name }}
                                 </Link>
                                 <Badge
                                     variant="outline"
                                     class="capitalize text-[0.6rem]"
-                                    :class="c.type === 'webinar' ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-teal-200 bg-teal-50 text-teal-700'"
+                                    :class="c.type === 'webinar' ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-blue-200 bg-blue-50 text-blue-700'"
                                 >
                                     {{ c.type }}
                                 </Badge>
                                 <Badge
                                     variant="outline"
                                     class="capitalize text-[0.6rem]"
-                                    :class="c.status === 'published' ? 'border-teal-200 bg-teal-50 text-teal-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
+                                    :class="c.status === 'published' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-amber-200 bg-amber-50 text-amber-700'"
                                 >
                                     {{ c.status }}
                                 </Badge>
                                 <Badge
                                     v-if="c.knowledge_ready"
                                     variant="outline"
-                                    class="border-cyan-200 bg-cyan-50 text-[0.6rem] text-cyan-700"
+                                    class="border-blue-200 bg-blue-50 text-[0.6rem] text-blue-700"
                                 >
                                     Knowledge ready
                                 </Badge>
@@ -220,7 +220,7 @@ function wizardProgress(step: number): number {
                             <div class="mt-2 flex max-w-xs items-center gap-2">
                                 <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                                     <div
-                                        class="h-full rounded-full bg-linear-to-r from-teal-600 to-cyan-400 transition-all"
+                                        class="h-full rounded-full fill-brand-gradient transition-all"
                                         :style="{ width: `${wizardProgress(c.wizard_step)}%` }"
                                     />
                                 </div>
@@ -230,22 +230,22 @@ function wizardProgress(step: number): number {
                             <!-- Asset chips -->
                             <div class="mt-2 flex flex-wrap gap-1.5">
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
-                                    <Icon icon="heroicons:gift" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:gift" class="size-3 text-blue-600" />
                                     {{ c.bonuses_count }} bonuses
                                 </span>
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
-                                    <Icon icon="heroicons:envelope" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:envelope" class="size-3 text-blue-600" />
                                     {{ c.emails_count }} emails
                                 </span>
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">
-                                    <Icon icon="heroicons:shield-check" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:shield-check" class="size-3 text-blue-600" />
                                     {{ c.tracked_links_count }} links
                                 </span>
                                 <span
                                     v-if="c.type === 'webinar'"
                                     class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground"
                                 >
-                                    <Icon icon="heroicons:video-camera" class="size-3 text-teal-600" />
+                                    <Icon icon="heroicons:video-camera" class="size-3 text-blue-600" />
                                     {{ c.funnels_count }} funnels
                                 </span>
                                 <span class="inline-flex items-center gap-1 rounded-md bg-muted/40 px-2 py-0.5 text-[0.6rem] text-muted-foreground">

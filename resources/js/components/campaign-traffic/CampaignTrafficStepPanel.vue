@@ -23,7 +23,7 @@ const cards = computed(() => {
             desc: 'Facebook & Meta via Zernio',
             href: `${base}/ads`,
             icon: 'heroicons:currency-dollar',
-            color: 'bg-emerald-100 text-emerald-700',
+            color: 'bg-blue-100 text-blue-700',
         });
     }
 

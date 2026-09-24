@@ -4,6 +4,8 @@ use App\Http\Controllers\BonusLibraryController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CampaignTrafficController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\CommandCenterController;
+use App\Http\Controllers\ContentEmployeeController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FunnelAdCampaignController;
 use App\Http\Controllers\FunnelAiSourceController;
@@ -21,24 +23,39 @@ use App\Http\Controllers\MentionController;
 use App\Http\Controllers\PromotionCalendarController;
 use App\Http\Controllers\PublicCampaignController;
 use App\Http\Controllers\PublicFunnelController;
+use App\Http\Controllers\StandaloneTrafficController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TrackedLinkController;
 use App\Http\Controllers\TrafficHubController;
 use App\Http\Controllers\TutorialController;
 use App\Http\Controllers\UserManagementController;
-use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\ZernioInboxWebhookController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
 Route::post('/ipn/jvzoo', [JVZooWebhookController::class, 'handle'])->name('ipn.jvzoo');
+Route::post('/webhooks/zernio/inbox', ZernioInboxWebhookController::class)
+    ->middleware('throttle:120,1')
+    ->name('webhooks.zernio.inbox');
 
-Route::get('/', function () {
-    return Auth::check()
-        ? redirect()->route('dashboard')
-        : redirect()->route('login');
-})->name('home');
+Route::get('/', [PublicCampaignController::class, 'homeOrDomainRoot'])->name('home');
 
-$reservedPublicPrefix = '^(?!(tutorial|dashboard|templates|funnels|campaigns|bonuses|tracked-links|growth|r|integrations|settings|users|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads)$)[A-Za-z0-9_-]+';
+Route::middleware('custom-domain')->group(function () {
+    Route::get('/p/{page}', [PublicCampaignController::class, 'domainPage'])
+        ->where('page', 'squeeze|thankyou|quiz|bonus')
+        ->name('public.domain.page');
+    Route::post('/campaign-optin', [PublicCampaignController::class, 'domainOptin'])
+        ->middleware('throttle:public-optin')
+        ->name('public.domain.optin');
+    Route::get('/bonus/{bonusUuid}', [PublicCampaignController::class, 'domainBonusViewer'])
+        ->where('bonusUuid', '[0-9a-f-]{36}')
+        ->name('public.domain.bonus.viewer');
+    Route::get('/bonus/{bonusUuid}/download', [PublicCampaignController::class, 'domainBonusDownload'])
+        ->where('bonusUuid', '[0-9a-f-]{36}')
+        ->name('public.domain.bonus.download');
+});
+
+$reservedPublicPrefix = '^(?!(tutorial|dashboard|templates|funnels|campaigns|bonuses|tracked-links|growth|r|integrations|settings|users|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads|command-center|webhooks)$)[A-Za-z0-9_-]+';
 
 // Route::inertia('/', 'Welcome', [
 //     'canRegister' => Features::enabled(Features::registration()),
@@ -47,6 +64,19 @@ $reservedPublicPrefix = '^(?!(tutorial|dashboard|templates|funnels|campaigns|bon
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tutorial', TutorialController::class)->name('tutorial');
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+    Route::prefix('command-center')->name('command-center.')->group(function () {
+        Route::get('/', [CommandCenterController::class, 'index'])->name('index');
+        Route::get('state', [CommandCenterController::class, 'state'])->name('state');
+        Route::post('chat', [CommandCenterController::class, 'chat'])
+            ->middleware('throttle:command-center-chat')
+            ->name('chat');
+        Route::post('approvals/{approval}/launch', [CommandCenterController::class, 'launch'])->name('approvals.launch');
+        Route::post('approvals/{approval}/reject', [CommandCenterController::class, 'reject'])->name('approvals.reject');
+        Route::patch('settings', [CommandCenterController::class, 'updateSettings'])->name('settings.update');
+        Route::post('whatsapp/pairing', [CommandCenterController::class, 'pairing'])->name('whatsapp.pairing');
+        Route::post('clear', [CommandCenterController::class, 'clear'])->name('clear');
+    });
 
     Route::get('templates', [TemplateController::class, 'index'])->name('templates.index');
 
@@ -74,6 +104,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('{campaign}/generate-emails', [CampaignController::class, 'generateEmails'])->name('generate-emails');
         Route::post('{campaign}/generate-webinar-funnels', [CampaignController::class, 'generateWebinarFunnels'])->name('generate-webinar-funnels');
         Route::delete('{campaign}', [CampaignController::class, 'destroy'])->name('destroy');
+        Route::patch('{campaign}/autoresponders', [CampaignController::class, 'updateAutoresponders'])->name('autoresponders.update');
+        Route::patch('{campaign}/email-sequence', [CampaignController::class, 'updateEmailSequence'])->name('email-sequence.update');
         Route::post('{campaign}/publish', [CampaignController::class, 'publish'])->name('publish');
 
         Route::prefix('{campaign}/traffic')->name('traffic.')->group(function () {
@@ -82,10 +114,65 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('promotion/posts', [CampaignTrafficController::class, 'promotionPosts'])->name('promotion.posts');
             Route::get('promotion/calendar', [CampaignTrafficController::class, 'promotionCalendar'])->name('promotion.calendar');
             Route::get('ads', [CampaignTrafficController::class, 'ads'])->middleware('paid-ads')->name('ads');
+
+            Route::post('keywords', [CampaignTrafficController::class, 'storeKeyword'])->name('keywords.store');
+            Route::patch('keywords/{keyword}', [CampaignTrafficController::class, 'updateKeyword'])->name('keywords.update');
+            Route::delete('keywords/{keyword}', [CampaignTrafficController::class, 'destroyKeyword'])->name('keywords.destroy');
+            Route::post('keywords/{keyword}/fetch', [CampaignTrafficController::class, 'fetchKeyword'])->name('keywords.fetch');
+            Route::post('mentions/{mention}/draft-reply', [CampaignTrafficController::class, 'draftMentionReply'])->name('mentions.draft-reply');
+            Route::patch('settings', [CampaignTrafficController::class, 'updateSettings'])->name('settings.update');
+
+            Route::middleware('paid-ads')->prefix('ads')->name('ads.')->group(function () {
+                Route::post('/', [CampaignTrafficController::class, 'storeAd'])->name('store');
+                Route::patch('{adCampaign}', [CampaignTrafficController::class, 'updateAd'])->name('update');
+                Route::post('{adCampaign}/duplicate', [CampaignTrafficController::class, 'duplicateAd'])->name('duplicate');
+                Route::delete('{adCampaign}', [CampaignTrafficController::class, 'destroyAd'])->name('destroy');
+                Route::post('{adCampaign}/research', [CampaignTrafficController::class, 'researchAd'])->name('research');
+                Route::post('{adCampaign}/creatives/generate', [CampaignTrafficController::class, 'generateAdCreatives'])->name('creatives.generate');
+                Route::post('{adCampaign}/creatives', [CampaignTrafficController::class, 'storeAdCreative'])->name('creatives.store');
+                Route::patch('{adCampaign}/creatives/{creative}', [CampaignTrafficController::class, 'updateAdCreative'])->name('creatives.update');
+                Route::delete('{adCampaign}/creatives/{creative}', [CampaignTrafficController::class, 'destroyAdCreative'])->name('creatives.destroy');
+                Route::post('{adCampaign}/creatives/{creative}/image', [CampaignTrafficController::class, 'generateAdCreativeImage'])->name('creatives.image');
+                Route::post('{adCampaign}/creatives/{creative}/toggle', [CampaignTrafficController::class, 'toggleAdCreative'])->name('creatives.toggle');
+                Route::post('{adCampaign}/launch', [CampaignTrafficController::class, 'launchAd'])->name('launch');
+                Route::post('{adCampaign}/sync', [CampaignTrafficController::class, 'syncAd'])->name('sync');
+            });
         });
     });
 
     Route::get('traffic', [TrafficHubController::class, 'index'])->name('traffic.index');
+    Route::patch('traffic/profile', [TrafficHubController::class, 'updateProfile'])->name('traffic.profile.update');
+
+    Route::prefix('traffic/workspace')->name('traffic.workspace.')->group(function () {
+        Route::get('/', [StandaloneTrafficController::class, 'index'])->name('index');
+        Route::get('free', [StandaloneTrafficController::class, 'freeTraffic'])->name('free');
+        Route::get('promotion/posts', [StandaloneTrafficController::class, 'promotionPosts'])->name('promotion.posts');
+        Route::get('promotion/calendar', [StandaloneTrafficController::class, 'promotionCalendar'])->name('promotion.calendar');
+        Route::get('ads', [StandaloneTrafficController::class, 'ads'])->middleware('paid-ads')->name('ads');
+
+        Route::post('keywords', [StandaloneTrafficController::class, 'storeKeyword'])->name('keywords.store');
+        Route::patch('keywords/{keyword}', [StandaloneTrafficController::class, 'updateKeyword'])->name('keywords.update');
+        Route::delete('keywords/{keyword}', [StandaloneTrafficController::class, 'destroyKeyword'])->name('keywords.destroy');
+        Route::post('keywords/{keyword}/fetch', [StandaloneTrafficController::class, 'fetchKeyword'])->name('keywords.fetch');
+        Route::post('mentions/{mention}/draft-reply', [StandaloneTrafficController::class, 'draftMentionReply'])->name('mentions.draft-reply');
+        Route::patch('settings', [StandaloneTrafficController::class, 'updateSettings'])->name('settings.update');
+
+        Route::middleware('paid-ads')->prefix('ads')->name('ads.')->group(function () {
+            Route::post('/', [StandaloneTrafficController::class, 'storeAd'])->name('store');
+            Route::patch('{adCampaign}', [StandaloneTrafficController::class, 'updateAd'])->name('update');
+            Route::post('{adCampaign}/duplicate', [StandaloneTrafficController::class, 'duplicateAd'])->name('duplicate');
+            Route::delete('{adCampaign}', [StandaloneTrafficController::class, 'destroyAd'])->name('destroy');
+            Route::post('{adCampaign}/research', [StandaloneTrafficController::class, 'researchAd'])->name('research');
+            Route::post('{adCampaign}/creatives/generate', [StandaloneTrafficController::class, 'generateAdCreatives'])->name('creatives.generate');
+            Route::post('{adCampaign}/creatives', [StandaloneTrafficController::class, 'storeAdCreative'])->name('creatives.store');
+            Route::patch('{adCampaign}/creatives/{creative}', [StandaloneTrafficController::class, 'updateAdCreative'])->name('creatives.update');
+            Route::delete('{adCampaign}/creatives/{creative}', [StandaloneTrafficController::class, 'destroyAdCreative'])->name('creatives.destroy');
+            Route::post('{adCampaign}/creatives/{creative}/image', [StandaloneTrafficController::class, 'generateAdCreativeImage'])->name('creatives.image');
+            Route::post('{adCampaign}/creatives/{creative}/toggle', [StandaloneTrafficController::class, 'toggleAdCreative'])->name('creatives.toggle');
+            Route::post('{adCampaign}/launch', [StandaloneTrafficController::class, 'launchAd'])->name('launch');
+            Route::post('{adCampaign}/sync', [StandaloneTrafficController::class, 'syncAd'])->name('sync');
+        });
+    });
 
     Route::get('campaign-download/{token}', [CampaignController::class, 'downloadLeadMagnet'])
         ->name('campaigns.lead-magnet.download');
@@ -104,9 +191,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('growth')->name('growth.')->group(function () {
         Route::get('domains', [GrowthToolsController::class, 'domains'])->name('domains');
         Route::post('domains', [GrowthToolsController::class, 'storeDomain'])->name('domains.store');
+        Route::post('domains/{customDomain}/verify', [GrowthToolsController::class, 'verifyDomain'])->name('domains.verify');
+        Route::patch('domains/{customDomain}', [GrowthToolsController::class, 'updateDomain'])->name('domains.update');
+        Route::delete('domains/{customDomain}', [GrowthToolsController::class, 'destroyDomain'])->name('domains.destroy');
         Route::get('opportunities', [GrowthToolsController::class, 'opportunities'])->name('opportunities');
         Route::post('opportunities/search', [GrowthToolsController::class, 'searchOpportunities'])->name('opportunities.search');
         Route::get('content-employee', [GrowthToolsController::class, 'contentEmployee'])->name('content-employee');
+        Route::post('content-employee/plans', [ContentEmployeeController::class, 'generatePlan'])->name('content-employee.plans.generate');
+        Route::post('content-employee/plans/{plan}/approve', [ContentEmployeeController::class, 'approve'])->name('content-employee.plans.approve');
+        Route::post('content-employee/plans/{plan}/execute', [ContentEmployeeController::class, 'execute'])->name('content-employee.plans.execute');
+        Route::delete('content-employee/plans/{plan}', [ContentEmployeeController::class, 'destroy'])->name('content-employee.plans.destroy');
     });
 
     Route::prefix('funnels')->group(function () {
@@ -128,6 +222,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('{funnel}/chat/messages', [ChatController::class, 'ownerSend'])->name('funnels.chat.send');
 
         Route::prefix('{funnel}/traffic')->name('funnels.traffic.')->group(function () {
+            Route::get('/', [FunnelTrafficController::class, 'redirectToCampaignHub'])->name('hub');
             Route::post('keywords', [FunnelTrafficController::class, 'storeKeyword'])->name('keywords.store');
             Route::patch('keywords/{keyword}', [FunnelTrafficController::class, 'updateKeyword'])->name('keywords.update');
             Route::delete('keywords/{keyword}', [FunnelTrafficController::class, 'destroyKeyword'])->name('keywords.destroy');

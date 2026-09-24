@@ -241,14 +241,14 @@ onUnmounted(() => {
 <template>
     <Head :title="`Chat — ${funnel.name}`" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4" style="height: calc(100vh - 56px)">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4" style="height: calc(100vh - 56px)">
 
         <!-- Header -->
         <div class="shrink-0 rounded-xl border border-border/60 bg-white p-4 shadow-sm">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex min-w-0 items-start gap-3">
-                    <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
-                        <Icon icon="heroicons:chat-bubble-left-right" class="size-5 text-teal-600" />
+                    <div class="flex size-10 shrink-0 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10">
+                        <Icon icon="heroicons:chat-bubble-left-right" class="size-5 text-blue-600" />
                     </div>
                     <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
@@ -257,7 +257,7 @@ onUnmounted(() => {
                                 variant="outline"
                                 class="capitalize text-[0.65rem]"
                                 :class="funnel.status === 'published'
-                                    ? 'border-teal-200 bg-teal-50 text-teal-700'
+                                    ? 'border-blue-200 bg-blue-50 text-blue-700'
                                     : 'border-amber-200 bg-amber-50 text-amber-700'"
                             >
                                 {{ funnel.status }}
@@ -322,14 +322,14 @@ onUnmounted(() => {
                         :key="convo.conversation_key"
                         class="relative flex w-full items-start gap-2.5 border-b border-border/30 px-3 py-3 text-left transition-colors last:border-0 hover:bg-white/80"
                         :class="activeKey === convo.conversation_key
-                            ? 'border-l-[3px] border-l-teal-600 bg-teal-50/60 pl-[9px]'
+                            ? 'border-l-[3px] border-l-blue-600 bg-blue-50/60 pl-[9px]'
                             : 'border-l-[3px] border-l-transparent'"
                         @click="selectConvo(convo.conversation_key)"
                     >
                         <div
                             class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
                             :class="activeKey === convo.conversation_key
-                                ? 'bg-teal-500/15 text-teal-700'
+                                ? 'bg-blue-500/15 text-blue-700'
                                 : 'bg-muted text-muted-foreground'"
                         >
                             {{ initials(convo.attendee_name) }}
@@ -349,7 +349,7 @@ onUnmounted(() => {
 
                         <span
                             v-if="convo.message_count > 0"
-                            class="absolute bottom-3 right-2.5 flex size-4 items-center justify-center rounded-full bg-teal-600 text-[0.55rem] font-bold text-white"
+                            class="absolute bottom-3 right-2.5 flex size-4 items-center justify-center rounded-full bg-brand-gradient text-[0.55rem] font-bold text-white"
                         >
                             {{ convo.message_count > 99 ? '99+' : convo.message_count }}
                         </span>
@@ -361,8 +361,8 @@ onUnmounted(() => {
             <div class="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
 
                 <div v-if="!activeConvo" class="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-                    <div class="flex size-16 items-center justify-center rounded-2xl border border-teal-500/15 bg-teal-500/10">
-                        <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-8 text-teal-600/60" />
+                    <div class="flex size-16 items-center justify-center rounded-2xl border border-blue-500/15 bg-blue-500/10">
+                        <Icon icon="heroicons:chat-bubble-oval-left-ellipsis" class="size-8 text-blue-600/60" />
                     </div>
                     <p class="text-sm font-medium text-foreground">Select a conversation</p>
                     <p class="max-w-xs text-center text-xs">Click an attendee on the left to open their chat thread.</p>
@@ -371,7 +371,7 @@ onUnmounted(() => {
                 <template v-else>
                     <!-- Thread header -->
                     <div class="flex shrink-0 items-center gap-3 border-b border-border/60 bg-muted/20 px-4 py-3">
-                        <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs font-bold text-teal-700">
+                        <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-xs font-bold text-blue-700">
                             {{ initials(activeConvo.attendee_name) }}
                         </div>
                         <div class="min-w-0 flex-1">
@@ -435,7 +435,7 @@ onUnmounted(() => {
                                     v-if="idx === 0 || messages[idx - 1].participant_role !== msg.participant_role"
                                     class="mb-1 flex size-7 shrink-0 items-center justify-center self-end rounded-full text-[0.55rem] font-bold"
                                     :class="msg.participant_role === 'owner'
-                                        ? 'bg-teal-500/20 text-teal-700'
+                                        ? 'bg-blue-500/20 text-blue-700'
                                         : 'bg-muted text-muted-foreground'"
                                 >
                                     {{ initials(msg.author_name) }}
@@ -449,7 +449,7 @@ onUnmounted(() => {
                                     <p
                                         v-if="idx === 0 || messages[idx - 1].participant_role !== msg.participant_role"
                                         class="mb-0.5 px-1 text-[0.6rem] font-semibold"
-                                        :class="msg.participant_role === 'owner' ? 'text-right text-teal-700' : 'text-muted-foreground'"
+                                        :class="msg.participant_role === 'owner' ? 'text-right text-blue-700' : 'text-muted-foreground'"
                                     >
                                         {{ msg.participant_role === 'owner' ? 'You (Host)' : msg.author_name }}
                                     </p>
@@ -457,7 +457,7 @@ onUnmounted(() => {
                                     <div
                                         class="rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm"
                                         :class="msg.participant_role === 'owner'
-                                            ? 'rounded-tr-sm bg-teal-500 text-slate-900'
+                                            ? 'rounded-tr-sm bg-blue-500 text-slate-900'
                                             : 'rounded-tl-sm border border-border/60 bg-muted/50 text-foreground'"
                                     >
                                         {{ msg.message }}
@@ -474,7 +474,7 @@ onUnmounted(() => {
                     <!-- Reply -->
                     <div class="shrink-0 border-t border-border/60 bg-muted/20 px-4 py-3">
                         <div class="flex items-end gap-2">
-                            <div class="mb-0.5 flex size-8 shrink-0 items-center justify-center self-end rounded-full bg-teal-500/15 text-[0.6rem] font-bold text-teal-700">
+                            <div class="mb-0.5 flex size-8 shrink-0 items-center justify-center self-end rounded-full bg-blue-500/15 text-[0.6rem] font-bold text-blue-700">
                                 H
                             </div>
 
@@ -483,14 +483,14 @@ onUnmounted(() => {
                                     v-model="replyText"
                                     rows="1"
                                     placeholder="Reply as host…"
-                                    class="w-full resize-none rounded-2xl border border-border/60 bg-white px-4 py-2.5 pr-12 text-sm leading-5 transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                                    class="w-full resize-none rounded-2xl border border-border/60 bg-white px-4 py-2.5 pr-12 text-sm leading-5 transition-all placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                     style="min-height: 42px; max-height: 120px; overflow-y: auto; field-sizing: content"
                                     @keydown="handleKeydown"
                                 />
                                 <button
                                     class="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full transition-all disabled:opacity-30"
                                     :class="replyText.trim() && !sending
-                                        ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700'
+                                        ? 'chip-brand-active'
                                         : 'cursor-not-allowed bg-muted text-muted-foreground'"
                                     :disabled="sending || !replyText.trim()"
                                     @click="sendReply"

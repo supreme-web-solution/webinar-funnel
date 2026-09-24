@@ -5,14 +5,18 @@ namespace App\Services\Ads;
 use App\Models\Funnel;
 use App\Models\FunnelAdCampaign;
 use App\Models\FunnelAdCreative;
+use App\Services\Ai\OpenRouterService;
 use App\Services\Cloudinary\CloudinaryService;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 final class AdGenerationService
 {
+    public function __construct(
+        private readonly OpenRouterService $openRouter,
+    ) {}
+
     /**
      * Run full AI research on the product and funnel, returning hooks, personas, and angles.
      *
@@ -20,8 +24,7 @@ final class AdGenerationService
      */
     public function research(FunnelAdCampaign $campaign, Funnel $funnel): array
     {
-        $apiKey = (string) config('services.openai.api_key', '');
-        if ($apiKey === '') {
+        if (! $this->openRouter->isConfigured()) {
             return $this->fallbackResearch($campaign, $funnel);
         }
 
@@ -49,21 +52,21 @@ SYS;
         ], JSON_UNESCAPED_SLASHES);
 
         try {
-            $response = Http::withToken($apiKey)
-                ->timeout(30)
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => config('services.openai.model', 'gpt-4o-mini'),
-                    'response_format' => ['type' => 'json_object'],
-                    'messages' => [
-                        ['role' => 'system', 'content' => $system],
-                        ['role' => 'user', 'content' => $user],
-                    ],
-                ]);
+            $result = $this->openRouter->chatJson(
+                [
+                    ['role' => 'system', 'content' => $system],
+                    ['role' => 'user', 'content' => $user],
+                ],
+                $this->openRouter->modelFor('promotion_text'),
+                30,
+                null,
+                0.4,
+                true,
+            );
 
-            $content = $response->json('choices.0.message.content') ?? '';
-            $data    = json_decode($content, true);
+            $data = $result['data'] ?? null;
 
-            if (is_array($data) && isset($data['hooks'])) {
+            if ($result['ok'] && is_array($data) && isset($data['hooks'])) {
                 return $data;
             }
         } catch (\Throwable $e) {
@@ -81,8 +84,7 @@ SYS;
      */
     public function generateCopyVariants(FunnelAdCampaign $campaign, Funnel $funnel, array $hooks): array
     {
-        $apiKey = (string) config('services.openai.api_key', '');
-        if ($apiKey === '') {
+        if (! $this->openRouter->isConfigured()) {
             return $this->fallbackCopyVariants($hooks);
         }
 
@@ -107,22 +109,21 @@ SYS;
         ], JSON_UNESCAPED_SLASHES);
 
         try {
-            $response = Http::withToken($apiKey)
-                ->timeout(40)
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => config('services.openai.model', 'gpt-4o-mini'),
-                    'response_format' => ['type' => 'json_object'],
-                    'messages' => [
-                        ['role' => 'system', 'content' => $system],
-                        ['role' => 'user', 'content' => $user],
-                    ],
-                ]);
+            $result = $this->openRouter->chatJson(
+                [
+                    ['role' => 'system', 'content' => $system],
+                    ['role' => 'user', 'content' => $user],
+                ],
+                $this->openRouter->modelFor('promotion_text'),
+                40,
+                null,
+                0.7,
+                true,
+            );
 
-            $content  = $response->json('choices.0.message.content') ?? '';
-            $data     = json_decode($content, true);
-            $variants = $data['variants'] ?? null;
+            $variants = is_array($result['data'] ?? null) ? ($result['data']['variants'] ?? null) : null;
 
-            if (is_array($variants) && count($variants) > 0) {
+            if ($result['ok'] && is_array($variants) && count($variants) > 0) {
                 return array_values($variants);
             }
         } catch (\Throwable $e) {
@@ -142,8 +143,7 @@ SYS;
         string $headline,
         string $format = 'square'
     ): ?string {
-        $apiKey = (string) config('services.openai.api_key', '');
-        if ($apiKey === '') {
+        if (! $this->openRouter->isConfigured()) {
             return null;
         }
 
@@ -154,38 +154,34 @@ SYS;
             default => '1024x1024',
         };
 
-        $prompt = "A high-quality, professional advertising banner for a digital product. "
-            . "Headline text overlay in bold: \"{$headline}\". "
-            . "Industry: " . ($campaign->industry ?? 'online business') . ". "
-            . "Style: modern, clean, direct-response marketing, bold typography, "
-            . "gradient or solid background with complementary brand colours, minimal design. "
-            . "Concept: {$hook}. "
-            . "No realistic human faces. No logos.";
+        $prompt = 'A high-quality, professional advertising banner for a digital product. '
+            ."Headline text overlay in bold: \"{$headline}\". "
+            .'Industry: '.($campaign->industry ?? 'online business').'. '
+            .'Style: modern, clean, direct-response marketing, bold typography, '
+            .'gradient or solid background with complementary brand colours, minimal design. '
+            ."Concept: {$hook}. "
+            .'No realistic human faces. No logos.';
 
         try {
-            $response = Http::withToken($apiKey)
-                ->timeout(90)
-                ->post('https://api.openai.com/v1/images/generations', [
-                    'model'           => 'gpt-image-1',
-                    'prompt'          => $prompt,
-                    'n'               => 1,
-                    'size'            => $size,
-                    'quality'         => 'medium',   // low|medium|high
-                    'output_format'   => 'png',
+            $result = $this->openRouter->generateImage($prompt, $this->openRouter->promotionImageModel(), [
+                'n' => 1,
+                'size' => $size,
+                'quality' => 'medium',
+                'output_format' => 'png',
+                'timeout' => 90,
+            ]);
+
+            if (! $result['ok']) {
+                Log::warning('[Ads] OpenRouter image API error', [
+                    'error' => $result['error'] ?? 'Unknown error',
                 ]);
 
-            if (! $response->successful()) {
-                Log::warning('[Ads] gpt-image-1 API error', [
-                    'status' => $response->status(),
-                    'body'   => \Illuminate\Support\Str::limit($response->body(), 300),
-                ]);
                 return null;
             }
 
-            // gpt-image-1 returns base64 in data[0].b64_json
-            $b64 = $response->json('data.0.b64_json');
+            $b64 = $result['b64_json'] ?? null;
             if (! is_string($b64) || $b64 === '') {
-                return null;
+                return is_string($result['url'] ?? null) && $result['url'] !== '' ? $result['url'] : null;
             }
 
             $imageData = base64_decode($b64);
@@ -193,7 +189,7 @@ SYS;
                 return null;
             }
 
-            $folder   = 'ad-assets/' . now()->format('Y/m');
+            $folder = 'ad-assets/'.now()->format('Y/m');
             $publicId = Str::uuid()->toString();
 
             $cloudinary = app(CloudinaryService::class);
@@ -230,8 +226,8 @@ SYS;
             'hooks' => [
                 "Still struggling with {$campaign->industry}?",
                 "The {$name} system changes everything.",
-                "What if the hard part was already done?",
-                "Most people never discover this shortcut.",
+                'What if the hard part was already done?',
+                'Most people never discover this shortcut.',
                 "You're one funnel away from real results.",
             ],
             'angles' => [
@@ -274,10 +270,10 @@ SYS;
         $variants = [];
         foreach ($hooks as $hook) {
             $variants[] = [
-                'headline'     => Str::limit($hook, 40),
+                'headline' => Str::limit($hook, 40),
                 'primary_text' => "{$hook}\n\nIf you've been trying to build an online business and keep running into the same walls — no time, no traffic, no content — this system was built for you.\n\nEverything is done for you. Click below to see how it works.",
-                'description'  => 'Done-for-you webinar funnels powered by AI.',
-                'cta_button'   => 'LEARN_MORE',
+                'description' => 'Done-for-you webinar funnels powered by AI.',
+                'cta_button' => 'LEARN_MORE',
             ];
         }
 

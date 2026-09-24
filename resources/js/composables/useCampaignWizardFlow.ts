@@ -6,6 +6,7 @@ export type WizardSectionId =
     | 'knowledge'
     | 'lead_magnet'
     | 'pages'
+    | 'autoresponders'
     | 'webinar'
     | 'bonuses'
     | 'emails'
@@ -126,6 +127,12 @@ export function useCampaignWizardFlow(campaign: ComputedRef<CampaignLike | null>
             || (Array.isArray(meta.slides) && meta.slides.length > 0);
     });
 
+    const autorespondersReady = computed(() => {
+        if (!funnelPagesReady.value) return false;
+
+        return true;
+    });
+
     const emailsReady = computed(() => {
         if (isStepGenerated(campaign.value, 'emails')) return true;
 
@@ -137,14 +144,18 @@ export function useCampaignWizardFlow(campaign: ComputedRef<CampaignLike | null>
         if (!c || c.type !== 'webinar') return true;
         if (isStepGenerated(c, 'webinar')) return true;
 
-        return c.funnels.length >= 2;
+        const funnels = c.funnels as Array<{ role?: string }>;
+        const hasOptin = funnels.some((f) => f.role === 'optin');
+        const hasPitch = funnels.some((f) => f.role === 'pitch');
+
+        return hasOptin && hasPitch;
     });
 
     const stepOrder = computed((): WizardSectionId[] => {
         const c = campaign.value;
         if (!c) return ['offer'];
 
-        const base: WizardSectionId[] = ['offer', 'knowledge', 'lead_magnet', 'pages'];
+        const base: WizardSectionId[] = ['offer', 'knowledge', 'lead_magnet', 'pages', 'autoresponders'];
         if (c.type === 'webinar') base.push('webinar');
         base.push('bonuses', 'emails', 'traffic', 'publish');
 
@@ -164,6 +175,8 @@ export function useCampaignWizardFlow(campaign: ComputedRef<CampaignLike | null>
                 return leadMagnetReady.value;
             case 'pages':
                 return funnelPagesReady.value;
+            case 'autoresponders':
+                return autorespondersReady.value;
             case 'webinar':
                 return webinarReady.value;
             case 'bonuses':
@@ -192,6 +205,8 @@ export function useCampaignWizardFlow(campaign: ComputedRef<CampaignLike | null>
                 return knowledgeReady.value;
             case 'pages':
                 return c.type === 'webinar' ? knowledgeReady.value : leadMagnetReady.value;
+            case 'autoresponders':
+                return funnelPagesReady.value;
             case 'webinar':
                 return funnelPagesReady.value && c.type === 'webinar';
             case 'bonuses':
@@ -221,6 +236,8 @@ export function useCampaignWizardFlow(campaign: ComputedRef<CampaignLike | null>
                 return c?.type === 'webinar'
                     ? 'Build the knowledge base first.'
                     : 'Generate the lead magnet first (thank-you page needs the download).';
+            case 'autoresponders':
+                return 'Generate funnel pages first.';
             case 'webinar':
                 return 'Generate funnel pages first.';
             case 'bonuses':
@@ -239,9 +256,11 @@ export function useCampaignWizardFlow(campaign: ComputedRef<CampaignLike | null>
     }
 
     const steps = computed((): WizardStep[] => {
+        const c = campaign.value;
+
         return stepOrder.value.map((id, i) => ({
             id,
-            label: stepLabels[id] ?? id,
+            label: stepLabel(id, c?.type),
             icon: stepIcons[id] ?? 'heroicons: circle',
             complete: isStepComplete(id),
             unlocked: isStepUnlocked(id),
@@ -275,6 +294,7 @@ export function useCampaignWizardFlow(campaign: ComputedRef<CampaignLike | null>
         leadMagnetGenerating,
         hasLeadMagnetSuggestions,
         funnelPagesReady,
+        autorespondersReady,
         bonusesReady,
         emailsReady,
         webinarReady,
@@ -291,6 +311,7 @@ const stepLabels: Record<WizardSectionId, string> = {
     knowledge: 'Knowledge Base',
     lead_magnet: 'Lead Magnet',
     pages: 'Funnel Pages',
+    autoresponders: 'Autoresponders',
     webinar: 'Webinar Funnels',
     bonuses: 'Bonuses',
     emails: 'Email Swipes',
@@ -298,11 +319,20 @@ const stepLabels: Record<WizardSectionId, string> = {
     publish: 'Publish',
 };
 
+function stepLabel(id: WizardSectionId, campaignType?: 'sales' | 'webinar'): string {
+    if (id === 'lead_magnet' && campaignType === 'webinar') {
+        return 'Lead Magnet (optional)';
+    }
+
+    return stepLabels[id] ?? id;
+}
+
 const stepIcons: Record<WizardSectionId, string> = {
     offer: 'heroicons:link',
     knowledge: 'heroicons:book-open',
     lead_magnet: 'heroicons:gift',
     pages: 'heroicons:document-text',
+    autoresponders: 'heroicons:paper-airplane',
     webinar: 'heroicons:video-camera',
     bonuses: 'heroicons:sparkles',
     emails: 'heroicons:envelope',

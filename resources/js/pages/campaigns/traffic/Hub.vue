@@ -92,8 +92,8 @@ const featureCards = computed(() => {
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -110,16 +110,16 @@ const featureCards = computed(() => {
             <article
                 v-for="card in featureCards"
                 :key="card.title"
-                class="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-teal-200/60 hover:shadow-md"
+                class="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-blue-200/60 hover:shadow-md"
             >
                 <div class="flex flex-1 flex-col gap-3 p-4 md:p-5">
-                    <div class="flex size-10 items-center justify-center rounded-xl border border-teal-500/15 bg-teal-500/10">
-                        <Icon :icon="card.icon" class="size-5 text-teal-600" />
+                    <div class="flex size-10 items-center justify-center rounded-xl border border-blue-500/15 bg-blue-500/10">
+                        <Icon :icon="card.icon" class="size-5 text-blue-600" />
                     </div>
                     <div class="flex-1">
                         <h2 class="font-semibold text-foreground">{{ card.title }}</h2>
                         <p class="mt-1 text-sm text-muted-foreground">{{ card.description }}</p>
-                        <Badge v-if="card.badge" variant="outline" class="mt-2 border-teal-200 bg-teal-50 text-[0.65rem] text-teal-700">
+                        <Badge v-if="card.badge" variant="outline" class="mt-2 border-blue-200 bg-blue-50 text-[0.65rem] text-blue-700">
                             {{ card.badge }}
                         </Badge>
                     </div>

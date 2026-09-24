@@ -86,6 +86,8 @@ return [
             'lead_magnet_blueprint' => env('OPENROUTER_MODEL_LM_BLUEPRINT', env('OPENROUTER_MODEL', 'openai/gpt-4o-mini')),
             'lead_magnet_content' => env('OPENROUTER_MODEL_LM_CONTENT', env('OPENROUTER_MODEL', 'openai/gpt-4o')),
             'lead_magnet_polish' => env('OPENROUTER_MODEL_LM_POLISH', env('OPENROUTER_MODEL', 'openai/gpt-4o')),
+            'promotion_text' => env('PROMOTION_OPENROUTER_TEXT_MODEL', env('OPENROUTER_MODEL', 'openai/gpt-4o-mini')),
+            'promotion_image' => env('PROMOTION_OPENROUTER_IMAGE_MODEL', 'openai/gpt-image-1'),
             'free_fallback' => env('OPENROUTER_MODEL_FREE', 'google/gemma-2-9b-it:free'),
         ],
     ],
@@ -154,5 +156,8 @@ return [
         'base_url' => env('ZERNIO_BASE_URL', 'https://zernio.com/api'),
         'timeout' => env('ZERNIO_TIMEOUT', 60),
         'default_social_account_id' => env('ZERNIO_DEFAULT_SOCIAL_ACCOUNT_ID'),
+        'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET'),
+        'whatsapp_account_id' => env('ZERNIO_WHATSAPP_ACCOUNT_ID'),
+        'whatsapp_phone' => env('ZERNIO_WHATSAPP_PHONE'),
     ],
 ];

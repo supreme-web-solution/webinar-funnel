@@ -18,7 +18,7 @@ defineProps<{
     >
         <slot />
     </CampaignTrafficLayout>
-    <div v-else :class="standaloneClass ?? 'mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 md:px-6'">
+    <div v-else :class="standaloneClass ?? 'mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 md:px-6'">
         <slot />
     </div>
 </template>

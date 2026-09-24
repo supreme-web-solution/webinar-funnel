@@ -110,7 +110,7 @@ function typeIcon(type: string): string {
 <template>
     <Head title="Bonus Library" />
 
-    <div class="mx-auto flex w-full max-w-7xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div class="mx-auto flex w-full max-w-4xl flex-col gap-3 p-3 md:gap-4 md:p-4">
         <!-- Header -->
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="min-w-0">
@@ -142,8 +142,8 @@ function typeIcon(type: string): string {
                 :key="stat.label"
                 class="flex items-center gap-3 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-sm"
             >
-                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10">
-                    <Icon :icon="stat.icon" class="size-4 text-teal-600" />
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                    <Icon :icon="stat.icon" class="size-4 text-blue-600" />
                 </div>
                 <div class="min-w-0">
                     <p class="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{{ stat.label }}</p>
@@ -172,8 +172,8 @@ function typeIcon(type: string): string {
                         type="button"
                         class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
                         :class="typeFilter === tab.key
-                            ? 'bg-teal-600 text-white shadow-sm'
-                            : 'border border-border/60 bg-muted/20 text-muted-foreground hover:bg-teal-50 hover:text-teal-800'"
+                            ? 'chip-brand-active'
+                            : 'border border-border/60 bg-muted/20 text-muted-foreground hover:bg-blue-50 hover:text-blue-800'"
                         @click="typeFilter = tab.key"
                     >
                         {{ tab.label }}
@@ -197,10 +197,10 @@ function typeIcon(type: string): string {
         <!-- Empty: no bonuses at all -->
         <div
             v-if="bonuses.length === 0"
-            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-teal-200/60 bg-white px-6 py-14 text-center shadow-sm"
+            class="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-blue-200/60 bg-white px-6 py-14 text-center shadow-sm"
         >
-            <div class="flex size-14 items-center justify-center rounded-2xl bg-teal-500/10">
-                <Icon icon="heroicons:gift" class="size-7 text-teal-600/60" />
+            <div class="flex size-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                <Icon icon="heroicons:gift" class="size-7 text-blue-600/60" />
             </div>
             <div>
                 <p class="font-semibold text-foreground">No bonuses yet</p>
@@ -230,9 +230,9 @@ function typeIcon(type: string): string {
             <article
                 v-for="b in filtered"
                 :key="b.uuid"
-                class="group flex flex-col overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-teal-200/60 hover:shadow-md"
+                class="group flex flex-col overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm transition-all hover:border-blue-200/60 hover:shadow-md"
             >
-                <div class="flex items-center justify-center bg-linear-to-b from-teal-50/30 to-white px-6 pb-2 pt-8">
+                <div class="flex items-center justify-center bg-linear-to-b from-blue-50/30 to-white px-6 pb-2 pt-8">
                     <BonusCoverArt
                         :title="b.title"
                         :subtitle="b.subtitle || detailLine(b)"
@@ -244,7 +244,7 @@ function typeIcon(type: string): string {
 
                 <div class="flex flex-1 flex-col gap-3 p-4 pt-3">
                     <div class="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" class="gap-1 border-teal-200 bg-teal-50 text-[10px] text-teal-700">
+                        <Badge variant="outline" class="gap-1 border-blue-200 bg-blue-50 text-[10px] text-blue-700">
                             <Icon :icon="typeIcon(b.bonus_type)" class="size-3" />
                             {{ bonusTypeLabel(b.bonus_type) }}
                         </Badge>
@@ -262,8 +262,8 @@ function typeIcon(type: string): string {
 
                     <div class="mt-auto space-y-2 border-t border-border/60 pt-3">
                         <div v-if="b.campaign" class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Icon icon="heroicons:folder" class="size-3.5 shrink-0 text-teal-600" />
-                            <Link :href="`/campaigns/${b.campaign.id}/edit`" class="truncate hover:text-teal-700 hover:underline">
+                            <Icon icon="heroicons:folder" class="size-3.5 shrink-0 text-blue-600" />
+                            <Link :href="`/campaigns/${b.campaign.id}/edit`" class="truncate hover:text-blue-700 hover:underline">
                                 {{ b.campaign.name }}
                             </Link>
                         </div>

@@ -151,11 +151,11 @@ function submit() {
     <Dialog :open="open" @update:open="emit('update:open', $event)">
         <DialogContent class="gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-xl sm:max-w-lg" :show-close-button="false">
             <!-- Header -->
-            <div class="relative bg-linear-to-br from-teal-50 via-cyan-50/60 to-white px-6 pt-6 pb-4">
-                <div class="pointer-events-none absolute -right-6 -top-6 size-24 rounded-full bg-teal-400/15 blur-2xl" />
+            <div class="relative bg-linear-to-br from-blue-50 via-blue-50/60 to-white px-6 pt-6 pb-4">
+                <div class="pointer-events-none absolute -right-6 -top-6 size-24 rounded-full bg-blue-400/15 blur-2xl" />
                 <DialogHeader class="relative text-left">
                     <div class="flex items-start gap-3">
-                        <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-teal-600 shadow-sm ring-1 ring-teal-100">
+                        <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm ring-1 ring-blue-100">
                             <Icon icon="heroicons:link" class="size-5" />
                         </div>
                         <div>
@@ -169,10 +169,10 @@ function submit() {
             </div>
 
             <div class="space-y-4 bg-white px-6 py-4">
-                <div class="rounded-xl border border-border/60 bg-teal-50/30 p-3 text-sm">
+                <div class="rounded-xl border border-border/60 bg-blue-50/30 p-3 text-sm">
                     <p class="font-semibold text-foreground">{{ campaignName }}</p>
                     <p v-if="offerUrl" class="mt-1 truncate text-xs text-muted-foreground">{{ offerUrl }}</p>
-                    <p v-if="marketplace" class="mt-1 text-xs capitalize text-teal-700">{{ marketplace }} offer</p>
+                    <p v-if="marketplace" class="mt-1 text-xs capitalize text-blue-700">{{ marketplace }} offer</p>
                 </div>
 
                 <div class="space-y-2">
@@ -191,14 +191,14 @@ function submit() {
                     <p v-if="form.errors.affiliate_link" class="text-xs text-destructive">{{ form.errors.affiliate_link }}</p>
                 </div>
 
-                <div v-if="isApplying" class="space-y-3 rounded-xl border border-teal-200/60 bg-teal-50/40 p-3">
+                <div v-if="isApplying" class="space-y-3 rounded-xl border border-blue-200/60 bg-blue-50/40 p-3">
                     <div class="flex items-center justify-between text-xs">
-                        <span class="font-medium text-teal-900">Applying to your campaign</span>
-                        <span class="tabular-nums text-teal-700">{{ progressPercent }}%</span>
+                        <span class="font-medium text-blue-900">Applying to your campaign</span>
+                        <span class="tabular-nums text-blue-700">{{ progressPercent }}%</span>
                     </div>
-                    <div class="h-1.5 overflow-hidden rounded-full bg-teal-100">
+                    <div class="h-1.5 overflow-hidden rounded-full bg-blue-100">
                         <div
-                            class="h-full rounded-full bg-linear-to-r from-teal-600 to-cyan-400 transition-all duration-500 ease-out"
+                            class="h-full rounded-full fill-brand-gradient transition-all duration-500 ease-out"
                             :style="{ width: `${progressPercent}%` }"
                         />
                     </div>
@@ -208,20 +208,20 @@ function submit() {
                             :key="step.id"
                             class="flex items-center gap-2 text-xs"
                             :class="{
-                                'font-medium text-teal-900': stepStatus(i) === 'active',
-                                'text-green-700': stepStatus(i) === 'done',
+                                'font-medium text-blue-900': stepStatus(i) === 'active',
+                                'text-blue-700': stepStatus(i) === 'done',
                                 'text-muted-foreground': stepStatus(i) === 'pending',
                             }"
                         >
                             <Icon
                                 v-if="stepStatus(i) === 'done'"
                                 icon="heroicons:check-circle"
-                                class="size-3.5 shrink-0 text-green-600"
+                                class="size-3.5 shrink-0 text-blue-600"
                             />
                             <Icon
                                 v-else-if="stepStatus(i) === 'active'"
                                 icon="heroicons:arrow-path"
-                                class="size-3.5 shrink-0 animate-spin text-teal-600"
+                                class="size-3.5 shrink-0 animate-spin text-blue-600"
                             />
                             <Icon
                                 v-else

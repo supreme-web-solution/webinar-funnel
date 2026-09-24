@@ -19,7 +19,7 @@ const { isMobile, state } = useSidebar();
                 <DropdownMenuTrigger as-child>
                     <SidebarMenuButton
                         size="lg"
-                        class="rounded-xl border border-transparent hover:border-teal-500/15 hover:bg-sidebar-accent/80 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-colors"
+                        class="rounded-[10px] border border-transparent hover:border-blue-500/15 hover:bg-sidebar-accent/80 data-[state=open]:bg-sidebar-accent transition-colors"
                         data-test="sidebar-menu-button"
                     >
                         <UserInfo :user="user" variant="sidebar" />

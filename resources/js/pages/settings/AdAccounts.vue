@@ -93,7 +93,7 @@ function applySuggestion(platform: string, id: string): void {
                 v-for="platform in platformKeys"
                 :key="platform"
                 class="border shadow-sm"
-                :class="formIds[platform] ? 'border-green-500/30 bg-green-500/5' : ''"
+                :class="formIds[platform] ? 'border-blue-500/30 bg-blue-500/5' : ''"
             >
                 <CardContent class="space-y-3 p-4">
                     <div class="flex items-center gap-2">

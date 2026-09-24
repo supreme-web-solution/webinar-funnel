@@ -8,11 +8,14 @@ use App\Models\CampaignLead;
 use App\Models\CampaignPage;
 use App\Models\User;
 use App\Services\Campaigns\CampaignBonusPresenterService;
+use App\Services\Campaigns\CampaignEmailSequenceService;
 use App\Services\Campaigns\CampaignLeadCaptureService;
 use App\Services\Campaigns\CampaignLinkResolverService;
+use App\Services\Campaigns\CampaignPublicUrlService;
 use App\Services\Campaigns\LeadMagnetPdfService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -26,61 +29,68 @@ class PublicCampaignController extends Controller
         protected CampaignBonusPresenterService $bonusPresenter,
         protected LeadMagnetPdfService $pdf,
         protected CampaignLeadCaptureService $leadCapture,
+        protected CampaignPublicUrlService $publicUrls,
     ) {}
+
+    public function homeOrDomainRoot(Request $request): Response|RedirectResponse
+    {
+        if ($request->attributes->get('resolved_campaign')) {
+            return $this->domainRoot($request);
+        }
+
+        return Auth::check()
+            ? redirect()->route('dashboard')
+            : redirect()->route('login');
+    }
+
+    public function domainRoot(Request $request): Response|RedirectResponse
+    {
+        return $this->domainPage($request, 'squeeze');
+    }
+
+    public function domainPage(Request $request, string $page): Response|RedirectResponse
+    {
+        [$campaign, $username] = $this->campaignFromDomain($request);
+
+        return $this->renderPage($request, $campaign, $username, $page);
+    }
+
+    public function domainOptin(Request $request): RedirectResponse
+    {
+        [$campaign, $username] = $this->campaignFromDomain($request);
+
+        return $this->processOptin($request, $campaign, $username);
+    }
+
+    public function domainBonusViewer(Request $request, string $bonusUuid): Response
+    {
+        [$campaign, $username] = $this->campaignFromDomain($request);
+        [$campaign, $bonus] = $this->resolveBonusForCampaign($campaign, $username, $bonusUuid);
+
+        return Inertia::render('public/campaign/BonusViewer', [
+            'campaign' => [
+                'name' => $campaign->name,
+                'uuid' => $campaign->uuid,
+            ],
+            'bonus' => $this->bonusPresenter->viewerPayload($campaign, $bonus, $username),
+            'username' => $username,
+            'slug' => $campaign->slug,
+        ]);
+    }
+
+    public function domainBonusDownload(Request $request, string $bonusUuid): StreamedResponse
+    {
+        [$campaign, $username] = $this->campaignFromDomain($request);
+        [$campaign, $bonus] = $this->resolveBonusForCampaign($campaign, $username, $bonusUuid);
+
+        return $this->streamBonusDownload($bonus);
+    }
 
     public function page(Request $request, string $username, string $slug, string $page): Response|RedirectResponse
     {
-        $user = User::query()->where('username', $username)->firstOrFail();
+        $campaign = $this->resolvePublishedCampaign($username, $slug);
 
-        $campaign = Campaign::query()
-            ->where('user_id', $user->id)
-            ->where('slug', $slug)
-            ->where('status', 'published')
-            ->firstOrFail();
-
-        abort_unless(in_array($page, ['squeeze', 'thankyou', 'quiz', 'bonus'], true), 404);
-
-        $campaignPage = CampaignPage::query()
-            ->where('campaign_id', $campaign->id)
-            ->where('page_type', $page)
-            ->first();
-
-        $content = $campaignPage?->content ?? [];
-
-        $affiliateUrl = $this->linkResolver->affiliatePublicUrl($campaign);
-
-        if ($page === 'thankyou') {
-            $token = $request->query('dl');
-            if (is_string($token) && $token !== '') {
-                $lead = CampaignLead::query()->where('download_token', $token)->where('campaign_id', $campaign->id)->first();
-                if ($lead) {
-                    $content['download_url'] = route('campaigns.lead-magnet.download', ['token' => $token]);
-                }
-            }
-            if ($affiliateUrl) {
-                $content['bridge_url'] = $affiliateUrl;
-            }
-        }
-
-        if ($page === 'bonus') {
-            $content['bonuses'] = $this->bonusPresenter->featuredForPage($campaign, $content, $username);
-            $content['total_value_label'] = $this->totalValueLabel($content['bonuses']);
-            if ($affiliateUrl) {
-                $content['affiliate_url'] = $affiliateUrl;
-            }
-        }
-
-        return Inertia::render('public/campaign/'.$this->pageComponent($page), [
-            'campaign' => [
-                'name' => $campaign->name,
-                'type' => $campaign->type,
-                'uuid' => $campaign->uuid,
-            ],
-            'content' => $content,
-            'username' => $username,
-            'slug' => $slug,
-            'optin_url' => route('public.campaign.optin', ['username' => $username, 'slug' => $slug]),
-        ]);
+        return $this->renderPage($request, $campaign, $username, $page);
     }
 
     public function bonusViewer(string $username, string $slug, string $bonusUuid): Response
@@ -102,31 +112,11 @@ class PublicCampaignController extends Controller
     {
         [$campaign, $bonus] = $this->resolveBonus($username, $slug, $bonusUuid);
 
-        abort_unless($bonus->bonus_type === 'ebook', 404);
-
-        $meta = is_array($bonus->meta) ? $bonus->meta : [];
-        $pdfPath = $meta['pdf_path'] ?? null;
-        $htmlPath = $meta['download_path'] ?? null;
-
-        if (is_string($htmlPath) && $htmlPath !== '') {
-            $pdfPath = $this->pdf->ensurePdf($htmlPath, is_string($pdfPath) ? $pdfPath : null);
-            if ($pdfPath && $pdfPath !== ($meta['pdf_path'] ?? null)) {
-                $meta['pdf_path'] = $pdfPath;
-                $bonus->update(['meta' => $meta]);
-            }
-        }
-
-        abort_unless(is_string($pdfPath) && Storage::disk('public')->exists($pdfPath), 404);
-
-        $filename = Str::slug($bonus->title).'.pdf';
-
-        return Storage::disk('public')->download($pdfPath, $filename, [
-            'Content-Type' => 'application/pdf',
-        ]);
+        return $this->streamBonusDownload($bonus);
     }
 
     /**
-     * @return array{0: Campaign, 1: \App\Models\CampaignBonus}
+     * @return array{0: Campaign, 1: CampaignBonus}
      */
     protected function resolveBonus(string $username, string $slug, string $bonusUuid): array
     {
@@ -184,14 +174,83 @@ class PublicCampaignController extends Controller
 
     public function optin(Request $request, string $username, string $slug): RedirectResponse
     {
+        $campaign = $this->resolvePublishedCampaign($username, $slug);
+
+        return $this->processOptin($request, $campaign, $username);
+    }
+
+    /**
+     * @return array{0: Campaign, 1: string}
+     */
+    protected function campaignFromDomain(Request $request): array
+    {
+        $campaign = $request->attributes->get('resolved_campaign');
+        $username = $request->attributes->get('resolved_username');
+
+        abort_unless($campaign instanceof Campaign && is_string($username) && $username !== '', 404);
+
+        return [$campaign, $username];
+    }
+
+    protected function resolvePublishedCampaign(string $username, string $slug): Campaign
+    {
         $user = User::query()->where('username', $username)->firstOrFail();
 
-        $campaign = Campaign::query()
+        return Campaign::query()
             ->where('user_id', $user->id)
             ->where('slug', $slug)
             ->where('status', 'published')
             ->firstOrFail();
+    }
 
+    protected function renderPage(Request $request, Campaign $campaign, string $username, string $page): Response|RedirectResponse
+    {
+        abort_unless(in_array($page, ['squeeze', 'thankyou', 'quiz', 'bonus'], true), 404);
+
+        $campaignPage = CampaignPage::query()
+            ->where('campaign_id', $campaign->id)
+            ->where('page_type', $page)
+            ->first();
+
+        $content = $campaignPage?->content ?? [];
+        $affiliateUrl = $this->linkResolver->affiliatePublicUrl($campaign);
+
+        if ($page === 'thankyou') {
+            $token = $request->query('dl');
+            if (is_string($token) && $token !== '') {
+                $lead = CampaignLead::query()->where('download_token', $token)->where('campaign_id', $campaign->id)->first();
+                if ($lead) {
+                    $content['download_url'] = route('campaigns.lead-magnet.download', ['token' => $token]);
+                }
+            }
+            if ($affiliateUrl) {
+                $content['bridge_url'] = $affiliateUrl;
+            }
+        }
+
+        if ($page === 'bonus') {
+            $content['bonuses'] = $this->bonusPresenter->featuredForPage($campaign, $content, $username);
+            $content['total_value_label'] = $this->totalValueLabel($content['bonuses']);
+            if ($affiliateUrl) {
+                $content['affiliate_url'] = $affiliateUrl;
+            }
+        }
+
+        return Inertia::render('public/campaign/'.$this->pageComponent($page), [
+            'campaign' => [
+                'name' => $campaign->name,
+                'type' => $campaign->type,
+                'uuid' => $campaign->uuid,
+            ],
+            'content' => $content,
+            'username' => $username,
+            'slug' => $campaign->slug,
+            'optin_url' => $this->publicUrls->optinUrl($campaign, $username),
+        ]);
+    }
+
+    protected function processOptin(Request $request, Campaign $campaign, string $username): RedirectResponse
+    {
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:255'],
@@ -211,7 +270,17 @@ class PublicCampaignController extends Controller
             ]
         );
 
+        $campaignLead = CampaignLead::query()
+            ->where('campaign_id', $campaign->id)
+            ->where('email_hash', $hash)
+            ->first();
+
         $this->leadCapture->capture($campaign, $validated, $request);
+
+        if ($campaignLead) {
+            app(CampaignEmailSequenceService::class)
+                ->scheduleForLead($campaign, $campaignLead);
+        }
 
         if ($campaign->type === Campaign::TYPE_WEBINAR) {
             $squeeze = CampaignPage::query()
@@ -241,11 +310,68 @@ class PublicCampaignController extends Controller
             }
         }
 
+        if ($this->publicUrls->usesCustomDomain($campaign)) {
+            return redirect($this->publicUrls->pageUrl($campaign, $username, 'thankyou').'?dl='.$token);
+        }
+
         return redirect()->route('public.campaign.page', [
             'username' => $username,
-            'slug' => $slug,
+            'slug' => $campaign->slug,
             'page' => 'thankyou',
             'dl' => $token,
+        ]);
+    }
+
+    /**
+     * @return array{0: Campaign, 1: CampaignBonus}
+     */
+    protected function resolveBonusForCampaign(Campaign $campaign, string $username, string $bonusUuid): array
+    {
+        $bonus = CampaignBonus::query()
+            ->where('user_id', $campaign->user_id)
+            ->where('uuid', $bonusUuid)
+            ->where('status', 'ready')
+            ->firstOrFail();
+
+        if ((int) $bonus->campaign_id !== (int) $campaign->id) {
+            $bonusPage = CampaignPage::query()
+                ->where('campaign_id', $campaign->id)
+                ->where('page_type', 'bonus')
+                ->first();
+            $featured = is_array($bonusPage?->content['featured_bonus_uuids'] ?? null)
+                ? $bonusPage->content['featured_bonus_uuids']
+                : [];
+
+            if (! in_array($bonus->uuid, $featured, true)) {
+                abort(404);
+            }
+        }
+
+        return [$campaign, $bonus];
+    }
+
+    protected function streamBonusDownload(CampaignBonus $bonus): StreamedResponse
+    {
+        abort_unless($bonus->bonus_type === 'ebook', 404);
+
+        $meta = is_array($bonus->meta) ? $bonus->meta : [];
+        $pdfPath = $meta['pdf_path'] ?? null;
+        $htmlPath = $meta['download_path'] ?? null;
+
+        if (is_string($htmlPath) && $htmlPath !== '') {
+            $pdfPath = $this->pdf->ensurePdf($htmlPath, is_string($pdfPath) ? $pdfPath : null);
+            if ($pdfPath && $pdfPath !== ($meta['pdf_path'] ?? null)) {
+                $meta['pdf_path'] = $pdfPath;
+                $bonus->update(['meta' => $meta]);
+            }
+        }
+
+        abort_unless(is_string($pdfPath) && Storage::disk('public')->exists($pdfPath), 404);
+
+        $filename = Str::slug($bonus->title).'.pdf';
+
+        return Storage::disk('public')->download($pdfPath, $filename, [
+            'Content-Type' => 'application/pdf',
         ]);
     }
 

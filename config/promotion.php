@@ -17,6 +17,8 @@ return [
         'twitter',
         'youtube',
         'reddit',
+        'threads',
+        'pinterest',
     ],
 
     'queues' => [
@@ -24,10 +26,37 @@ return [
         'publish' => env('PROMOTION_QUEUE_PUBLISH', 'promotion-publish'),
     ],
 
+    'carousel' => [
+        /** Hard cap for slide copy + rendered images (env: PROMOTION_CAROUSEL_MAX_SLIDES). */
+        'max_slide_images' => (int) env('PROMOTION_CAROUSEL_MAX_SLIDES', 6),
+        /** text_template = typography templates (default); ai_image = optional photo slides. */
+        'render_mode' => env('PROMOTION_CAROUSEL_RENDER_MODE', 'text_template'),
+    ],
+
+    // Promotion AI runs through OpenRouter (same OpenAI models, unified billing/key).
+    'openrouter' => [
+        'text_model' => env(
+            'PROMOTION_OPENROUTER_TEXT_MODEL',
+            env('PROMOTION_OPENAI_TEXT_MODEL', env('OPENROUTER_MODEL', 'openai/gpt-4o-mini')),
+        ),
+        'image_model' => env(
+            'PROMOTION_OPENROUTER_IMAGE_MODEL',
+            env('PROMOTION_OPENAI_IMAGE_MODEL', 'openai/gpt-image-1'),
+        ),
+        'timeout' => (int) env('PROMOTION_OPENROUTER_TIMEOUT', env('PROMOTION_OPENAI_TIMEOUT', 90)),
+    ],
+
+    /** @deprecated Use promotion.openrouter — kept for backward-compatible env names */
     'openai' => [
-        'text_model'  => env('PROMOTION_OPENAI_TEXT_MODEL',  'gpt-4o-mini'),
-        'image_model' => env('PROMOTION_OPENAI_IMAGE_MODEL', 'gpt-image-1'),
-        'timeout'     => (int) env('PROMOTION_OPENAI_TIMEOUT', 90),
+        'text_model' => env(
+            'PROMOTION_OPENAI_TEXT_MODEL',
+            env('PROMOTION_OPENROUTER_TEXT_MODEL', env('OPENROUTER_MODEL', 'openai/gpt-4o-mini')),
+        ),
+        'image_model' => env(
+            'PROMOTION_OPENAI_IMAGE_MODEL',
+            env('PROMOTION_OPENROUTER_IMAGE_MODEL', 'openai/gpt-image-1'),
+        ),
+        'timeout' => (int) env('PROMOTION_OPENAI_TIMEOUT', env('PROMOTION_OPENROUTER_TIMEOUT', 90)),
     ],
 
     'ads' => [
@@ -52,19 +81,25 @@ return [
     ],
 
     'did' => [
-        'enabled'               => env('DID_ENABLED', false),
-        'api_key'               => env('DID_API_KEY'),
-        'default_voice_id'      => env('DID_DEFAULT_VOICE_ID', 'en-US-JennyNeural'),
+        'enabled' => env('DID_ENABLED', false),
+        'api_key' => env('DID_API_KEY'),
+        'default_voice_id' => env('DID_DEFAULT_VOICE_ID', 'en-US-JennyNeural'),
         'default_presenter_url' => env('DID_DEFAULT_PRESENTER_URL', ''),
-        'timeout'               => (int) env('DID_TIMEOUT', 120),
+        'timeout' => (int) env('DID_TIMEOUT', 120),
         'poll_interval_seconds' => (int) env('DID_POLL_INTERVAL_SECONDS', 15),
-        'poll_max_attempts'     => (int) env('DID_POLL_MAX_ATTEMPTS', 60),
+        'poll_max_attempts' => (int) env('DID_POLL_MAX_ATTEMPTS', 60),
     ],
 
     'zernio' => [
         'default_publish_endpoint' => env('ZERNIO_POST_ENDPOINT', '/v1/posts'),
         'publish_poll_attempts' => (int) env('ZERNIO_PUBLISH_POLL_ATTEMPTS', 15),
         'publish_poll_interval_seconds' => (int) env('ZERNIO_PUBLISH_POLL_INTERVAL_SECONDS', 3),
+        'thread_poll_attempts' => (int) env('ZERNIO_THREAD_POLL_ATTEMPTS', 20),
+        'thread_poll_interval_seconds' => (int) env('ZERNIO_THREAD_POLL_INTERVAL_SECONDS', 2),
+        /** chain = one API call per tweet with replyToTweetId; batch = single threadItems call. */
+        'twitter_thread_publish_mode' => env('ZERNIO_TWITTER_THREAD_MODE', 'chain'),
+        /** Delay between chained X thread replies (ms) to avoid rate limits and broken chains. */
+        'twitter_thread_delay_ms' => (int) env('ZERNIO_TWITTER_THREAD_DELAY_MS', 3000),
     ],
 
     'platform_content_limits' => [

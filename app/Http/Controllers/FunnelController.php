@@ -5,21 +5,25 @@ namespace App\Http\Controllers;
 use App\Http\Requests\FunnelPageUpdateRequest;
 use App\Http\Requests\FunnelSettingsUpdateRequest;
 use App\Http\Requests\FunnelStoreRequest;
+use App\Models\Campaign;
 use App\Models\ChatMessage;
 use App\Models\ChatRoom;
 use App\Models\Funnel;
+use App\Models\FunnelAdCampaign;
 use App\Models\FunnelAiSource;
 use App\Models\FunnelAiSourceChunk;
 use App\Models\FunnelPage;
-use App\Models\FunnelAdCampaign;
 use App\Models\FunnelPromotionPost;
 use App\Models\FunnelPromotionTopicSuggestion;
 use App\Models\FunnelVideoViewStat;
-use App\Models\IntegrationAccount;
 use App\Models\Keyword;
 use App\Models\Mention;
 use App\Models\SocialAccount;
 use App\Models\Template;
+use App\Services\Campaigns\CampaignAutoresponderService;
+use App\Services\Campaigns\CampaignBuilderService;
+use App\Services\Campaigns\CampaignLeadCaptureService;
+use App\Services\Campaigns\CampaignTrafficHubService;
 use App\Services\Funnel\FunnelPaidTrafficAssetsService;
 use App\Services\Funnels\FunnelAiKnowledgeProvisioner;
 use App\Services\Funnels\PageSanitizer;
@@ -50,32 +54,32 @@ class FunnelController extends Controller
         $funnels = $funnels
             ->filter(fn (Funnel $funnel) => ! in_array($funnel->meta['campaign_variant'] ?? null, ['optin_capture', 'traffic'], true))
             ->map(function (Funnel $funnel) use ($username) {
-            $variant = (string) ($funnel->meta['campaign_variant'] ?? '');
-            $isWebinar = $variant === 'webinar' || $funnel->campaign?->type === 'webinar';
+                $variant = (string) ($funnel->meta['campaign_variant'] ?? '');
+                $isWebinar = $variant === 'webinar' || $funnel->campaign?->type === 'webinar';
 
-            return [
-                'id' => $funnel->id,
-                'name' => $funnel->name,
-                'slug' => $funnel->slug,
-                'status' => $funnel->status,
-                'published_at' => $funnel->published_at,
-                'created_at' => $funnel->created_at,
-                'leads_count' => $funnel->leads_count,
-                'kind' => $isWebinar ? 'webinar' : 'funnel',
-                'campaign_name' => $funnel->campaign?->name,
-                'template' => $funnel->template
-                    ? [
-                        'name' => $funnel->template->name,
-                        'category' => $funnel->template->category,
-                    ]
-                    : null,
-                'public_url' => $funnel->status === 'published'
-                    ? ($isWebinar
-                        ? route('public.webinar', ['username' => $username, 'slug' => $funnel->slug])
-                        : route('public.optin', ['username' => $username, 'slug' => $funnel->slug]))
-                    : null,
-            ];
-        })->values();
+                return [
+                    'id' => $funnel->id,
+                    'name' => $funnel->name,
+                    'slug' => $funnel->slug,
+                    'status' => $funnel->status,
+                    'published_at' => $funnel->published_at,
+                    'created_at' => $funnel->created_at,
+                    'leads_count' => $funnel->leads_count,
+                    'kind' => $isWebinar ? 'webinar' : 'funnel',
+                    'campaign_name' => $funnel->campaign?->name,
+                    'template' => $funnel->template
+                        ? [
+                            'name' => $funnel->template->name,
+                            'category' => $funnel->template->category,
+                        ]
+                        : null,
+                    'public_url' => $funnel->status === 'published'
+                        ? ($isWebinar
+                            ? route('public.webinar', ['username' => $username, 'slug' => $funnel->slug])
+                            : route('public.optin', ['username' => $username, 'slug' => $funnel->slug]))
+                        : null,
+                ];
+            })->values();
 
         $stats = [
             'total' => $funnels->count(),
@@ -180,7 +184,7 @@ class FunnelController extends Controller
     {
         $this->authorizeFunnel($funnel);
 
-        $funnel->load(['template', 'pages', 'settings', 'chatRoom', 'integrations.integrationAccount', 'campaign:id,slug,type']);
+        $funnel->load(['template', 'pages', 'settings', 'chatRoom', 'campaign:id,slug,type']);
 
         $settings = $funnel->settings;
         if (
@@ -192,9 +196,6 @@ class FunnelController extends Controller
             $settings->refresh();
         }
 
-        $integrationAccounts = IntegrationAccount::query()
-            ->where('user_id', auth()->id())
-            ->get(['id', 'name', 'provider']);
         $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
         $conversationSummaries = $this->buildConversationSummaries($funnel, 50);
         $trafficData = $this->buildTrafficData($request, $funnel);
@@ -204,7 +205,6 @@ class FunnelController extends Controller
 
         return Inertia::render('funnels/Edit', [
             'funnel' => $funnel,
-            'integrationAccounts' => $integrationAccounts,
             'conversationSummaries' => $conversationSummaries,
             'traffic' => $trafficData,
             'promotion' => $promotionData,
@@ -437,14 +437,14 @@ class FunnelController extends Controller
     private function buildAdsData(Funnel $funnel): array
     {
         $campaigns = FunnelAdCampaign::query()->where('funnel_id', $funnel->id);
-        $active    = (clone $campaigns)->where('status', FunnelAdCampaign::STATUS_ACTIVE)->get(['performance']);
+        $active = (clone $campaigns)->where('status', FunnelAdCampaign::STATUS_ACTIVE)->get(['performance']);
         $totalSpend = $active->sum(fn ($c) => (float) ($c->performance['spend'] ?? 0));
 
         return [
             'campaigns_count' => (clone $campaigns)->count(),
-            'active_count'    => $active->count(),
-            'total_spend'     => round($totalSpend, 2),
-            'route'           => route('funnels.ads.index', $funnel),
+            'active_count' => $active->count(),
+            'total_spend' => round($totalSpend, 2),
+            'route' => route('funnels.ads.index', $funnel),
         ];
     }
 
@@ -555,6 +555,56 @@ class FunnelController extends Controller
     public function publish(Funnel $funnel, PublicFunnelResolver $resolver): RedirectResponse
     {
         $this->authorizeFunnel($funnel);
+        $funnel->loadMissing(['user', 'campaign']);
+
+        $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
+
+        if ($funnel->campaign) {
+            $campaign = $funnel->campaign;
+
+            app(CampaignTrafficHubService::class)->ensureTrafficFunnel($campaign);
+
+            $campaign->update([
+                'status' => 'published',
+                'published_at' => now(),
+                'wizard_step' => 8,
+            ]);
+
+            if ($campaign->type === Campaign::TYPE_WEBINAR) {
+                $builder = app(CampaignBuilderService::class);
+                $offer = $campaign->offer_data ?? ['product_name' => $campaign->name];
+                if ($builder->primaryOptinFunnel($campaign) === null || $builder->primaryWebinarFunnel($campaign) === null) {
+                    $builder->buildWebinarFunnels($campaign->fresh(), $offer);
+                }
+
+                $campaign->funnels()->update([
+                    'status' => 'published',
+                    'published_at' => now(),
+                ]);
+            } else {
+                app(CampaignLeadCaptureService::class)->ensureOptinFunnel($campaign->fresh());
+
+                $funnel->update([
+                    'status' => 'published',
+                    'published_at' => now(),
+                ]);
+            }
+
+            $relatedIds = $campaign->fresh()->funnels()->pluck('id');
+            FunnelPage::query()
+                ->whereIn('funnel_id', $relatedIds)
+                ->update(['published_at' => now()]);
+
+            app(CampaignAutoresponderService::class)->syncToLeadFunnel($campaign->fresh());
+
+            foreach ($campaign->fresh()->funnels as $related) {
+                $resolver->forget($username, $related->slug);
+            }
+
+            Inertia::flash('toast', ['type' => 'success', 'message' => 'Campaign published.']);
+
+            return back()->with('success', 'Campaign published successfully.');
+        }
 
         $funnel->update([
             'status' => 'published',
@@ -562,10 +612,9 @@ class FunnelController extends Controller
         ]);
 
         $funnel->pages()->update(['published_at' => now()]);
-        $funnel->loadMissing('user');
-
-        $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
         $resolver->forget($username, $funnel->slug);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Funnel published.']);
 
         return back()->with('success', 'Funnel published successfully.');
     }
@@ -573,6 +622,35 @@ class FunnelController extends Controller
     public function unpublish(Funnel $funnel, PublicFunnelResolver $resolver): RedirectResponse
     {
         $this->authorizeFunnel($funnel);
+        $funnel->loadMissing(['user', 'campaign']);
+
+        $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
+
+        if ($funnel->campaign) {
+            $campaign = $funnel->campaign;
+
+            $campaign->update([
+                'status' => 'draft',
+                'published_at' => null,
+            ]);
+
+            $relatedIds = $campaign->funnels()->pluck('id');
+            $campaign->funnels()->update([
+                'status' => 'draft',
+                'published_at' => null,
+            ]);
+            FunnelPage::query()
+                ->whereIn('funnel_id', $relatedIds)
+                ->update(['published_at' => null]);
+
+            foreach ($campaign->fresh()->funnels as $related) {
+                $resolver->forget($username, $related->slug);
+            }
+
+            Inertia::flash('toast', ['type' => 'success', 'message' => 'Campaign unpublished.']);
+
+            return back()->with('success', 'Campaign unpublished and moved back to draft.');
+        }
 
         $funnel->update([
             'status' => 'draft',
@@ -580,10 +658,9 @@ class FunnelController extends Controller
         ]);
 
         $funnel->pages()->update(['published_at' => null]);
-        $funnel->loadMissing('user');
-
-        $username = $funnel->user->username ?? 'user-'.$funnel->user_id;
         $resolver->forget($username, $funnel->slug);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Funnel unpublished.']);
 
         return back()->with('success', 'Funnel unpublished and moved back to draft.');
     }

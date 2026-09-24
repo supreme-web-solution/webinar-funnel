@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Funnels;
 
+use App\Models\Campaign;
 use App\Models\Funnel;
 use App\Models\FunnelIntegration;
 use App\Models\IntegrationAccount;
@@ -113,6 +114,80 @@ class FunnelManagementActionsTest extends TestCase
             'integration_account_id' => $integration->id,
             'provider_list_config->audience_id' => 'aud-1',
             'provider_list_config->tag' => 'vip',
+        ]);
+    }
+
+    public function test_publishing_campaign_funnel_also_publishes_parent_campaign(): void
+    {
+        $user = User::factory()->create(['username' => 'owner_publish']);
+        $this->actingAs($user);
+
+        $template = Template::query()->create([
+            'name' => 'Template C',
+            'slug' => 'template-c',
+            'category' => 'business',
+            'conversion_style' => 'webinar',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $campaign = Campaign::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Webinar Campaign',
+            'slug' => 'webinar-campaign',
+            'type' => Campaign::TYPE_WEBINAR,
+            'status' => 'draft',
+            'offer_data' => ['product_name' => 'Webinar Offer'],
+        ]);
+
+        $optin = Funnel::query()->create([
+            'user_id' => $user->id,
+            'campaign_id' => $campaign->id,
+            'template_id' => $template->id,
+            'name' => 'Opt-in',
+            'slug' => 'webinar-campaign-optin',
+            'status' => 'draft',
+            'meta' => ['campaign_variant' => 'optin_capture'],
+        ]);
+        $optin->pages()->create([
+            'page_type' => 'optin',
+            'schema' => ['html' => '<div>optin</div>'],
+            'version' => 1,
+        ]);
+
+        $webinar = Funnel::query()->create([
+            'user_id' => $user->id,
+            'campaign_id' => $campaign->id,
+            'template_id' => $template->id,
+            'name' => 'Webinar Room',
+            'slug' => 'webinar-campaign-room',
+            'status' => 'draft',
+            'meta' => ['campaign_variant' => 'webinar'],
+        ]);
+        $webinar->pages()->createMany([
+            ['page_type' => 'optin', 'schema' => ['html' => '<div>optin</div>'], 'version' => 1],
+            ['page_type' => 'webinar', 'schema' => ['title' => 'room'], 'version' => 1],
+        ]);
+
+        $meta = [
+            'primary_optin_funnel_id' => $optin->id,
+            'primary_webinar_funnel_id' => $webinar->id,
+        ];
+        $campaign->update(['meta' => $meta]);
+
+        $this->post(route('funnels.publish', $webinar))->assertRedirect();
+
+        $this->assertDatabaseHas('campaigns', [
+            'id' => $campaign->id,
+            'status' => 'published',
+        ]);
+        $this->assertDatabaseHas('funnels', [
+            'id' => $webinar->id,
+            'status' => 'published',
+        ]);
+        $this->assertDatabaseHas('funnels', [
+            'id' => $optin->id,
+            'status' => 'published',
         ]);
     }
 }

@@ -4,35 +4,33 @@ import { cva } from "class-variance-authority"
 export { default as Button } from "./Button.vue"
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[10px] text-sm font-medium transition-[background-color,box-shadow,border-color,transform,color] duration-150 ease-out disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#3B82F6]/35 focus-visible:ring-offset-2 aria-invalid:ring-destructive/20 aria-invalid:border-destructive active:scale-[0.98]",
   {
     variants: {
       variant: {
-        default:
-          "bg-primary text-primary-foreground hover:bg-primary/90",
-        brand:
-          "btn-brand border-0 shadow-none hover:opacity-100",
+        default: "btn-brand",
+        brand: "btn-brand",
         "brand-outline":
           "btn-brand-outline",
         "brand-outline-on-dark":
-          "btn-brand-outline-on-dark",
+          "btn-brand-outline-on-dark active:scale-[0.98]",
         destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20",
+          "border border-transparent bg-destructive text-white shadow-sm hover:bg-destructive/90",
         outline:
-          "border border-input bg-white/90 shadow-xs hover:bg-teal-50/60 hover:text-teal-900",
+          "border border-[#E2E8F0] bg-white text-[#334155] shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-[#BFDBFE] hover:bg-[#F8FAFC] hover:text-[#1E293B]",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "border border-transparent bg-[#F1F5F9] text-[#334155] shadow-none hover:bg-[#E2E8F0]",
         ghost:
-          "hover:bg-teal-50/70 hover:text-teal-900",
-        link: "text-primary underline-offset-4 hover:underline",
+          "border border-transparent text-[#475569] shadow-none hover:bg-[#EFF6FF] hover:text-[#2563EB] active:scale-100",
+        link: "border-0 text-[#2563EB] shadow-none underline-offset-4 hover:underline active:scale-100",
       },
       size: {
-        "default": "h-9 px-4 py-2 has-[>svg]:px-3",
-        "sm": "h-8 rounded-xl gap-1.5 px-3 has-[>svg]:px-2.5",
-        "lg": "h-10 rounded-xl px-6 has-[>svg]:px-4",
-        "icon": "size-9",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
+        "default": "h-10 px-4 has-[>svg]:px-3.5",
+        "sm": "h-9 gap-1.5 px-3.5 text-xs has-[>svg]:px-2.5",
+        "lg": "h-11 px-5 text-[0.9375rem] has-[>svg]:px-4",
+        "icon": "size-10",
+        "icon-sm": "size-9",
+        "icon-lg": "size-11",
       },
     },
     defaultVariants: {

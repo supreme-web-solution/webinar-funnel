@@ -181,10 +181,16 @@ final class ZernioClient
         $endpoint = (string) config('promotion.zernio.default_publish_endpoint', '/v1/posts');
         $mediaUrls = array_values(array_filter($mediaUrls, fn ($url) => is_string($url) && $url !== ''));
 
+        $hasThreadItems = $this->countThreadItemsInPlatforms($platforms) > 0;
+
         $payload = [
-            'content' => $content,
             'platforms' => $platforms,
         ];
+
+        // Zernio thread docs omit top-level content; it is display-only when threadItems is set.
+        if (! $hasThreadItems) {
+            $payload['content'] = $content;
+        }
 
         if ($mediaUrls !== []) {
             $payload['mediaUrls'] = $mediaUrls;
@@ -192,7 +198,10 @@ final class ZernioClient
         }
 
         // linkUrl turns Facebook posts into link previews and drops the image attachment.
-        if ($linkUrl !== null && $linkUrl !== '' && $mediaUrls === []) {
+        // Never attach linkUrl to X threads or replies — it breaks multi-tweet chains.
+        $skipLinkUrl = $this->countThreadItemsInPlatforms($platforms) > 0
+            || $this->hasReplyToTweetInPlatforms($platforms);
+        if ($linkUrl !== null && $linkUrl !== '' && $mediaUrls === [] && ! $skipLinkUrl) {
             $payload['linkUrl'] = $linkUrl;
         }
         if ($publishNow) {
@@ -210,6 +219,7 @@ final class ZernioClient
                 'publish_now' => $publishNow,
                 'media_items' => count($payload['mediaItems'] ?? []),
                 'content_length' => strlen($content),
+                'thread_items' => $this->countThreadItemsInPlatforms($platforms),
             ]);
 
             $response = $this->request()->post($endpoint, $payload);
@@ -305,6 +315,89 @@ final class ZernioClient
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $platforms
+     */
+    private function countThreadItemsInPlatforms(array $platforms): int
+    {
+        foreach ($platforms as $target) {
+            $items = $target['platformSpecificData']['threadItems'] ?? null;
+            if (is_array($items)) {
+                return count($items);
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Poll Zernio until all X thread tweet IDs are confirmed.
+     *
+     * @return array{complete: bool, count: int, thread_post_ids: list<string>}
+     */
+    public function waitForTwitterThreadCompletion(string $zernioPostId, int $expectedCount): array
+    {
+        $attempts = (int) config('promotion.zernio.thread_poll_attempts', 20);
+        $sleepSeconds = (int) config('promotion.zernio.thread_poll_interval_seconds', 2);
+        $bestIds = [];
+
+        for ($attempt = 0; $attempt < $attempts; $attempt++) {
+            if ($attempt > 0 && $sleepSeconds > 0) {
+                sleep($sleepSeconds);
+            }
+
+            $post = $this->getPost($zernioPostId);
+            if (! is_array($post)) {
+                continue;
+            }
+
+            foreach ($post['platforms'] ?? [] as $platformRow) {
+                if (! is_array($platformRow) || ($platformRow['platform'] ?? '') !== 'twitter') {
+                    continue;
+                }
+
+                $ids = $platformRow['platformSpecificData']['threadPostIds'] ?? null;
+                if (! is_array($ids)) {
+                    continue;
+                }
+
+                $stringIds = array_values(array_filter($ids, fn ($id): bool => is_string($id) && $id !== ''));
+                if (count($stringIds) > count($bestIds)) {
+                    $bestIds = $stringIds;
+                }
+
+                if (count($stringIds) >= $expectedCount) {
+                    return [
+                        'complete' => true,
+                        'count' => count($stringIds),
+                        'thread_post_ids' => $stringIds,
+                    ];
+                }
+            }
+        }
+
+        return [
+            'complete' => count($bestIds) >= $expectedCount,
+            'count' => count($bestIds),
+            'thread_post_ids' => $bestIds,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $platforms
+     */
+    private function hasReplyToTweetInPlatforms(array $platforms): bool
+    {
+        foreach ($platforms as $target) {
+            $replyTo = $target['platformSpecificData']['replyToTweetId'] ?? null;
+            if (is_string($replyTo) && $replyTo !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -489,8 +582,8 @@ final class ZernioClient
                 return ['success' => false, 'error' => 'Zernio API error ('.$response->status().').'];
             }
 
-            $data    = $response->json('data') ?? $response->json();
-            $postId  = is_array($data) ? ($data['postId'] ?? $data['id'] ?? null) : null;
+            $data = $response->json('data') ?? $response->json();
+            $postId = is_array($data) ? ($data['postId'] ?? $data['id'] ?? null) : null;
 
             return ['success' => true, 'post_id' => is_string($postId) ? $postId : null];
         } catch (\Throwable $e) {
@@ -534,6 +627,61 @@ final class ZernioClient
         $json = $response->json();
 
         return is_array($json) ? $json : [];
+    }
+
+    /**
+     * Send a WhatsApp/inbox DM reply.
+     *
+     * @return array{success: bool, message_id?: string|null, error?: string}
+     */
+    public function sendInboxMessage(
+        string $accountId,
+        string $conversationId,
+        string $message,
+        ?string $participantId = null,
+    ): array {
+        if (! $this->isEnabled()) {
+            return ['success' => false, 'error' => 'Zernio is not configured.'];
+        }
+
+        if ($conversationId === '') {
+            return ['success' => false, 'error' => 'Missing conversation id.'];
+        }
+
+        $payload = [
+            'accountId' => $accountId,
+            'message' => $message,
+        ];
+        if ($participantId !== null && $participantId !== '') {
+            $payload['participantId'] = $participantId;
+        }
+
+        try {
+            $response = $this->request()
+                ->withHeaders(['Idempotency-Key' => (string) Str::uuid()])
+                ->post('/v1/inbox/conversations/'.rawurlencode($conversationId).'/messages', $payload);
+
+            if (! $response->successful()) {
+                Log::warning('ZernioClient::sendInboxMessage failed', [
+                    'status' => $response->status(),
+                    'body' => Str::limit($response->body(), 400, ''),
+                ]);
+
+                return ['success' => false, 'error' => $this->parseApiErrorMessage($response)];
+            }
+
+            $data = $response->json('data') ?? $response->json();
+            $messageId = is_array($data) ? ($data['messageId'] ?? $data['id'] ?? null) : null;
+
+            return [
+                'success' => true,
+                'message_id' => is_string($messageId) ? $messageId : null,
+            ];
+        } catch (\Throwable $e) {
+            Log::error('ZernioClient::sendInboxMessage exception', ['error' => $e->getMessage()]);
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     private function request(): PendingRequest

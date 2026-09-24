@@ -1,0 +1,51 @@
+export type CountryOption = { code: string; label: string; region: string };
+
+/** Common affiliate traffic countries — ISO 3166-1 alpha-2 */
+export const TRACKED_LINK_COUNTRIES: CountryOption[] = [
+    { code: 'US', label: 'United States', region: 'North America' },
+    { code: 'CA', label: 'Canada', region: 'North America' },
+    { code: 'MX', label: 'Mexico', region: 'North America' },
+    { code: 'GB', label: 'United Kingdom', region: 'Europe' },
+    { code: 'IE', label: 'Ireland', region: 'Europe' },
+    { code: 'DE', label: 'Germany', region: 'Europe' },
+    { code: 'FR', label: 'France', region: 'Europe' },
+    { code: 'NL', label: 'Netherlands', region: 'Europe' },
+    { code: 'BE', label: 'Belgium', region: 'Europe' },
+    { code: 'ES', label: 'Spain', region: 'Europe' },
+    { code: 'IT', label: 'Italy', region: 'Europe' },
+    { code: 'PT', label: 'Portugal', region: 'Europe' },
+    { code: 'SE', label: 'Sweden', region: 'Europe' },
+    { code: 'NO', label: 'Norway', region: 'Europe' },
+    { code: 'DK', label: 'Denmark', region: 'Europe' },
+    { code: 'FI', label: 'Finland', region: 'Europe' },
+    { code: 'CH', label: 'Switzerland', region: 'Europe' },
+    { code: 'AT', label: 'Austria', region: 'Europe' },
+    { code: 'PL', label: 'Poland', region: 'Europe' },
+    { code: 'AU', label: 'Australia', region: 'Oceania' },
+    { code: 'NZ', label: 'New Zealand', region: 'Oceania' },
+    { code: 'SG', label: 'Singapore', region: 'Asia' },
+    { code: 'MY', label: 'Malaysia', region: 'Asia' },
+    { code: 'PH', label: 'Philippines', region: 'Asia' },
+    { code: 'IN', label: 'India', region: 'Asia' },
+    { code: 'ID', label: 'Indonesia', region: 'Asia' },
+    { code: 'TH', label: 'Thailand', region: 'Asia' },
+    { code: 'VN', label: 'Vietnam', region: 'Asia' },
+    { code: 'JP', label: 'Japan', region: 'Asia' },
+    { code: 'KR', label: 'South Korea', region: 'Asia' },
+    { code: 'HK', label: 'Hong Kong', region: 'Asia' },
+    { code: 'TW', label: 'Taiwan', region: 'Asia' },
+    { code: 'AE', label: 'United Arab Emirates', region: 'Middle East' },
+    { code: 'SA', label: 'Saudi Arabia', region: 'Middle East' },
+    { code: 'IL', label: 'Israel', region: 'Middle East' },
+    { code: 'ZA', label: 'South Africa', region: 'Africa' },
+    { code: 'NG', label: 'Nigeria', region: 'Africa' },
+    { code: 'EG', label: 'Egypt', region: 'Africa' },
+    { code: 'BR', label: 'Brazil', region: 'South America' },
+    { code: 'AR', label: 'Argentina', region: 'South America' },
+    { code: 'CL', label: 'Chile', region: 'South America' },
+    { code: 'CO', label: 'Colombia', region: 'South America' },
+];
+
+export function countryLabel(code: string): string {
+    return TRACKED_LINK_COUNTRIES.find((c) => c.code === code)?.label ?? code;
+}

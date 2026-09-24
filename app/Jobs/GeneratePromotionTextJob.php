@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\FunnelPromotionPost;
+use App\Services\Content\FormatContentGenerationService;
 use App\Services\Promotion\PromotionGenerationCoordinator;
 use App\Services\Promotion\PromotionTextGenerationService;
 use Illuminate\Bus\Queueable;
@@ -23,60 +24,96 @@ class GeneratePromotionTextJob implements ShouldQueue
         $this->onQueue((string) config('promotion.queues.generate', 'promotion-generate'));
     }
 
-    public function handle(PromotionTextGenerationService $service, PromotionGenerationCoordinator $coordinator): void
-    {
+    public function handle(
+        PromotionTextGenerationService $service,
+        FormatContentGenerationService $formatService,
+        PromotionGenerationCoordinator $coordinator,
+    ): void {
         Log::info('[Promotion] GeneratePromotionTextJob started', ['post_id' => $this->postId]);
 
         $post = FunnelPromotionPost::query()->with(['funnel'])->find($this->postId);
 
         if (! $post) {
             Log::warning('[Promotion] GeneratePromotionTextJob: post not found', ['post_id' => $this->postId]);
+
             return;
         }
 
         if (! $post->funnel) {
             Log::warning('[Promotion] GeneratePromotionTextJob: funnel not found', [
-                'post_id'   => $this->postId,
+                'post_id' => $this->postId,
                 'funnel_id' => $post->funnel_id,
             ]);
+
             return;
         }
 
         Log::info('[Promotion] GeneratePromotionTextJob: generating text', [
-            'post_id'      => $this->postId,
-            'topic'        => $post->topic,
+            'post_id' => $this->postId,
+            'topic' => $post->topic,
             'content_type' => $post->content_type,
-            'funnel_id'    => $post->funnel_id,
+            'funnel_id' => $post->funnel_id,
         ]);
 
         try {
-            $result = $service->generate($post->funnel, $post);
+            $hasFormat = ! empty($post->metadata['format_key'] ?? null)
+                || ! empty($post->generation_context['content_format'] ?? null);
+
+            $result = $hasFormat
+                ? $formatService->generate($post->funnel, $post)
+                : $service->generate($post->funnel, $post);
 
             Log::info('[Promotion] GeneratePromotionTextJob: text generated', [
-                'post_id'          => $this->postId,
-                'source'           => $result['source'] ?? 'unknown',
+                'post_id' => $this->postId,
+                'source' => $result['source'] ?? 'unknown',
                 'text_body_length' => strlen($result['text_body'] ?? ''),
-                'hashtag_count'    => count($result['hashtags'] ?? []),
+                'hashtag_count' => count($result['hashtags'] ?? []),
             ]);
 
-            // Image posts wait for image + text before STATUS_READY.
+            // Image posts wait for image + text; video posts wait for D-ID render.
             $isImagePost = $post->content_type === FunnelPromotionPost::TYPE_IMAGE;
+            $isVideoPost = $post->content_type === FunnelPromotionPost::TYPE_VIDEO;
+
+            $metadata = $post->metadata ?? [];
+            if (! empty($result['format_payload'] ?? null)) {
+                $metadata['format_payload'] = $result['format_payload'];
+            }
+
+            $isMultiSlide = ($result['format_payload']['generator'] ?? null) === 'carousel';
+            if ($isMultiSlide) {
+                $slides = is_array($result['format_payload']['slides'] ?? null)
+                    ? $result['format_payload']['slides']
+                    : [];
+                if ($slides !== []) {
+                    $metadata['generation_progress'] = [
+                        'phase' => 'slide_images',
+                        'current' => 0,
+                        'total' => count($slides),
+                        'message' => 'Slide copy ready — starting images…',
+                        'updated_at' => now()->toIso8601String(),
+                    ];
+                }
+            }
 
             $post->fill([
-                'text_body'     => $result['text_body'],
+                'text_body' => $result['text_body'],
                 'email_subject' => $result['email_subject'],
-                'email_body'    => $result['email_body'],
-                'hashtags'      => $result['hashtags'],
-                'last_error'    => null,
+                'email_body' => $result['email_body'],
+                'hashtags' => $result['hashtags'],
+                'metadata' => $metadata,
+                'last_error' => null,
             ]);
 
-            if (! $isImagePost) {
+            if (! $isImagePost && ! $isVideoPost) {
                 $post->status = FunnelPromotionPost::STATUS_READY;
             }
 
             $post->save();
 
-            if ($isImagePost) {
+            if ($isMultiSlide) {
+                Log::info('[Promotion] GeneratePromotionTextJob: dispatching multi-slide images', ['post_id' => $this->postId]);
+                GeneratePromotionCarouselImagesJob::dispatch($this->postId);
+            } elseif ($isImagePost || $isVideoPost) {
                 $coordinator->maybeFinalize($post);
             } elseif ($post->publish_mode === FunnelPromotionPost::MODE_AUTO_PUBLISH) {
                 $coordinator->maybeFinalize($post);
@@ -84,17 +121,17 @@ class GeneratePromotionTextJob implements ShouldQueue
 
             Log::info('[Promotion] GeneratePromotionTextJob: post updated', [
                 'post_id' => $this->postId,
-                'status'  => $post->status,
+                'status' => $post->status,
             ]);
         } catch (\Throwable $e) {
             Log::error('[Promotion] GeneratePromotionTextJob: exception', [
                 'post_id' => $this->postId,
-                'error'   => $e->getMessage(),
-                'trace'   => $e->getTraceAsString(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             $post->update([
-                'status'     => FunnelPromotionPost::STATUS_FAILED,
+                'status' => FunnelPromotionPost::STATUS_FAILED,
                 'last_error' => 'Text generation failed: '.$e->getMessage(),
             ]);
 

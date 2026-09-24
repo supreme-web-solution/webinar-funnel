@@ -2,26 +2,92 @@
 
 namespace App\Services\Ai;
 
+use App\Services\Content\PlatformFormatCatalog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class OpenRouterService
 {
+    public function isConfigured(): bool
+    {
+        return (string) config('services.openrouter.api_key', '') !== '';
+    }
+
+    public function modelFor(string $key): string
+    {
+        $configured = config("services.openrouter.models.{$key}");
+
+        $model = is_string($configured) && $configured !== ''
+            ? $configured
+            : (string) config('services.openrouter.model', 'openai/gpt-4o-mini');
+
+        return $this->resolveModel($model);
+    }
+
+    public function promotionTextModel(): string
+    {
+        return $this->resolveModel((string) config('promotion.openrouter.text_model', $this->modelFor('promotion_text')));
+    }
+
+    public function promotionImageModel(): string
+    {
+        return $this->resolveModel((string) config('promotion.openrouter.image_model', $this->modelFor('promotion_image')));
+    }
+
+    public function resolveModel(string $model): string
+    {
+        $model = trim($model);
+        if ($model === '') {
+            return 'openai/gpt-4o-mini';
+        }
+
+        if (str_contains($model, '/')) {
+            return $model;
+        }
+
+        return 'openai/'.$model;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function requestHeaders(): array
+    {
+        return [
+            'HTTP-Referer' => (string) config('app.url'),
+            'X-Title' => (string) config('app.name', 'AffiliateOS AI'),
+        ];
+    }
+
+    protected function baseUrl(): string
+    {
+        return rtrim((string) config('services.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
+    }
+
     /**
      * @param  array<int, array{role: string, content: string}>  $messages
      * @return array{ok: bool, content: string|null, error: string|null, raw?: mixed}
      */
-    public function chat(array $messages, ?string $model = null, float $temperature = 0.4, ?int $timeout = null, ?int $maxTokens = null): array
-    {
+    public function chat(
+        array $messages,
+        ?string $model = null,
+        float $temperature = 0.4,
+        ?int $timeout = null,
+        ?int $maxTokens = null,
+        ?array $responseFormat = null,
+    ): array {
         $apiKey = (string) config('services.openrouter.api_key', '');
         if ($apiKey === '') {
-            // Fallback to OpenAI key for local/dev continuity
-            return $this->chatViaOpenAi($messages, $model, $temperature, $timeout);
+            return [
+                'ok' => false,
+                'content' => null,
+                'error' => 'OPENROUTER_API_KEY is not configured.',
+            ];
         }
 
-        $model = $model ?: (string) config('services.openrouter.model', 'openai/gpt-4o-mini');
-        $baseUrl = rtrim((string) config('services.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
+        $model = $this->resolveModel($model ?: (string) config('services.openrouter.model', 'openai/gpt-4o-mini'));
+        $baseUrl = $this->baseUrl();
         $timeout ??= (int) config('services.openrouter.timeout', 90);
         $connectTimeout = (int) config('services.openrouter.connect_timeout', 15);
         $retries = (int) config('services.openrouter.retries', 2);
@@ -36,21 +102,20 @@ class OpenRouterService
                         || str_contains(strtolower($e->getMessage()), 'connection was reset')
                         || str_contains(strtolower($e->getMessage()), 'timed out');
                 }, throw: false)
-                ->withHeaders([
-                    'HTTP-Referer' => (string) config('app.url'),
-                    'X-Title' => (string) config('app.name', 'AffiliateOS AI'),
-                ])
+                ->withHeaders($this->requestHeaders())
                 ->post($baseUrl.'/chat/completions', array_filter([
                     'model' => $model,
                     'temperature' => $temperature,
                     'messages' => $messages,
                     'max_tokens' => $maxTokens,
+                    'response_format' => $responseFormat,
                 ], fn ($v) => $v !== null));
 
             if (! $response->successful()) {
                 Log::warning('[OpenRouter] chat failed', [
                     'status' => $response->status(),
                     'body' => $response->body(),
+                    'model' => $model,
                 ]);
 
                 return [
@@ -81,24 +146,42 @@ class OpenRouterService
     }
 
     /**
-     * @param  array<int, array{role: string, content: string}>  $messages
-     * @return array{ok: bool, content: string|null, error: string|null, raw?: mixed}
+     * Generate an image via OpenRouter's Image API (e.g. openai/gpt-image-1).
+     *
+     * @param  array<string, mixed>  $options
+     * @return array{ok: bool, url: string|null, b64_json: string|null, error: string|null, raw?: mixed}
      */
-    protected function chatViaOpenAi(array $messages, ?string $model, float $temperature, ?int $timeout = null): array
+    public function generateImage(string $prompt, ?string $model = null, array $options = []): array
     {
-        $apiKey = (string) config('services.openai.api_key', '');
+        $apiKey = (string) config('services.openrouter.api_key', '');
         if ($apiKey === '') {
             return [
                 'ok' => false,
-                'content' => null,
-                'error' => 'Neither OPENROUTER_API_KEY nor OPENAI_API_KEY is configured.',
+                'url' => null,
+                'b64_json' => null,
+                'error' => 'OPENROUTER_API_KEY is not configured.',
             ];
         }
 
-        $model = $model ?: (string) config('services.openai.model', 'gpt-4o-mini');
-        $timeout ??= (int) config('services.openrouter.timeout', 90);
+        $model = $this->resolveModel($model ?: $this->promotionImageModel());
+        $timeout = (int) ($options['timeout'] ?? config('promotion.openrouter.timeout', 90));
         $connectTimeout = (int) config('services.openrouter.connect_timeout', 15);
         $retries = (int) config('services.openrouter.retries', 2);
+
+        $size = isset($options['size']) && is_string($options['size'])
+            ? $this->normalizeImageSize($options['size'])
+            : null;
+
+        $payload = array_filter([
+            'model' => $model,
+            'prompt' => $prompt,
+            'n' => (int) ($options['n'] ?? 1),
+            'size' => $size,
+            'aspect_ratio' => $options['aspect_ratio'] ?? null,
+            'quality' => $options['quality'] ?? null,
+            'output_format' => $options['output_format'] ?? 'png',
+            'background' => $options['background'] ?? null,
+        ], fn ($v) => $v !== null && $v !== '');
 
         try {
             $response = Http::withToken($apiKey)
@@ -110,32 +193,53 @@ class OpenRouterService
                         || str_contains(strtolower($e->getMessage()), 'connection was reset')
                         || str_contains(strtolower($e->getMessage()), 'timed out');
                 }, throw: false)
-                ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => str_contains($model, '/') ? explode('/', $model, 2)[1] : $model,
-                    'temperature' => $temperature,
-                    'messages' => $messages,
-                ]);
+                ->withHeaders($this->requestHeaders())
+                ->post($this->baseUrl().'/images', $payload);
 
             if (! $response->successful()) {
+                Log::error('[OpenRouter] image generation failed', [
+                    'status' => $response->status(),
+                    'body' => substr($response->body(), 0, 500),
+                    'model' => $model,
+                ]);
+
                 return [
                     'ok' => false,
-                    'content' => null,
-                    'error' => 'OpenAI fallback failed ('.$response->status().').',
+                    'url' => null,
+                    'b64_json' => null,
+                    'error' => 'Image generation failed: HTTP '.$response->status().' — '.substr($response->body(), 0, 200),
+                    'raw' => $response->json(),
                 ];
             }
 
-            $content = data_get($response->json(), 'choices.0.message.content');
+            $first = (array) ($response->json('data.0') ?? []);
+            $url = is_string($first['url'] ?? null) ? $first['url'] : null;
+            $b64 = is_string($first['b64_json'] ?? null) ? $first['b64_json'] : null;
+
+            if (($url === null || $url === '') && ($b64 === null || $b64 === '')) {
+                return [
+                    'ok' => false,
+                    'url' => null,
+                    'b64_json' => null,
+                    'error' => 'No image payload returned by OpenRouter.',
+                    'raw' => $response->json(),
+                ];
+            }
 
             return [
-                'ok' => is_string($content) && trim($content) !== '',
-                'content' => is_string($content) ? trim($content) : null,
+                'ok' => true,
+                'url' => $url,
+                'b64_json' => $b64,
                 'error' => null,
                 'raw' => $response->json(),
             ];
         } catch (\Throwable $e) {
+            Log::error('[OpenRouter] image exception', ['message' => $e->getMessage()]);
+
             return [
                 'ok' => false,
-                'content' => null,
+                'url' => null,
+                'b64_json' => null,
                 'error' => $e->getMessage(),
             ];
         }
@@ -147,9 +251,16 @@ class OpenRouterService
      * @param  array<int, array{role: string, content: string}>  $messages
      * @return array{ok: bool, data: array<string, mixed>|null, error: string|null}
      */
-    public function chatJson(array $messages, ?string $model = null, ?int $timeout = null, ?int $maxTokens = null): array
-    {
-        $result = $this->chat($messages, $model, 0.2, $timeout, $maxTokens);
+    public function chatJson(
+        array $messages,
+        ?string $model = null,
+        ?int $timeout = null,
+        ?int $maxTokens = null,
+        float $temperature = 0.2,
+        bool $strictJsonObject = false,
+    ): array {
+        $responseFormat = $strictJsonObject ? ['type' => 'json_object'] : null;
+        $result = $this->chat($messages, $model, $temperature, $timeout, $maxTokens, $responseFormat);
         if (! $result['ok'] || ! is_string($result['content'])) {
             return ['ok' => false, 'data' => null, 'error' => $result['error'] ?? 'No content'];
         }
@@ -275,15 +386,6 @@ class OpenRouterService
         return $json;
     }
 
-    public function modelFor(string $key): string
-    {
-        $configured = config("services.openrouter.models.{$key}");
-
-        return is_string($configured) && $configured !== ''
-            ? $configured
-            : (string) config('services.openrouter.model', 'openai/gpt-4o-mini');
-    }
-
     /**
      * Try primary model, then optional free/cheap fallback.
      *
@@ -320,5 +422,14 @@ class OpenRouterService
     public function leadMagnetTimeout(): int
     {
         return (int) config('services.openrouter.lead_magnet_timeout', 180);
+    }
+
+    private function normalizeImageSize(string $size): string
+    {
+        if (in_array($size, ['1024x1024', '1024x1536', '1536x1024', 'auto'], true)) {
+            return $size;
+        }
+
+        return app(PlatformFormatCatalog::class)->normalizeOpenRouterImageSize($size);
     }
 }
