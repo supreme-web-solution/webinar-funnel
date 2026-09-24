@@ -35,7 +35,7 @@ return [
     ],
 
     'apify' => [
-        'api_token' => env('APIFY_API_TOKEN'),
+        'api_token' => env('APIFY_API_TOKEN') ?: '',
         'enabled' => env('APIFY_ENABLED', true),
         'max_items_per_search' => env('APIFY_MAX_ITEMS_PER_SEARCH', 25),
         // Reddit search: sort=new + time=year keeps results recent (Apify actor practicaltools/apify-reddit-api).

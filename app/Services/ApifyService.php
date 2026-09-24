@@ -13,7 +13,7 @@ class ApifyService
 
     public function __construct()
     {
-        $this->token = config('services.apify.api_token', '');
+        $this->token = (string) (config('services.apify.api_token') ?? '');
         $this->maxItems = (int) config('services.apify.max_items_per_search', 25);
     }
 
