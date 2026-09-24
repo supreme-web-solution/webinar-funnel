@@ -13,10 +13,12 @@ Background work in this app uses Laravel queues. In production you should run **
 | `promotion-generate` | `GeneratePromotionTextJob`, `GeneratePromotionImageJob`, `GeneratePromotionVideoJob`, `PollPromotionVideoJob`, `LaunchAdCampaignJob`, `SyncAdPerformanceJob` | Generate organic promotion assets/content + paid ad launch/sync |
 | `promotion-publish` | `PublishPromotionPostJob`, `DispatchDuePromotionPostsJob` | Publish now + scheduled promotion dispatch |
 | `esp-dispatch` | `DispatchLeadToEspJob` | Send opt-in leads to ESP integrations |
-| `webinar-ai` | `IndexFunnelAiSourceJob`, `DispatchWebinarAiReplyJob`, `GenerateWebinarAiReplyJob` | Webinar AI sources + simulated chat replies |
+| `ai-employee` | `ProcessAiChatTurnJob`, `ProcessWhatsAppInboundJob` | Command Center chat + WhatsApp (`AI_EMPLOYEE_QUEUE`) |
+| `webinar-ai` | `IndexFunnelAiSourceJob`, `DispatchWebinarAiReplyJob`, `GenerateWebinarAiReplyJob` | Funnel webinar room AI only |
+| `campaign-generate` | `RunCampaignGenerationJob` | Campaign wizard AI build |
 
 Priority order for workers (highest first):  
-`traffic-post` → `traffic-generate` → `traffic-evaluate` → `promotion-publish` → `promotion-generate` → `esp-dispatch` → `webinar-ai` → `default`
+`traffic-post` → `traffic-generate` → `traffic-evaluate` → `promotion-publish` → `promotion-generate` → `esp-dispatch` → `ai-employee` → `webinar-ai` → `campaign-generate` → `default`
 
 ## Scheduler (required in production)
 
@@ -39,7 +41,7 @@ This runs `mentions:fetch` every 15 minutes and promotion dispatch every minute 
 Horizon requires `ext-pcntl` and `ext-posix` (not available on Windows CLI). Use a database or redis queue worker:
 
 ```bash
-php artisan queue:work --queue=traffic-post,traffic-generate,traffic-evaluate,promotion-publish,promotion-generate,esp-dispatch,webinar-ai,default --tries=3 --sleep=1
+php artisan queue:work --queue=traffic-post,traffic-generate,traffic-evaluate,promotion-publish,promotion-generate,esp-dispatch,ai-employee,webinar-ai,campaign-generate,default --tries=3 --sleep=1
 ```
 
 Or use the all-in-one dev script (includes the same queues):
@@ -109,7 +111,7 @@ sudo supervisorctl start dfy-horizon
 If you prefer plain workers:
 
 ```bash
-php artisan queue:work redis --queue=traffic-post,traffic-generate,traffic-evaluate,promotion-publish,promotion-generate,esp-dispatch,webinar-ai,default --tries=3 --sleep=1 --max-time=3600
+php artisan queue:work redis --queue=traffic-post,traffic-generate,traffic-evaluate,promotion-publish,promotion-generate,esp-dispatch,ai-employee,webinar-ai,campaign-generate,default --tries=3 --sleep=1 --max-time=3600
 ```
 
 Run under Supervisor with `autorestart=true` (restart after `--max-time`).

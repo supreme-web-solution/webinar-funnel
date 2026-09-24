@@ -6,7 +6,8 @@ return [
     'title' => env('AI_EMPLOYEE_TITLE', 'Command Center'),
     /** Public path (under /public) or absolute URL for Command Center avatar */
     'avatar' => env('AI_EMPLOYEE_AVATAR', '/images/ai-employee/alex.png'),
-    'queue' => env('AI_EMPLOYEE_QUEUE', 'webinar-ai'),
+    /** Command Center web chat + WhatsApp inbound (Horizon: supervisor-ai). */
+    'queue' => env('AI_EMPLOYEE_QUEUE', 'ai-employee'),
     'history_limit' => (int) env('AI_EMPLOYEE_HISTORY_LIMIT', 40),
     /** Clear stuck "Thinking…" UI if a queued turn never finishes (seconds). */
     'processing_timeout' => (int) env('AI_EMPLOYEE_PROCESSING_TIMEOUT', 210),

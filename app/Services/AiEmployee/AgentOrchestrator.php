@@ -62,8 +62,7 @@ class AgentOrchestrator
 
         $this->recordUserMessage($user, $session, $text);
         $this->sessions->startTurn($session, $channel);
-        ProcessAiChatTurnJob::dispatch($user->id, $session->conversation_id, $text, $channel)
-            ->onQueue((string) config('ai_employee.queue', 'webinar-ai'));
+        ProcessAiChatTurnJob::dispatch($user->id, $session->conversation_id, $text, $channel);
 
         return $this->result($session, 'processing', null, true);
     }

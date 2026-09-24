@@ -14,14 +14,15 @@ Include at least:
 - `promotion-generate` — AI copy, images, carousel slides
 - `promotion-publish` — Zernio social publish
 - `campaign-generate` — campaign wizard AI build
-- `webinar-ai` — Command Center chat, WhatsApp inbound, some funnel AI
+- `ai-employee` — Command Center web chat + WhatsApp inbound (`AI_EMPLOYEE_QUEUE`)
+- `webinar-ai` — Funnel webinar room AI (sources, simulated replies)
 - `default` — misc jobs
 - `esp-dispatch` — if ESP integrations are used
 
 Example (dev):
 
 ```bash
-php artisan queue:work --queue=promotion-generate,promotion-publish,campaign-generate,webinar-ai,esp-dispatch,default
+php artisan queue:work --queue=promotion-generate,promotion-publish,campaign-generate,ai-employee,webinar-ai,esp-dispatch,default
 ```
 
 Production: prefer Horizon over a single `queue:work`.

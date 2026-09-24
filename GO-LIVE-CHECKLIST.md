@@ -42,7 +42,7 @@ Use with [DEPLOY.md](./DEPLOY.md) for env and queue details. Run in order before
 | **Bonus stack** `/p/bonus` — CTAs go to **affiliate** link, not bonus viewer | |
 | **Promotion Posts**: text post → **ready** → publish to connected X/IG (Zernio) | |
 | **Promotion Posts**: carousel or pin → image + caption **ready** | |
-| **Command Center**: create X thread → generates on `promotion-generate` queue | |
+| **Command Center**: message Alex → completes on `ai-employee` queue | |
 | **Leads → Export CSV** downloads with expected rows | |
 | **Email** promotion post → **Copy email** / download `.txt` (no social publish) | |
 | **Video** post (optional) → D-ID path only in wizard → generate when D-ID configured | |

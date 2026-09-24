@@ -25,7 +25,9 @@ class ProcessAiChatTurnJob implements ShouldBeUnique, ShouldQueue
         public string $conversationId,
         public string $text,
         public string $channel = 'web',
-    ) {}
+    ) {
+        $this->onQueue((string) config('ai_employee.queue', 'ai-employee'));
+    }
 
     public function uniqueId(): string
     {

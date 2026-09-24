@@ -15,7 +15,7 @@ class ProcessWhatsAppInboundJob implements ShouldQueue
      */
     public function __construct(public array $payload)
     {
-        $this->onQueue((string) config('ai_employee.queue', 'webinar-ai'));
+        $this->onQueue((string) config('ai_employee.queue', 'ai-employee'));
     }
 
     public function handle(WhatsAppChannelService $whatsApp): void

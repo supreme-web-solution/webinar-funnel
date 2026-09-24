@@ -104,6 +104,7 @@ return [
         'redis:traffic-evaluate' => 60,
         'redis:promotion-generate' => 120,
         'redis:promotion-publish' => 120,
+        'redis:ai-employee' => 180,
         'redis:webinar-ai' => 180,
     ],
 
@@ -210,8 +211,8 @@ return [
     |
     | supervisor-fast  — customer-facing / quick I/O (publish, post, ESP, default)
     | supervisor-heavy — slower generation / evaluation work
-    | supervisor-ai    — long OpenAI / indexing jobs (isolated so they cannot
-    |                    starve email or publish workers)
+    | supervisor-ai    — ai-employee (Command Center + WhatsApp), webinar-ai,
+    |                    campaign-generate (long AI jobs, isolated from publish)
     |
     */
 
@@ -244,7 +245,7 @@ return [
         ],
         'supervisor-ai' => [
             'connection' => 'redis',
-            'queue' => ['webinar-ai', 'campaign-generate'],
+            'queue' => ['ai-employee', 'webinar-ai', 'campaign-generate'],
             'balance' => 'simple',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,
