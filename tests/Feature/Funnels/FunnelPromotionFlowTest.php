@@ -862,4 +862,273 @@ class FunnelPromotionFlowTest extends TestCase
             'status' => FunnelPromotionPost::STATUS_PUBLISHED,
         ]);
     }
+
+    public function test_email_export_downloads_subject_and_body(): void
+    {
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'Weekly tips',
+            'content_type' => FunnelPromotionPost::TYPE_EMAIL,
+            'platforms' => [],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_READY,
+            'email_subject' => 'Three growth hacks',
+            'email_body' => 'Here is the body for your list.',
+            'timezone' => 'UTC',
+        ]);
+
+        $response = $this->actingAs($user)->get(route('funnels.promotion.posts.email-export', [$funnel, $post]));
+
+        $response->assertOk();
+        $response->assertHeader('content-disposition');
+        $this->assertStringContainsString('Three growth hacks', $response->streamedContent());
+        $this->assertStringContainsString('Here is the body for your list.', $response->streamedContent());
+    }
+
+    public function test_publish_blocks_email_content_type(): void
+    {
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'Newsletter draft',
+            'content_type' => FunnelPromotionPost::TYPE_EMAIL,
+            'platforms' => [],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_READY,
+            'email_subject' => 'Hello',
+            'email_body' => 'Body copy',
+            'timezone' => 'UTC',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('funnels.promotion.posts.publish', [$funnel, $post]), [
+            'sync' => true,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasErrors('publish');
+        $this->assertSame(FunnelPromotionPost::STATUS_READY, $post->fresh()->status);
+    }
+
+    public function test_publish_linkedin_poll_sends_poll_options_to_zernio(): void
+    {
+        config([
+            'services.zernio.base_url' => 'https://zernio.test/api',
+            'services.zernio.api_key' => 'test_key',
+            'promotion.zernio.default_publish_endpoint' => '/v1/posts',
+        ]);
+
+        Http::fake([
+            'https://zernio.test/api/v1/posts' => function ($request) {
+                $payload = $request->data();
+                $psd = $payload['platforms'][0]['platformSpecificData'] ?? [];
+                $this->assertSame('Which offer angle converts best?', $payload['content']);
+                $this->assertSame(['Social proof', 'Scarcity', 'Free trial'], $psd['pollOptions'] ?? []);
+
+                return Http::response([
+                    'post' => [
+                        '_id' => 'post_li_poll',
+                        'platforms' => [[
+                            'platform' => 'linkedin',
+                            'platformPostId' => 'li_poll_1',
+                            'status' => 'published',
+                        ]],
+                    ],
+                ], 201);
+            },
+        ]);
+
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'platform' => 'linkedin',
+            'platform_username' => 'acct',
+            'zernio_account_id' => 'acct_li',
+            'daily_post_limit' => 50,
+            'posts_today' => 0,
+        ]);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'Offer angles',
+            'content_type' => FunnelPromotionPost::TYPE_TEXT,
+            'platforms' => ['linkedin'],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_READY,
+            'text_body' => "Which offer angle converts best?\n\n1. Social proof\n2. Scarcity\n3. Free trial",
+            'timezone' => 'UTC',
+            'metadata' => [
+                'format_payload' => [
+                    'generator' => 'poll',
+                    'question' => 'Which offer angle converts best?',
+                    'options' => ['Social proof', 'Scarcity', 'Free trial'],
+                ],
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->post(route('funnels.promotion.posts.publish', [$funnel, $post]), [
+            'sync' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('funnel_promotion_posts', [
+            'id' => $post->id,
+            'status' => FunnelPromotionPost::STATUS_PUBLISHED,
+        ]);
+    }
+
+    public function test_publish_threads_poll_sends_poll_options_to_zernio(): void
+    {
+        config([
+            'services.zernio.base_url' => 'https://zernio.test/api',
+            'services.zernio.api_key' => 'test_key',
+            'promotion.zernio.default_publish_endpoint' => '/v1/posts',
+        ]);
+
+        Http::fake([
+            'https://zernio.test/api/v1/posts' => function ($request) {
+                $psd = $request->data()['platforms'][0]['platformSpecificData'] ?? [];
+                $this->assertSame(['Yes', 'Not yet'], $psd['pollOptions'] ?? []);
+
+                return Http::response([
+                    'post' => [
+                        '_id' => 'post_th_poll',
+                        'platforms' => [[
+                            'platform' => 'threads',
+                            'platformPostId' => 'th_poll_1',
+                            'status' => 'published',
+                        ]],
+                    ],
+                ], 201);
+            },
+        ]);
+
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'platform' => 'threads',
+            'platform_username' => 'acct',
+            'zernio_account_id' => 'acct_th',
+            'daily_post_limit' => 50,
+            'posts_today' => 0,
+        ]);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'Poll',
+            'content_type' => FunnelPromotionPost::TYPE_TEXT,
+            'platforms' => ['threads'],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_READY,
+            'text_body' => 'Have you tried AI content yet?',
+            'timezone' => 'UTC',
+            'metadata' => [
+                'format_payload' => [
+                    'generator' => 'poll',
+                    'question' => 'Have you tried AI content yet?',
+                    'options' => ['Yes', 'Not yet'],
+                ],
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->post(route('funnels.promotion.posts.publish', [$funnel, $post]), [
+            'sync' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('funnel_promotion_posts', [
+            'id' => $post->id,
+            'status' => FunnelPromotionPost::STATUS_PUBLISHED,
+        ]);
+    }
+
+    public function test_publish_pinterest_pin_sends_title_and_link(): void
+    {
+        config([
+            'services.zernio.base_url' => 'https://zernio.test/api',
+            'services.zernio.api_key' => 'test_key',
+            'promotion.zernio.default_publish_endpoint' => '/v1/posts',
+        ]);
+
+        Http::fake([
+            'https://zernio.test/api/v1/posts' => function ($request) {
+                $psd = $request->data()['platforms'][0]['platformSpecificData'] ?? [];
+                $this->assertSame('Pin headline for SEO', $psd['title'] ?? null);
+                $this->assertSame('https://example.com/hop', $psd['link'] ?? null);
+                $this->assertSame('Marketing Board', $psd['board'] ?? null);
+
+                return Http::response([
+                    'post' => [
+                        '_id' => 'post_pin',
+                        'platforms' => [[
+                            'platform' => 'pinterest',
+                            'platformPostId' => 'pin_1',
+                            'status' => 'published',
+                        ]],
+                    ],
+                ], 201);
+            },
+        ]);
+
+        $user = User::factory()->create();
+        $funnel = $this->makeFunnel($user);
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'platform' => 'pinterest',
+            'platform_username' => 'acct',
+            'zernio_account_id' => 'acct_pin',
+            'daily_post_limit' => 50,
+            'posts_today' => 0,
+        ]);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $user->id,
+            'funnel_id' => $funnel->id,
+            'topic' => 'Pin topic',
+            'content_type' => FunnelPromotionPost::TYPE_IMAGE,
+            'platforms' => ['pinterest'],
+            'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
+            'status' => FunnelPromotionPost::STATUS_READY,
+            'text_body' => 'Long pin description with keywords.',
+            'cta_url' => 'https://example.com/hop',
+            'timezone' => 'UTC',
+            'metadata' => [
+                'format_payload' => [
+                    'generator' => 'pin',
+                    'pin_title' => 'Pin headline for SEO',
+                    'pin_description' => 'Long pin description with keywords.',
+                    'board_suggestion' => 'Marketing Board',
+                ],
+            ],
+        ]);
+
+        $asset = FunnelPromotionAsset::query()->create([
+            'promotion_post_id' => $post->id,
+            'asset_type' => FunnelPromotionAsset::TYPE_IMAGE,
+            'provider' => 'openai_image',
+            'status' => FunnelPromotionAsset::STATUS_READY,
+            'url' => 'https://example.com/pin.png',
+        ]);
+        $post->update(['primary_asset_id' => $asset->id]);
+
+        $response = $this->actingAs($user)->post(route('funnels.promotion.posts.publish', [$funnel, $post]), [
+            'sync' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('funnel_promotion_posts', [
+            'id' => $post->id,
+            'status' => FunnelPromotionPost::STATUS_PUBLISHED,
+        ]);
+    }
 }

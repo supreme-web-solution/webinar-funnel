@@ -33,16 +33,10 @@ const props = defineProps<{
 
 const brand = computed(() => props.content.brand_color || '#ea580c');
 const bonuses = computed(() => props.content.bonuses ?? []);
+const affiliateHref = computed(() => props.content.affiliate_url?.trim() || null);
 
-function primaryHref(b: BonusItem): string {
-    if (b.bonus_type === 'ebook' && b.download_url) return b.download_url;
-    if (b.bonus_type === 'mini_course') return b.viewer_url;
-    return b.download_url || b.viewer_url || '#';
-}
-
-function primaryTarget(b: BonusItem): string {
-    return b.bonus_type === 'ebook' ? '_self' : '_blank';
-}
+const cardPrimaryLabel = computed(() => props.content.cta?.trim() || 'Get instant access ↗');
+const cardSecondaryLabel = computed(() => 'View the offer ↗');
 </script>
 
 <template>
@@ -96,30 +90,23 @@ function primaryTarget(b: BonusItem): string {
                         </ul>
                     </div>
 
-                    <div class="flex shrink-0 flex-col gap-2 sm:w-44">
+                    <div v-if="affiliateHref" class="flex shrink-0 flex-col gap-2 sm:w-44">
                         <a
-                            :href="primaryHref(b)"
-                            :target="primaryTarget(b)"
+                            :href="affiliateHref"
+                            target="_blank"
+                            rel="noopener noreferrer"
                             class="inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
                             :style="{ background: brand }"
                         >
-                            {{ b.cta_label }}
+                            {{ cardPrimaryLabel }}
                         </a>
                         <a
-                            v-if="b.bonus_type !== 'ebook'"
-                            :href="b.viewer_url"
+                            :href="affiliateHref"
                             target="_blank"
+                            rel="noopener noreferrer"
                             class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
                         >
-                            Preview ↗
-                        </a>
-                        <a
-                            v-else
-                            :href="b.viewer_url"
-                            target="_blank"
-                            class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
-                        >
-                            Read online ↗
+                            {{ cardSecondaryLabel }}
                         </a>
                     </div>
                 </div>

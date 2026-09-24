@@ -33,7 +33,7 @@ class FunnelPromotionGenerateAssetsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'types' => ['required', 'array', 'min:1', 'max:3'],
+            'types' => ['nullable', 'array', 'max:3'],
             'types.*' => [
                 'string',
                 Rule::in([

@@ -240,6 +240,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('posts/{post}/generate-assets', [FunnelPromotionController::class, 'generateAssets'])->name('posts.generate-assets');
             Route::patch('posts/{post}/schedule', [FunnelPromotionController::class, 'schedule'])->name('posts.schedule');
             Route::post('posts/{post}/publish', [FunnelPromotionController::class, 'publish'])->name('posts.publish');
+            Route::get('posts/{post}/email-export', [FunnelPromotionController::class, 'exportEmail'])->name('posts.email-export');
             Route::post('posts/{post}/duplicate', [FunnelPromotionController::class, 'duplicate'])->name('posts.duplicate');
 
             Route::get('calendar', [FunnelPromotionCalendarController::class, 'index'])->name('calendar.index');

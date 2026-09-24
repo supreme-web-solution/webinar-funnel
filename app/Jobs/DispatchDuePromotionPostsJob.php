@@ -22,6 +22,7 @@ class DispatchDuePromotionPostsJob implements ShouldQueue
     {
         FunnelPromotionPost::query()
             ->where('status', FunnelPromotionPost::STATUS_SCHEDULED)
+            ->where('content_type', '!=', FunnelPromotionPost::TYPE_EMAIL)
             ->whereNotNull('scheduled_for')
             ->where('scheduled_for', '<=', now())
             ->orderBy('scheduled_for')

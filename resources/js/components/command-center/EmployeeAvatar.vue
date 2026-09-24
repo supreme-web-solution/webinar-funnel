@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps<{
     size?: string;
     thinking?: boolean;
     online?: boolean;
+    src?: string | null;
+    alt?: string;
 }>();
 
 const sizeClass = computed(() => props.size ?? 'size-11');
+const imageFailed = ref(false);
+
+const showImage = computed(() => Boolean(props.src) && !imageFailed.value);
 </script>
 
 <template>
@@ -18,9 +23,17 @@ const sizeClass = computed(() => props.size ?? 'size-11');
             class="absolute -inset-1 rounded-full border-2 border-sky-400/70 border-t-transparent animate-spin"
         />
         <div
-            class="bg-brand-gradient relative flex h-full w-full items-center justify-center overflow-hidden rounded-full text-white shadow-[var(--brand-gradient-shadow)]"
+            class="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full shadow-[var(--brand-gradient-shadow)]"
+            :class="showImage ? 'bg-muted ring-1 ring-border/40' : 'bg-brand-gradient text-white'"
         >
-            <Icon icon="heroicons:user" class="size-[55%] opacity-90" />
+            <img
+                v-if="showImage"
+                :src="src!"
+                :alt="alt ?? 'AI employee'"
+                class="h-full w-full object-cover object-center"
+                @error="imageFailed = true"
+            />
+            <Icon v-else icon="heroicons:user" class="size-[55%] opacity-90" />
         </div>
         <span
             v-if="online !== false"

@@ -72,9 +72,9 @@ function bonusTypeLabel(type: string): string {
 }
 
 function bonusCtaLabel(type: string): string {
-    if (type === 'mini_course') return 'Open course ↗';
     if (type === 'mini_app') return 'Get access ↗';
-    return 'Download PDF';
+    const pageCta = typeof draft.value.cta === 'string' ? draft.value.cta.trim() : '';
+    return pageCta || 'Get instant access ↗';
 }
 
 function bonusValueLabel(type: string, meta: Record<string, unknown>): string {
@@ -543,7 +543,7 @@ function save() {
                                             class="inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold text-white"
                                             :style="{ background: brandColor }"
                                         >{{ b.cta_label }}</span>
-                                        <span class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800">Preview ↗</span>
+                                        <span class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800">View the offer ↗</span>
                                     </div>
                                 </div>
                             </article>

@@ -68,7 +68,12 @@ function sendChip(message: string): void {
         <!-- Header -->
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="flex min-w-0 items-start gap-3">
-                <EmployeeAvatar size="size-11" :thinking="state.processing" />
+                <EmployeeAvatar
+                    size="size-11"
+                    :src="state.employee.avatar_url"
+                    :alt="state.employee.name"
+                    :thinking="state.processing"
+                />
                 <div class="min-w-0">
                     <h1 class="text-xl font-bold tracking-tight text-foreground md:text-2xl">
                         {{ state.employee.name }}

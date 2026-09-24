@@ -74,12 +74,6 @@ class CampaignBuilderService
             $affiliate,
             'Affiliate offer'
         );
-        $downloadStub = $this->trackedLinks->createForCampaign(
-            $campaign,
-            url('/campaigns/'.$campaign->uuid.'/download-placeholder'),
-            'Lead magnet download'
-        );
-
         $pages = [
             'squeeze' => [
                 'headline' => $headline ?: "Free Training: {$product}",
@@ -95,7 +89,6 @@ class CampaignBuilderService
             'thankyou' => [
                 'headline' => 'Congrats! Click the link below to download your free gift…',
                 'download_cta' => 'DOWNLOAD NOW',
-                'download_url' => $downloadStub->publicUrl(),
                 'bridge_headline' => 'What Next?',
                 'bridge_body' => "Click here to discover how {$product} can help you get results faster.",
                 'bridge_cta' => 'Continue to the Offer',

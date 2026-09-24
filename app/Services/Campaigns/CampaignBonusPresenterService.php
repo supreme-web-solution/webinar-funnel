@@ -383,9 +383,8 @@ class CampaignBonusPresenterService
     protected function ctaLabel(string $type): string
     {
         return match ($type) {
-            'mini_course' => 'Open course ↗',
             'mini_app' => 'Get access ↗',
-            default => 'Download PDF',
+            default => 'Get instant access ↗',
         };
     }
 

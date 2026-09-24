@@ -4,6 +4,8 @@ return [
 
     'name' => env('AI_EMPLOYEE_NAME', 'Alex'),
     'title' => env('AI_EMPLOYEE_TITLE', 'Command Center'),
+    /** Public path (under /public) or absolute URL for Command Center avatar */
+    'avatar' => env('AI_EMPLOYEE_AVATAR', '/images/ai-employee/alex.png'),
     'queue' => env('AI_EMPLOYEE_QUEUE', 'webinar-ai'),
     'history_limit' => (int) env('AI_EMPLOYEE_HISTORY_LIMIT', 40),
 

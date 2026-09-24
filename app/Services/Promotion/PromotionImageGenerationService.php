@@ -30,11 +30,15 @@ class PromotionImageGenerationService
         $model = $this->openRouter->promotionImageModel();
 
         if (! $this->openRouter->isConfigured()) {
-            Log::info('[Promotion] PromotionImageGenerationService: no OpenRouter key configured — skipping image', [
+            Log::warning('[Promotion] PromotionImageGenerationService: OpenRouter not configured', [
                 'post_id' => $post->id,
             ]);
 
-            return ['success' => true, 'url' => null, 'prompt' => $prompt];
+            return [
+                'success' => false,
+                'prompt' => $prompt,
+                'error' => 'Image generation requires OpenRouter (OPENROUTER_API_KEY). Add a key in .env and retry.',
+            ];
         }
 
         Log::info('[Promotion] PromotionImageGenerationService: calling OpenRouter Images', [
@@ -205,7 +209,11 @@ class PromotionImageGenerationService
         ];
 
         if (! $this->openRouter->isConfigured()) {
-            return ['success' => true, 'url' => null, 'prompt' => $prompt];
+            return [
+                'success' => false,
+                'prompt' => $prompt,
+                'error' => 'Carousel slide images require OpenRouter (OPENROUTER_API_KEY).',
+            ];
         }
 
         try {

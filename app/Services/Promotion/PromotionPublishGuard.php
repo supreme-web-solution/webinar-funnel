@@ -15,6 +15,12 @@ final class PromotionPublishGuard
      */
     public function blockingErrors(FunnelPromotionPost $post): array
     {
+        if ($post->content_type === FunnelPromotionPost::TYPE_EMAIL) {
+            return [
+                'Email posts are copy-only. Use Preview or Copy email, then send from your ESP or Campaign email sequences.',
+            ];
+        }
+
         if (in_array($post->status, [
             FunnelPromotionPost::STATUS_GENERATING,
             FunnelPromotionPost::STATUS_PUBLISHING,

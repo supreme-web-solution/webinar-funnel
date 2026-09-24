@@ -250,7 +250,7 @@ function onTouchEnd(e: TouchEvent): void {
         :class="aspectClass"
     >
         <Icon icon="heroicons:envelope" class="size-8 text-purple-500/70" />
-        <p class="text-xs font-semibold uppercase tracking-wide text-purple-700/80">Email broadcast</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-purple-700/80">Email copy</p>
         <p v-if="emailSubject" class="text-sm font-bold leading-snug text-purple-950 line-clamp-2">{{ emailSubject }}</p>
         <p v-if="textBody" class="text-xs leading-relaxed text-muted-foreground line-clamp-3">{{ textBody }}</p>
     </div>

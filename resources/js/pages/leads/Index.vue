@@ -12,6 +12,7 @@ interface LeadRow {
     email: string;
     source: string;
     created_at: string;
+    metadata?: { campaign_id?: number; campaign_name?: string } | null;
     funnel?: { id: number; name: string; slug: string } | null;
 }
 
@@ -38,22 +39,34 @@ interface FunnelOption {
     slug: string;
 }
 
+interface CampaignOption {
+    id: number;
+    name: string;
+    slug: string;
+}
+
 const props = defineProps<{
     leads: Paginator;
     funnels: FunnelOption[];
+    campaigns?: CampaignOption[];
     stats: { total: number; this_week: number; funnel_count: number };
-    filters: { search: string; funnel_id: number | null };
+    filters: { search: string; funnel_id: number | null; campaign_id?: number | null };
 }>();
 
 const search = ref(props.filters.search ?? '');
 const funnelId = ref<number | null>(props.filters.funnel_id ?? null);
+const campaignId = ref<number | null>(props.filters.campaign_id ?? null);
 
 let debounce: ReturnType<typeof setTimeout>;
 
-watch([search, funnelId], ([s, f]) => {
+watch([search, funnelId, campaignId], ([s, f, c]) => {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
-        router.get('/leads', { search: s || undefined, funnel_id: f || undefined }, {
+        router.get('/leads', {
+            search: s || undefined,
+            funnel_id: f || undefined,
+            campaign_id: c || undefined,
+        }, {
             preserveState: true,
             replace: true,
         });
@@ -95,6 +108,7 @@ function exportCsv(): void {
     const params = new URLSearchParams();
     if (search.value) params.set('search', search.value);
     if (funnelId.value) params.set('funnel_id', String(funnelId.value));
+    if (campaignId.value) params.set('campaign_id', String(campaignId.value));
     params.set('export', 'csv');
     window.location.href = `/leads?${params.toString()}`;
 }
@@ -102,9 +116,21 @@ function exportCsv(): void {
 function clearFilters(): void {
     search.value = '';
     funnelId.value = null;
+    campaignId.value = null;
 }
 
-const hasFilters = computed(() => search.value !== '' || funnelId.value !== null);
+function sourceLabel(source: string): string {
+    if (source === 'campaign_optin' || source === 'campaign_squeeze') {
+        return 'Campaign opt-in';
+    }
+    if (source === 'optin') {
+        return 'Funnel opt-in';
+    }
+
+    return source.replace(/_/g, ' ');
+}
+
+const hasFilters = computed(() => search.value !== '' || funnelId.value !== null || campaignId.value !== null);
 </script>
 
 <template>
@@ -174,6 +200,14 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
                         <option :value="null">All funnels</option>
                         <option v-for="f in funnels" :key="f.id" :value="f.id">{{ f.name }}</option>
                     </select>
+                    <select
+                        v-if="(campaigns ?? []).length"
+                        v-model="campaignId"
+                        class="h-9 max-w-[12rem] rounded-xl border border-border/60 bg-white px-3 text-sm shadow-sm"
+                    >
+                        <option :value="null">All campaigns</option>
+                        <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    </select>
                     <Button
                         v-if="hasFilters"
                         variant="ghost"
@@ -238,23 +272,30 @@ const hasFilters = computed(() => search.value !== '' || funnelId.value !== null
                                 </div>
                             </td>
                             <td class="px-4 py-3">
-                                <Link
-                                    v-if="lead.funnel"
-                                    :href="`/funnels/${lead.funnel.id}/edit`"
-                                    class="group inline-flex max-w-[160px] items-center gap-1 truncate text-xs font-medium text-foreground hover:text-blue-700"
-                                >
-                                    <Icon icon="heroicons:funnel" class="size-3 shrink-0 text-blue-600" />
-                                    {{ lead.funnel.name }}
-                                </Link>
+                                <div v-if="lead.funnel" class="max-w-[180px]">
+                                    <Link
+                                        :href="`/funnels/${lead.funnel.id}/edit`"
+                                        class="group inline-flex items-center gap-1 truncate text-xs font-medium text-foreground hover:text-blue-700"
+                                    >
+                                        <Icon icon="heroicons:funnel" class="size-3 shrink-0 text-blue-600" />
+                                        {{ lead.funnel.name }}
+                                    </Link>
+                                    <p
+                                        v-if="lead.metadata?.campaign_name"
+                                        class="mt-0.5 truncate text-[0.65rem] text-muted-foreground"
+                                    >
+                                        Campaign: {{ lead.metadata.campaign_name }}
+                                    </p>
+                                </div>
                                 <span v-else class="text-xs text-muted-foreground">—</span>
                             </td>
                             <td class="px-4 py-3">
                                 <Badge
                                     variant="outline"
                                     class="text-[0.65rem] capitalize"
-                                    :class="lead.source === 'optin' ? 'border-blue-200 bg-blue-50 text-blue-700' : ''"
+                                    :class="(lead.source === 'optin' || lead.source.startsWith('campaign_')) ? 'border-blue-200 bg-blue-50 text-blue-700' : ''"
                                 >
-                                    {{ lead.source }}
+                                    {{ sourceLabel(lead.source) }}
                                 </Badge>
                             </td>
                             <td class="px-4 py-3">

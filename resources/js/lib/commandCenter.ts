@@ -14,7 +14,7 @@ export type CommandCenterApproval = {
 };
 
 export type CommandCenterState = {
-    employee: { name: string; title: string };
+    employee: { name: string; title: string; avatar_url: string };
     conversation_id: string | null;
     processing: boolean;
     progress: string | null;

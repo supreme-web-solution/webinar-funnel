@@ -109,7 +109,8 @@ final class PromotionGenerationCoordinator
         }
 
         if ($post->publish_mode === FunnelPromotionPost::MODE_AUTO_PUBLISH
-            && $post->status === FunnelPromotionPost::STATUS_READY) {
+            && $post->status === FunnelPromotionPost::STATUS_READY
+            && $post->content_type !== FunnelPromotionPost::TYPE_EMAIL) {
             Log::info('[Promotion] auto_publish: dispatching publish job', ['post_id' => $post->id]);
             PublishPromotionPostJob::dispatch($post->id);
         }

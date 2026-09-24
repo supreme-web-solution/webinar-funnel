@@ -101,12 +101,5 @@ defineProps<{
                 Log in
             </Button>
         </div>
-
-        <p v-if="canRegister" class="text-center text-sm text-muted-foreground">
-            Don't have an account?
-            <TextLink :href="register()" class="font-medium text-blue-700 hover:text-blue-800" :tabindex="6">
-                Create one free
-            </TextLink>
-        </p>
     </Form>
 </template>

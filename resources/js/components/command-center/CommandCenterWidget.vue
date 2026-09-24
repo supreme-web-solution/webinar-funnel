@@ -53,7 +53,12 @@ onBeforeUnmount(() => {
         >
             <div class="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
                 <div class="flex items-center gap-2">
-                    <EmployeeAvatar size="size-8" :thinking="Boolean(state?.processing)" />
+                    <EmployeeAvatar
+                        size="size-8"
+                        :src="state?.employee.avatar_url"
+                        :alt="state?.employee.name"
+                        :thinking="Boolean(state?.processing)"
+                    />
                     <div>
                         <p class="text-sm font-semibold text-slate-800">
                             {{ state?.employee.name ?? 'Alex' }}
@@ -84,7 +89,12 @@ onBeforeUnmount(() => {
             :aria-label="open ? 'Close Command Center' : 'Open Command Center'"
             @click="toggle"
         >
-            <EmployeeAvatar size="size-14" :thinking="Boolean(state?.processing)" />
+            <EmployeeAvatar
+                size="size-14"
+                :src="state?.employee.avatar_url ?? '/images/ai-employee/alex.png'"
+                :alt="state?.employee.name ?? 'Alex'"
+                :thinking="Boolean(state?.processing)"
+            />
         </button>
     </div>
 </template>

@@ -14,6 +14,7 @@ class CommandCenterStateService
         protected AiActionLogService $logs,
         protected CommandCenterSnapshotService $snapshot,
         protected WhatsAppPairingService $pairing,
+        protected AiEmployeeBrandingService $branding,
     ) {}
 
     /**
@@ -25,10 +26,7 @@ class CommandCenterStateService
         $setting = $this->settings->for($user);
 
         return [
-            'employee' => [
-                'name' => (string) config('ai_employee.name', 'Alex'),
-                'title' => (string) config('ai_employee.title', 'Command Center'),
-            ],
+            'employee' => $this->branding->employeePayload(),
             'conversation_id' => $session->conversation_id,
             'processing' => $session->isProcessing(),
             'progress' => $session->progress,

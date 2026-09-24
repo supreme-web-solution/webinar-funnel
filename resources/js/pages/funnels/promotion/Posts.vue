@@ -263,30 +263,31 @@ const VIDEO_RENDER_OPTIONS: VideoRenderOption[] = [
         icon: 'heroicons:user-circle',
         available: true,
     },
-    {
-        key: 'elevenlabs',
-        label: 'ElevenLabs voiceover',
-        description: 'Premium AI voice narrates over visuals — no on-camera avatar.',
-        icon: 'heroicons:microphone',
-        available: false,
-        badge: 'Coming soon',
-    },
-    {
-        key: 'stock_footage',
-        label: 'Stock footage + voice',
-        description: 'B-roll clips matched to your script with AI narration.',
-        icon: 'heroicons:film',
-        available: false,
-        badge: 'Coming soon',
-    },
-    {
-        key: 'ai_broll',
-        label: 'AI-generated scenes',
-        description: 'Synthetic visuals built from your script — scene-by-scene.',
-        icon: 'heroicons:sparkles',
-        available: false,
-        badge: 'Coming soon',
-    },
+    // Other render pipelines (ElevenLabs, stock, AI b-roll) — not in v1; keep types for legacy metadata only.
+    // {
+    //     key: 'elevenlabs',
+    //     label: 'ElevenLabs voiceover',
+    //     description: 'Premium AI voice narrates over visuals — no on-camera avatar.',
+    //     icon: 'heroicons:microphone',
+    //     available: false,
+    //     badge: 'Coming soon',
+    // },
+    // {
+    //     key: 'stock_footage',
+    //     label: 'Stock footage + voice',
+    //     description: 'B-roll clips matched to your script with AI narration.',
+    //     icon: 'heroicons:film',
+    //     available: false,
+    //     badge: 'Coming soon',
+    // },
+    // {
+    //     key: 'ai_broll',
+    //     label: 'AI-generated scenes',
+    //     description: 'Synthetic visuals built from your script — scene-by-scene.',
+    //     icon: 'heroicons:sparkles',
+    //     available: false,
+    //     badge: 'Coming soon',
+    // },
 ];
 
 const selectedVideoRenderProvider = ref<VideoRenderProvider | null>(null);
@@ -870,6 +871,9 @@ function nextStep(): void {
         }
         if (wizardStep.value === 4 && isVideoFormat.value) {
             videoSubStep.value = 'avatar';
+            if (props.videoEnabled && !selectedVideoRenderProvider.value) {
+                selectedVideoRenderProvider.value = 'avatar_did';
+            }
         }
     }
 }
@@ -1231,26 +1235,13 @@ function togglePostPlatform(post: PromotionPost, platform: string): void {
 }
 
 function generate(post: PromotionPost): void {
-    const types: string[] = [];
-    const ctx = (post.generation_context ?? {}) as Record<string, unknown>;
-    if (post.content_type === 'video') {
-        const provider = (post.metadata as { video_render_provider?: string })?.video_render_provider
-            ?? (post.generation_context?.video_render_provider as string | undefined)
-            ?? 'avatar_did';
-        if (provider === 'avatar_did') types.push('video');
-    } else if (post.content_type === 'email') types.push('text');
-    else if (post.content_type === 'image') {
-        if (ctx.include_text !== false) types.push('text');
-        types.push('image');
-    } else {
-        types.push('text');
-    }
+    const provider = (post.metadata as { video_render_provider?: string })?.video_render_provider
+        ?? (post.generation_context?.video_render_provider as string | undefined)
+        ?? 'avatar_did';
 
     router.post(`/funnels/${props.funnel.id}/promotion/posts/${post.id}/generate-assets`, {
-        types,
-        wait_for_video: post.content_type === 'video'
-            && (((post.metadata as { video_render_provider?: string })?.video_render_provider
-                ?? post.generation_context?.video_render_provider) ?? 'avatar_did') === 'avatar_did',
+        types: [],
+        wait_for_video: post.content_type === 'video' && provider === 'avatar_did',
     }, {
         preserveScroll: true,
         onSuccess: () => toast.success('Regenerating content in background…'),
@@ -1293,6 +1284,7 @@ function platformPublishUrl(post: PromotionPost, platform: string): string | nul
 }
 
 function canPublishPost(post: PromotionPost): boolean {
+    if (post.content_type === 'email') return false;
     if (post.status === 'generating' || post.status === 'publishing') return false;
     if (needsRepublish(post)) return true;
     if (post.status === 'published') return false;
@@ -1301,6 +1293,34 @@ function canPublishPost(post: PromotionPost): boolean {
 
 function publishButtonLabel(post: PromotionPost): string {
     return needsRepublish(post) ? 'Retry publish' : 'Publish';
+}
+
+function emailCopyText(post: PromotionPost): string {
+    const subject = (post.email_subject ?? '').trim();
+    const body = (post.email_body ?? post.text_body ?? '').trim();
+    if (subject === '') {
+        return body;
+    }
+
+    return `Subject: ${subject}\n\n${body}`;
+}
+
+function emailExportUrl(post: PromotionPost): string {
+    return `/funnels/${props.funnel.id}/promotion/posts/${post.id}/email-export`;
+}
+
+async function copyEmailContent(post: PromotionPost): Promise<void> {
+    const text = emailCopyText(post);
+    if (!text) {
+        toast.error('Generate email content first.');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(text);
+        toast.success('Email copied — paste into your ESP.');
+    } catch {
+        toast.error('Could not copy to clipboard.');
+    }
 }
 
 function destroy(post: PromotionPost): void {
@@ -1506,7 +1526,7 @@ const statItems = computed(() => [
                             v-for="fmt in [
                                 { key: 'post',  icon: 'heroicons:megaphone',     label: 'Social media', sub: 'Posts, carousels, threads', color: 'text-primary',   badge: 'Most posts' },
                                 { key: 'video', icon: 'heroicons:video-camera',  label: 'Video',        sub: 'Platform video posts',    color: 'text-amber-500', badge: '' },
-                                { key: 'email', icon: 'heroicons:envelope',      label: 'Email',        sub: 'To your leads list',      color: 'text-purple-500', badge: '' },
+                                { key: 'email', icon: 'heroicons:envelope',      label: 'Email',        sub: 'Subject & body to copy', color: 'text-purple-500', badge: '' },
                             ]"
                             :key="fmt.key"
                             type="button"
@@ -1817,11 +1837,11 @@ const statItems = computed(() => [
             <div v-else-if="wizardStep === 4 && isVideoFormat" class="flex flex-1 min-h-0 flex-col overflow-hidden">
                 <div class="shrink-0 px-5 pt-5 pb-3 space-y-3">
                     <div class="space-y-1">
-                        <h3 class="text-sm font-semibold">How should we render the video?</h3>
-                        <p class="text-xs text-muted-foreground">Script is ready — choose a production method. More options coming soon.</p>
+                        <h3 class="text-sm font-semibold">Avatar video (D-ID)</h3>
+                        <p class="text-xs text-muted-foreground">Script is ready — pick presenter and voice. D-ID renders your MP4.</p>
                     </div>
 
-                    <div class="grid gap-2 sm:grid-cols-2">
+                    <div v-if="videoRenderOptions.length > 1" class="grid gap-2 sm:grid-cols-2">
                         <button
                             v-for="opt in videoRenderOptions"
                             :key="opt.key"
@@ -1988,12 +2008,12 @@ const statItems = computed(() => [
                         </p>
                     </div>
 
-                    <!-- Email audience notice (replaces platform picker) -->
+                    <!-- Email: copy/download only (replaces platform picker) -->
                     <div v-if="selectedFormat === 'email'" class="flex items-start gap-3 rounded-xl border border-purple-500/20 bg-purple-500/5 px-4 py-3">
                         <Icon icon="heroicons:envelope" class="size-4 text-purple-500 shrink-0 mt-0.5" />
                         <div>
-                            <p class="text-xs font-semibold text-purple-700 dark:text-purple-400">Sends to your leads list</p>
-                            <p class="text-xs text-muted-foreground mt-1">This email will be delivered to all leads captured through this funnel. You can schedule it below or publish immediately from the posts list.</p>
+                            <p class="text-xs font-semibold text-purple-700 dark:text-purple-400">Email copy</p>
+                            <p class="text-xs text-muted-foreground mt-1">AI writes subject and body for your funnel. Use <strong>Copy email</strong> or <strong>Download .txt</strong> on the post after generation.</p>
                         </div>
                     </div>
 
@@ -2524,12 +2544,12 @@ const statItems = computed(() => [
                         </div>
                     </div>
 
-                    <!-- Email audience notice -->
+                    <!-- Email posts: no social publish -->
                     <div v-else class="flex items-start gap-2 rounded-lg border border-purple-500/20 bg-purple-500/5 px-3 py-2">
-                        <Icon icon="heroicons:users" class="size-3.5 text-purple-500 shrink-0 mt-0.5" />
+                        <Icon icon="heroicons:envelope" class="size-3.5 text-purple-500 shrink-0 mt-0.5" />
                         <div>
-                            <p class="text-[0.65rem] font-semibold text-purple-700 dark:text-purple-400">Sends to your leads list</p>
-                            <p class="text-[0.6rem] text-muted-foreground mt-0.5">Schedule this email and it will be delivered to all leads captured through this funnel.</p>
+                            <p class="text-[0.65rem] font-semibold text-purple-700 dark:text-purple-400">Email copy</p>
+                            <p class="text-[0.6rem] text-muted-foreground mt-0.5">Copy or download — use your own mail tool or campaign follow-ups for sends.</p>
                         </div>
                     </div>
 
@@ -2557,6 +2577,7 @@ const statItems = computed(() => [
                 <div class="shrink-0 border-t border-border/50 bg-muted/10 px-4 py-2.5 space-y-2">
                     <!-- Schedule input -->
                     <input
+                        v-if="post.content_type !== 'email'"
                         type="datetime-local"
                         class="w-full h-8 rounded-lg border bg-background px-2.5 text-xs text-muted-foreground"
                         :value="post.scheduled_for ? new Date(post.scheduled_for).toISOString().slice(0, 16) : ''"
@@ -2608,8 +2629,32 @@ const statItems = computed(() => [
                         >
                             <Icon icon="heroicons:document-duplicate" class="size-3.5" />
                         </Button>
-                        <!-- Publish -->
+                        <template v-if="post.content_type === 'email'">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                class="h-8 px-2.5 text-xs gap-1.5"
+                                :disabled="!post.email_body && !post.text_body"
+                                as-child
+                            >
+                                <a :href="emailExportUrl(post)" download>
+                                    <Icon icon="heroicons:arrow-down-tray" class="size-3.5 shrink-0" />
+                                    .txt
+                                </a>
+                            </Button>
+                            <Button
+                                size="sm"
+                                class="h-8 px-3 text-xs gap-1.5 bg-purple-600 text-white hover:opacity-90"
+                                :disabled="!post.email_body && !post.text_body"
+                                @click="copyEmailContent(post)"
+                            >
+                                <Icon icon="heroicons:clipboard-document" class="size-3.5 shrink-0" />
+                                Copy email
+                            </Button>
+                        </template>
+                        <!-- Publish (social) -->
                         <Button
+                            v-else
                             size="sm"
                             class="h-8 px-3 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
                             :disabled="isPublishingPost(post) || !canPublishPost(post)"

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\LeadCaptureRequest;
 use App\Jobs\DispatchLeadToEspJob;
 use App\Models\DispatchJobLog;
+use App\Models\Campaign;
 use App\Models\Funnel;
 use App\Models\Lead;
 use App\Models\LeadEvent;
@@ -14,14 +15,16 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeadController extends Controller
 {
-    public function index(): Response
+    public function index(): Response|StreamedResponse
     {
         $userId  = auth()->id();
         $search  = request()->string('search')->toString();
         $funnelId = request()->integer('funnel_id') ?: null;
+        $campaignId = request()->integer('campaign_id') ?: null;
 
         $baseQuery = Lead::query()
             ->whereHas('funnel', fn ($q) => $q->where('user_id', $userId));
@@ -45,6 +48,14 @@ class LeadController extends Controller
             $tableQuery->where('funnel_id', $funnelId);
         }
 
+        if ($campaignId) {
+            $tableQuery->where('metadata->campaign_id', $campaignId);
+        }
+
+        if (request()->query('export') === 'csv') {
+            return $this->streamLeadsCsv($tableQuery);
+        }
+
         $leads = $tableQuery->latest()->paginate(25)->withQueryString();
 
         // Funnel options for filter dropdown
@@ -53,18 +64,57 @@ class LeadController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'slug']);
 
+        $campaigns = Campaign::query()
+            ->where('user_id', $userId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug']);
+
         return Inertia::render('leads/Index', [
             'leads'       => $leads,
             'funnels'     => $funnels,
+            'campaigns'   => $campaigns,
             'stats'       => [
                 'total'       => $totalLeads,
                 'this_week'   => $weekLeads,
                 'funnel_count' => $funnelCount,
             ],
             'filters'     => [
-                'search'    => $search,
-                'funnel_id' => $funnelId,
+                'search'      => $search,
+                'funnel_id'   => $funnelId,
+                'campaign_id' => $campaignId,
             ],
+        ]);
+    }
+
+    protected function streamLeadsCsv($query): StreamedResponse
+    {
+        $filename = 'leads-'.now()->format('Y-m-d-His').'.csv';
+
+        return response()->streamDownload(function () use ($query): void {
+            $handle = fopen('php://output', 'w');
+            if ($handle === false) {
+                return;
+            }
+
+            fputcsv($handle, ['Name', 'Email', 'Source', 'Funnel', 'Campaign', 'Created at (UTC)']);
+
+            $query->latest()->chunk(200, function ($leads) use ($handle): void {
+                foreach ($leads as $lead) {
+                    $meta = is_array($lead->metadata) ? $lead->metadata : [];
+                    fputcsv($handle, [
+                        $lead->name,
+                        $lead->email,
+                        $lead->source,
+                        $lead->funnel?->name ?? '',
+                        (string) ($meta['campaign_name'] ?? ''),
+                        $lead->created_at?->utc()->toDateTimeString() ?? '',
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 

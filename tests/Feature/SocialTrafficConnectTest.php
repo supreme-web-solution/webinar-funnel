@@ -49,8 +49,8 @@ class SocialTrafficConnectTest extends TestCase
         ]);
 
         Http::fake([
-            'zernio.com/api/v1/connect/threads*' => Http::response(['url' => 'https://zernio.com/oauth/threads'], 200),
-            'zernio.com/api/v1/connect/pinterest*' => Http::response(['url' => 'https://zernio.com/oauth/pinterest'], 200),
+            'zernio.com/api/v1/connect/threads*' => Http::response(['authUrl' => 'https://zernio.com/oauth/threads'], 200),
+            'zernio.com/api/v1/connect/pinterest*' => Http::response(['authUrl' => 'https://zernio.com/oauth/pinterest'], 200),
         ]);
 
         $this->actingAs($user)

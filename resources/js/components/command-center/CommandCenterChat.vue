@@ -172,9 +172,16 @@ onBeforeUnmount(() => {
             <div
                 v-for="message in messages"
                 :key="message.id"
-                class="flex w-full"
+                class="flex w-full gap-2"
                 :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
             >
+                <EmployeeAvatar
+                    v-if="message.role === 'assistant'"
+                    size="size-8"
+                    class="mt-0.5 shrink-0"
+                    :src="state.employee.avatar_url"
+                    :alt="state.employee.name"
+                />
                 <div class="max-w-[min(85%,28rem)] space-y-1">
                     <div
                         class="rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words"
@@ -198,7 +205,12 @@ onBeforeUnmount(() => {
             </div>
 
             <div v-if="processing" class="flex items-center gap-2 text-sm text-muted-foreground">
-                <EmployeeAvatar size="size-7" thinking />
+                <EmployeeAvatar
+                    size="size-7"
+                    :src="state.employee.avatar_url"
+                    :alt="state.employee.name"
+                    thinking
+                />
                 <span>{{ state.progress || 'Thinking…' }}</span>
             </div>
         </div>

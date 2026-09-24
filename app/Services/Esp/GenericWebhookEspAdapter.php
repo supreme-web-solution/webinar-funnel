@@ -2,6 +2,7 @@
 
 namespace App\Services\Esp;
 
+use App\Services\Esp\Concerns\FormatsEmailSequenceHtml;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 

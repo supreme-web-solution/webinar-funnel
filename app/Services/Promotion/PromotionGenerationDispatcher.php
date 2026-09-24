@@ -26,6 +26,28 @@ final class PromotionGenerationDispatcher
     {
         $types = array_values(array_unique($types));
 
+        if (in_array(FunnelPromotionPost::TYPE_VIDEO, $types, true)) {
+            $renderProvider = (string) (
+                data_get($post->metadata, 'video_render_provider')
+                ?? data_get($post->generation_context, 'video_render_provider')
+                ?? 'avatar_did'
+            );
+
+            if ($renderProvider !== 'avatar_did') {
+                Log::warning('[Promotion] dispatch: video provider not implemented', [
+                    'post_id' => $post->id,
+                    'video_render_provider' => $renderProvider,
+                ]);
+
+                $post->update([
+                    'status' => FunnelPromotionPost::STATUS_FAILED,
+                    'last_error' => 'Only D-ID avatar video is supported. Re-create this post with the video wizard or set render mode to avatar_did.',
+                ]);
+
+                return;
+            }
+        }
+
         if ($this->usesMultiSlideImages($post)) {
             $types = array_values(array_filter(
                 $types,
@@ -56,26 +78,32 @@ final class PromotionGenerationDispatcher
         }
 
         if (in_array(FunnelPromotionPost::TYPE_VIDEO, $types, true)) {
-            $renderProvider = (string) (
-                data_get($post->metadata, 'video_render_provider')
-                ?? data_get($post->generation_context, 'video_render_provider')
-                ?? 'avatar_did'
-            );
-
-            if ($renderProvider !== 'avatar_did') {
-                Log::info('[Promotion] dispatch: video provider not implemented', [
-                    'post_id' => $post->id,
-                    'video_render_provider' => $renderProvider,
-                ]);
+            Log::info('[Promotion] dispatch: video job', ['post_id' => $post->id, 'sync' => $waitForVideo]);
+            if ($waitForVideo) {
+                GeneratePromotionVideoJob::dispatchSync($post->id);
             } else {
-                Log::info('[Promotion] dispatch: video job', ['post_id' => $post->id, 'sync' => $waitForVideo]);
-                if ($waitForVideo) {
-                    GeneratePromotionVideoJob::dispatchSync($post->id);
-                } else {
-                    GeneratePromotionVideoJob::dispatch($post->id);
-                }
+                GeneratePromotionVideoJob::dispatch($post->id);
             }
         }
+    }
+
+    /**
+     * Job types to dispatch — matches Promotion Posts UI (text + image, carousels text-first).
+     *
+     * @return list<string>
+     */
+    public function generationTypesForPost(FunnelPromotionPost $post): array
+    {
+        $types = $this->defaultTypesForPost($post);
+
+        if ($this->usesMultiSlideImages($post)) {
+            $types = array_values(array_filter(
+                $types,
+                fn (string $type): bool => $type !== FunnelPromotionPost::TYPE_IMAGE,
+            ));
+        }
+
+        return $types;
     }
 
     /**

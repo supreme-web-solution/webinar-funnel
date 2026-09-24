@@ -66,9 +66,8 @@ function features(type: string, meta: Record<string, unknown>): string[] {
 }
 
 function ctaLabel(type: string): string {
-    if (type === 'mini_course') return 'Open course ↗';
     if (type === 'mini_app') return 'Get access ↗';
-    return 'Download PDF';
+    return props.cta?.trim() || 'Get instant access ↗';
 }
 
 const cards = computed(() => {
@@ -151,7 +150,7 @@ const totalLabel = computed(() => {
                     </div>
                     <div class="flex shrink-0 flex-col gap-2 sm:w-40">
                         <span class="inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold text-white" :style="{ background: brand }">{{ b.cta_label }}</span>
-                        <span class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800">Preview ↗</span>
+                        <span class="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800">View the offer ↗</span>
                     </div>
                 </div>
             </article>

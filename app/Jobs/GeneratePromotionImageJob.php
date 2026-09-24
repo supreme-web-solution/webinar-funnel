@@ -87,11 +87,32 @@ class GeneratePromotionImageJob implements ShouldQueue
                 return;
             }
 
+            $imageUrl = is_string($result['url'] ?? null) ? trim((string) $result['url']) : '';
+            if ($imageUrl === '') {
+                $errorMsg = 'Image generation completed but no image URL was returned. Check OpenRouter image model settings.';
+
+                $asset->update([
+                    'status'        => FunnelPromotionAsset::STATUS_FAILED,
+                    'source_prompt' => $result['prompt'] ?? null,
+                    'meta'          => ['error' => $errorMsg],
+                ]);
+                $post->update([
+                    'status'     => FunnelPromotionPost::STATUS_FAILED,
+                    'last_error' => $errorMsg,
+                ]);
+
+                Log::error('[Promotion] GeneratePromotionImageJob: missing image URL', [
+                    'post_id' => $this->postId,
+                ]);
+
+                return;
+            }
+
             $asset->update([
                 'status'        => FunnelPromotionAsset::STATUS_READY,
                 'source_prompt' => $result['prompt'] ?? null,
-                'url'           => $result['url'] ?? null,
-                'thumbnail_url' => $result['url'] ?? null,
+                'url'           => $imageUrl,
+                'thumbnail_url' => $imageUrl,
                 'meta'          => ['provider' => 'openai_image'],
             ]);
 
@@ -105,7 +126,7 @@ class GeneratePromotionImageJob implements ShouldQueue
             Log::info('[Promotion] GeneratePromotionImageJob: done', [
                 'post_id'   => $this->postId,
                 'asset_id'  => $asset->id,
-                'image_url' => $result['url'] ?? '(no url — api key missing or b64 decode failed)',
+                'image_url' => $imageUrl,
             ]);
         } catch (\Throwable $e) {
             Log::error('[Promotion] GeneratePromotionImageJob: exception', [

@@ -28,6 +28,8 @@ use App\Services\Promotion\PromotionTopicSuggestionService;
 use App\Services\Traffic\TrafficHubResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
@@ -194,11 +196,28 @@ class FunnelPromotionController extends Controller
         $action = $validated['action'];
 
         if ($action === 'publish') {
+            $guard = app(PromotionPublishGuard::class);
+            $queued = 0;
+            $skipped = 0;
+
             foreach ($posts as $post) {
+                if ($guard->blockingErrors($post->fresh()) !== []) {
+                    $skipped++;
+
+                    continue;
+                }
                 PublishPromotionPostJob::dispatch($post->id);
+                $queued++;
             }
 
-            return back()->with('success', 'Bulk publish queued for selected posts.');
+            $message = $queued > 0
+                ? "Bulk publish queued for {$queued} post(s)."
+                : 'No posts were queued for publish.';
+            if ($skipped > 0) {
+                $message .= " Skipped {$skipped} (not ready, email copy-only, or already published).";
+            }
+
+            return back()->with('success', $message);
         }
 
         if ($action === 'delete') {
@@ -223,7 +242,12 @@ class FunnelPromotionController extends Controller
                 return back()->withErrors(['scheduled_for' => 'A schedule datetime is required for bulk schedule.']);
             }
 
+            $scheduled = 0;
             foreach ($posts as $post) {
+                if ($post->content_type === FunnelPromotionPost::TYPE_EMAIL) {
+                    continue;
+                }
+
                 $previous = $post->scheduled_for;
                 $post->update([
                     'scheduled_for' => $scheduledFor,
@@ -242,9 +266,12 @@ class FunnelPromotionController extends Controller
                         : FunnelPromotionScheduleEvent::ACTION_SCHEDULED,
                     'meta' => ['source' => 'bulk_action'],
                 ]);
+                $scheduled++;
             }
 
-            return back()->with('success', 'Selected posts scheduled.');
+            return back()->with('success', $scheduled > 0
+                ? "Scheduled {$scheduled} post(s)."
+                : 'No posts scheduled (email copy-only posts were skipped).');
         }
 
         return back();
@@ -324,21 +351,9 @@ class FunnelPromotionController extends Controller
         ]);
 
         if (($validated['auto_generate'] ?? false) === true) {
-            // Determine which generation jobs to dispatch.
-            // For image posts: generate both the text caption AND the image.
-            // For text/email/video: only dispatch the matching job.
-            $types = [$post->content_type];
+            $dispatcher = app(PromotionGenerationDispatcher::class);
+            $types = $dispatcher->generationTypesForPost($post);
             $usesMultiSlide = $formatCatalog->usesMultiSlideImages($formatSpec);
-            $ctx = (array) ($post->generation_context ?? []);
-
-            if ($post->content_type === FunnelPromotionPost::TYPE_IMAGE) {
-                // Carousels always need text/slide copy first — the image job alone
-                // is stripped below and would leave the post stuck in "generating".
-                $needsText = $usesMultiSlide || (($ctx['include_text'] ?? true) !== false);
-                if ($needsText) {
-                    $types[] = FunnelPromotionPost::TYPE_TEXT;
-                }
-            }
 
             Log::info('[Promotion] store: dispatching generation jobs', [
                 'post_id' => $post->id,
@@ -346,15 +361,6 @@ class FunnelPromotionController extends Controller
                 'content_format' => $contentFormat,
                 'uses_multi_slide' => $usesMultiSlide,
             ]);
-
-            $post->update(['status' => FunnelPromotionPost::STATUS_GENERATING]);
-
-            if ($usesMultiSlide) {
-                $types = array_values(array_filter(
-                    $types,
-                    fn (string $type): bool => $type !== FunnelPromotionPost::TYPE_IMAGE,
-                ));
-            }
 
             if ($types === []) {
                 Log::warning('[Promotion] store: no generation jobs to dispatch', [
@@ -407,10 +413,14 @@ class FunnelPromotionController extends Controller
     ): RedirectResponse {
         $this->authorizePost($request, $funnel, $post);
         $validated = $request->validated();
+        $types = $validated['types'] ?? [];
+        if ($types === []) {
+            $types = app(PromotionGenerationDispatcher::class)->generationTypesForPost($post);
+        }
 
         Log::info('[Promotion] generateAssets: dispatching generation jobs', [
             'post_id' => $post->id,
-            'types' => $validated['types'],
+            'types' => $types,
             'platform' => $post->platforms,
         ]);
 
@@ -419,7 +429,16 @@ class FunnelPromotionController extends Controller
             'last_error' => null,
         ]);
 
-        $this->dispatchGeneration($post, $validated['types'], (bool) ($validated['wait_for_video'] ?? false));
+        if ($types === []) {
+            $post->update([
+                'status' => FunnelPromotionPost::STATUS_FAILED,
+                'last_error' => 'Nothing to generate for this post.',
+            ]);
+
+            return back()->withErrors(['generate' => 'Nothing to generate for this post.']);
+        }
+
+        $this->dispatchGeneration($post, $types, (bool) ($validated['wait_for_video'] ?? false));
 
         return back()->with('success', 'Generation started.');
     }
@@ -430,6 +449,13 @@ class FunnelPromotionController extends Controller
         FunnelPromotionPost $post,
     ): RedirectResponse {
         $this->authorizePost($request, $funnel, $post);
+
+        if ($post->content_type === FunnelPromotionPost::TYPE_EMAIL) {
+            return back()->withErrors([
+                'schedule' => 'Email posts cannot be scheduled for social publish. Copy the content and send via your ESP.',
+            ]);
+        }
+
         $validated = $request->validated();
         $from = $post->scheduled_for;
 
@@ -482,6 +508,35 @@ class FunnelPromotionController extends Controller
         }
 
         return back()->with('success', 'Publish triggered.');
+    }
+
+    public function exportEmail(Request $request, Funnel $funnel, FunnelPromotionPost $post): StreamedResponse|RedirectResponse
+    {
+        $this->authorizePost($request, $funnel, $post);
+
+        if ($post->content_type !== FunnelPromotionPost::TYPE_EMAIL) {
+            abort(404);
+        }
+
+        $subject = trim((string) ($post->email_subject ?? ''));
+        $body = trim((string) ($post->email_body ?? $post->text_body ?? ''));
+
+        if ($subject === '' && $body === '') {
+            return back()->withErrors(['export' => 'Generate email content before exporting.']);
+        }
+
+        $filename = Str::slug($post->topic ?: 'promotion-email').'-'.now()->format('Y-m-d').'.txt';
+        $contents = $subject !== ''
+            ? "Subject: {$subject}\n\n{$body}"
+            : $body;
+
+        return response()->streamDownload(
+            function () use ($contents): void {
+                echo $contents;
+            },
+            $filename,
+            ['Content-Type' => 'text/plain; charset=UTF-8'],
+        );
     }
 
     /**

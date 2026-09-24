@@ -110,7 +110,6 @@ final class PlatformFormatCatalog
                 'aspect_ratio' => $spec['aspect_ratio'] ?? null,
                 'size' => $spec['size'] ?? null,
                 'signals' => $spec['signals'] ?? [],
-                'automate' => $spec['automate'] ?? [],
             ];
         }
 

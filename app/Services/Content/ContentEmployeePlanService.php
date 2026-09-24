@@ -228,6 +228,7 @@ final class ContentEmployeePlanService
                     'content_employee_plan_id' => $plan->id,
                     'content_employee_item_id' => $item->id,
                     'format_spec' => $spec,
+                    'media_spec' => $this->formatCatalog->mediaSpec($spec),
                 ],
             ]);
 
@@ -238,7 +239,7 @@ final class ContentEmployeePlanService
 
             $this->generationDispatcher->dispatch(
                 $post,
-                $this->generationDispatcher->defaultTypesForPost($post),
+                $this->generationDispatcher->generationTypesForPost($post),
             );
             $queued++;
         }

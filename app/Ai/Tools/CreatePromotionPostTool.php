@@ -39,7 +39,7 @@ class CreatePromotionPostTool extends GatedTool
             'platforms' => $schema->string()->description('Default twitter'),
             'content_format' => $schema->string()->description('x_thread, x_text_post, etc. Prefer twitter_thread for threads'),
             'twitter_thread' => $schema->boolean()->description('true = one X thread (x_thread format)'),
-            'thread_parts' => $schema->integer()->description('Number of tweets when twitter_thread (2–8, default 3)'),
+            'thread_parts' => $schema->integer()->description('Number of tweets when twitter_thread (2–8, default 2 per catalog)'),
             'auto_generate' => $schema->boolean()->description('Queue AI copy generation (default true)'),
         ];
     }
@@ -108,12 +108,19 @@ class CreatePromotionPostTool extends GatedTool
             || filter_var($request['auto_generate'], FILTER_VALIDATE_BOOLEAN);
 
         if ($autoGenerate) {
-            $post->update(['status' => FunnelPromotionPost::STATUS_GENERATING]);
-            app(PromotionGenerationDispatcher::class)->dispatch(
-                $post->fresh(),
-                [FunnelPromotionPost::TYPE_TEXT],
-                false,
-            );
+            $dispatcher = app(PromotionGenerationDispatcher::class);
+            $post = $post->fresh();
+            $types = $dispatcher->generationTypesForPost($post);
+
+            if ($types === []) {
+                $post->update([
+                    'status' => FunnelPromotionPost::STATUS_FAILED,
+                    'last_error' => 'Nothing to generate — enable slide copy/text or pick another format.',
+                ]);
+            } else {
+                $post->update(['status' => FunnelPromotionPost::STATUS_GENERATING]);
+                $dispatcher->dispatch($post, $types, false);
+            }
         }
 
         return $this->json([
@@ -173,6 +180,13 @@ class CreatePromotionPostTool extends GatedTool
         $metadata['format_spec'] = $spec;
         $metadata['media_spec'] = $catalog->mediaSpec($spec);
         $generationContext['content_format'] = $formatKey;
+
+        if (! array_key_exists('include_text', $generationContext)) {
+            $generationContext['include_text'] = true;
+        }
+        if (! array_key_exists('include_image', $generationContext)) {
+            $generationContext['include_image'] = $catalog->requiresImageAsset($spec);
+        }
     }
 
     /**
