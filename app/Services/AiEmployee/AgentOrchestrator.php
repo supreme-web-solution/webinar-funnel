@@ -60,6 +60,7 @@ class AgentOrchestrator
             return $this->result($session, 'complete', $reply);
         }
 
+        $this->recordUserMessage($user, $session, $text);
         $this->sessions->startTurn($session, $channel);
         ProcessAiChatTurnJob::dispatch($user->id, $session->conversation_id, $text, $channel)
             ->onQueue((string) config('ai_employee.queue', 'webinar-ai'));
@@ -86,7 +87,19 @@ class AgentOrchestrator
     public function recordTurnFailure(User $user, AiEmployeeSession $session, string $userText, string $assistantText): void
     {
         $this->sessions->bind($session);
-        $this->appendExchange($user, $session, $userText, $assistantText);
+        $this->appendAssistant($user, $session, $assistantText);
+    }
+
+    public function recordUserMessage(User $user, AiEmployeeSession $session, string $userText): void
+    {
+        $this->sessions->bind($session);
+        $this->appendMessage($user, $session, 'user', $userText);
+    }
+
+    public function recordTurnSuccess(User $user, AiEmployeeSession $session, string $assistantText): void
+    {
+        $this->sessions->bind($session);
+        $this->appendAssistant($user, $session, $assistantText);
     }
 
     public function launch(User $user, int $approvalId): string
@@ -222,6 +235,21 @@ class AgentOrchestrator
 
     protected function appendMessage(User $user, AiEmployeeSession $session, string $role, string $content): void
     {
+        $content = trim($content);
+        if ($content === '') {
+            return;
+        }
+
+        $last = ConversationMessage::query()
+            ->where('conversation_id', $session->conversation_id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($last !== null && $last->role === $role && trim((string) $last->content) === $content) {
+            return;
+        }
+
         ConversationMessage::query()->create([
             'id' => (string) Str::uuid7(),
             'conversation_id' => $session->conversation_id,

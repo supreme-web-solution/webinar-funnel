@@ -11,10 +11,10 @@ class AiProviderFailoverService
     {
         $chain = [];
         $configured = [
-            'openrouter' => (string) config('services.openrouter.api_key', ''),
-            'openai' => (string) config('services.openai.api_key', ''),
-            'gemini' => (string) config('ai.providers.gemini.key', ''),
-            'anthropic' => (string) config('ai.providers.anthropic.key', ''),
+            'openrouter' => (string) (config('services.openrouter.api_key') ?? ''),
+            'openai' => (string) (config('services.openai.api_key') ?? ''),
+            'gemini' => (string) (config('ai.providers.gemini.key') ?? ''),
+            'anthropic' => (string) (config('ai.providers.anthropic.key') ?? ''),
         ];
 
         $models = config('ai_employee.failover', []);

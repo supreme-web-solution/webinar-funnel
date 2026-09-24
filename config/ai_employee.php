@@ -8,6 +8,8 @@ return [
     'avatar' => env('AI_EMPLOYEE_AVATAR', '/images/ai-employee/alex.png'),
     'queue' => env('AI_EMPLOYEE_QUEUE', 'webinar-ai'),
     'history_limit' => (int) env('AI_EMPLOYEE_HISTORY_LIMIT', 40),
+    /** Clear stuck "Thinking…" UI if a queued turn never finishes (seconds). */
+    'processing_timeout' => (int) env('AI_EMPLOYEE_PROCESSING_TIMEOUT', 210),
 
     'autonomy' => [
         'default' => env('AI_EMPLOYEE_AUTONOMY', 'assisted'),

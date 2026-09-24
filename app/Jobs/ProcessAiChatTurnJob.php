@@ -49,7 +49,9 @@ class ProcessAiChatTurnJob implements ShouldBeUnique, ShouldQueue
 
         try {
             $reply = $orchestrator->runTurn($user, $session, $this->text);
-            if ($this->channel === 'whatsapp') {
+            if ($this->channel === 'web') {
+                $orchestrator->recordTurnSuccess($user, $session, $reply);
+            } elseif ($this->channel === 'whatsapp') {
                 $whatsApp->reply($session, $reply);
             }
         } catch (Throwable $e) {

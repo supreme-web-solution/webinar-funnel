@@ -24,7 +24,29 @@ class AiEmployeeSessionService
             $session->save();
         }
 
-        return $session;
+        $this->recoverStaleProcessing($session);
+
+        return $session->fresh() ?? $session;
+    }
+
+    /**
+     * Redis/queue resets can drop jobs while processing_at stays set — unblock the UI.
+     */
+    public function recoverStaleProcessing(AiEmployeeSession $session): void
+    {
+        if ($session->processing_at === null) {
+            return;
+        }
+
+        $timeout = max(60, (int) config('ai_employee.processing_timeout', 210));
+        if ($session->processing_at->greaterThan(now()->subSeconds($timeout))) {
+            return;
+        }
+
+        $session->forceFill([
+            'processing_at' => null,
+            'progress' => null,
+        ])->save();
     }
 
     public function startTurn(AiEmployeeSession $session, string $channel, string $progress = 'Thinking…'): AiEmployeeSession
