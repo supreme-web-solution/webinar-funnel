@@ -3,7 +3,10 @@ import { Icon } from '@iconify/vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useAppName } from '@/composables/useAppName';
 import { home } from '@/routes';
+
+const appName = useAppName();
 
 defineProps<{
     title?: string;
@@ -57,11 +60,11 @@ const features = computed(() => {
                 >
                     <img
                         src="/favicon.png"
-                        alt="AffiliMachine Ai"
+                        :alt="appName"
                         class="size-10 rounded-xl shadow-sm ring-1 ring-blue-500/25"
                     />
                     <div class="text-left">
-                        <p class="text-sm font-bold tracking-tight text-foreground">AffiliMachine Ai</p>
+                        <p class="text-sm font-bold tracking-tight text-foreground">{{ appName }}</p>
                         <p class="text-[0.65rem] text-muted-foreground">Affiliate Business Builder</p>
                     </div>
                 </Link>

@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
 import { Head, router } from '@inertiajs/vue3';
+import { useAppName } from '@/composables/useAppName';
 import {
     hidePublicPageTransitionLoader,
     showPublicPageTransitionLoader,
     waitForPaint,
 } from '@/lib/publicPageTransitionLoader';
 import { nextTick, onBeforeMount, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue';
+
+const appName = useAppName();
 
 const props = defineProps<{
     funnel: {
@@ -273,7 +276,7 @@ onMounted(async () => {
             <div class="flex size-8 items-center justify-center rounded-lg" style="background:rgba(64,224,208,0.2)">
                 <Icon icon="heroicons:video-camera" class="size-4" style="color:#40E0D0" />
             </div>
-            <span class="text-sm font-semibold text-white/70">AffiliMachine Ai</span>
+            <span class="text-sm font-semibold text-white/70">{{ appName }}</span>
         </div>
 
         <!-- Card -->

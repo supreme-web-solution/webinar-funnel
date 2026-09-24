@@ -13,9 +13,12 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { useAppName } from '@/composables/useAppName';
 import type { NavItem } from '@/types';
 
 type NavGroup = { label: string; items: NavItem[] };
+
+const appName = useAppName();
 
 const mainNav: NavItem[] = [
     { title: 'Dashboard', href: '/dashboard', icon: 'heroicons:squares-2x2' },
@@ -91,7 +94,7 @@ const navGroups = computed<NavGroup[]>(() => {
                             </div>
                             <div class="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
                                 <span class="truncate text-[0.85rem] font-bold tracking-tight text-blue-50">
-                                    AffiliateOS AI
+                                    {{ appName }}
                                 </span>
                                 <span class="truncate text-[0.65rem] text-blue-200/55">
                                     AI Affiliate Employee

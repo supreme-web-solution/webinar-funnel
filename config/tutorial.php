@@ -14,7 +14,8 @@ return [
     |
     */
 
-    'intro' => 'Watch these step-by-step guides to get the most out of AffiliMachine Ai.',
+    // Intro text is built in TutorialController using config('app.name').
+    'intro' => '',
 
     'sections' => [
         [

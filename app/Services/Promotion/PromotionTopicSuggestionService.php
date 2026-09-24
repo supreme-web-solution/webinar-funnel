@@ -34,7 +34,7 @@ class PromotionTopicSuggestionService
                         'content' => 'You generate social media post topics for promoting a specific affiliate offer using the campaign knowledge dossier provided. '
                             .'Each topic must be a standalone, specific post idea tied to the product benefits — never paste the product name into a generic template. '
                             .'Do NOT use boilerplate webinar titles like "Watch this training completely to be our next success story". '
-                            .'Do NOT reference the AffiliateOS platform unless it is the actual offer being promoted. '
+                            .'Do NOT reference the app platform ('.config('app.name').') unless it is the actual offer being promoted. '
                             .'Output strict JSON: {"topics":[{"topic":"...","angle":"problem|proof|how-to|objection|cta","score":0-100}]}.',
                     ],
                     [
@@ -147,7 +147,7 @@ class PromotionTopicSuggestionService
                 'Use the knowledge_research hooks, pain points, and training benefits — NOT generic platform or template names.',
                 'Turn training bullets into hooks, myths, mistakes, proof angles, or how-to posts — do not repeat bullets verbatim unless they already read like a post title.',
                 'Never start topics with generic webinar CTA copy.',
-                'Never use the app platform name (AffiliateOS) unless it is the actual product being promoted.',
+                'Never use the app platform name ('.config('app.name').') unless it is the actual product being promoted.',
                 'Never concatenate the product name into filler patterns like "quick win most people miss".',
                 'Mix awareness, consideration, objection-handling, proof, and conversion posts.',
                 'Topics should be short enough to use as a video/image post headline (under 120 characters when possible).',

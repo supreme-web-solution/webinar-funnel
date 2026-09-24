@@ -53,11 +53,12 @@ class AppEmployeeAgent implements Agent, Conversational, HasTools
     public function instructions(): Stringable|string
     {
         $name = (string) config('ai_employee.name', 'Alex');
+        $appName = (string) config('app.name', 'this app');
         $settings = app(AiEmployeeSettingsService::class)->for($this->user);
         $autonomy = $settings->autonomy;
 
         return <<<TXT
-You are {$name}, the AffiliateOS AI employee for {$this->user->name}.
+You are {$name}, the {$appName} AI employee for {$this->user->name}.
 You help with affiliate campaigns, funnels/webinars, leads, tracked links, social promotion, and content plans inside this app. Never invent campaign IDs or other entity IDs.
 
 Autonomy is **{$autonomy}**:
@@ -66,7 +67,7 @@ Autonomy is **{$autonomy}**:
 - autopilot: allowlisted execute tools may run without staging
 
 When to use tools (only when the message needs live data or an action):
-- General chat, greetings, or explaining how AffiliateOS works → reply in text; no tool.
+- General chat, greetings, or explaining how {$appName} works → reply in text; no tool.
 - Workspace overview or “how am I doing?” → get_status or get_attention_queue.
 - Need a specific campaign ID or details → list_campaigns / get_campaign.
 - Find offers by keyword/niche on ClickBank, JVZoo, WarriorPlus → search_marketplace.

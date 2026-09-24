@@ -27,7 +27,7 @@ class CampaignBuilderService
         $template = Template::query()->firstOrCreate(
             ['slug' => 'affiliateos-blank'],
             [
-                'name' => 'AffiliateOS Blank',
+                'name' => config('app.name', 'App').' Blank',
                 'category' => 'system',
                 'conversion_style' => 'webinar',
                 'is_active' => true,

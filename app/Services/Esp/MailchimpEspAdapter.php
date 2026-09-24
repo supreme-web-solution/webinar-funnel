@@ -87,7 +87,7 @@ class MailchimpEspAdapter implements EspProviderAdapter, EspSequenceAdapter
             return ['ok' => false, 'message' => 'API key and Audience ID are required.'];
         }
 
-        $campaignName = (string) ($config['campaign_name'] ?? 'AffiliateOS Campaign');
+        $campaignName = (string) ($config['campaign_name'] ?? config('app.name', 'App').' Campaign');
         $tag = trim((string) ($config['tag'] ?? ''));
         $uploaded = 0;
         $details = [];
