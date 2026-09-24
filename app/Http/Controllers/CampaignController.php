@@ -45,37 +45,80 @@ class CampaignController extends Controller
     public function index(): Response
     {
         $userId = auth()->id();
+        $search = request()->string('search')->trim()->toString();
+        $statusFilter = request()->string('status')->toString();
+        if (! in_array($statusFilter, ['all', 'published', 'draft'], true)) {
+            $statusFilter = 'all';
+        }
 
-        $campaigns = Campaign::query()
-            ->where('user_id', $userId)
-            ->withCount(['bonuses', 'emails', 'funnels', 'trackedLinks'])
+        $baseQuery = Campaign::query()->where('user_id', $userId);
+
+        $stats = [
+            'total' => (clone $baseQuery)->count(),
+            'published' => (clone $baseQuery)->where('status', 'published')->count(),
+            'draft' => (clone $baseQuery)->where('status', 'draft')->count(),
+            'knowledge_ready' => (clone $baseQuery)->where('knowledge->status', 'ready')->count(),
+        ];
+
+        $listQuery = (clone $baseQuery)
+            ->withCount(['bonuses', 'emails', 'funnels', 'trackedLinks']);
+
+        if ($statusFilter !== 'all') {
+            $listQuery->where('status', $statusFilter);
+        }
+
+        if ($search !== '') {
+            $listQuery->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('slug', 'like', "%{$search}%");
+            });
+        }
+
+        $campaigns = $listQuery
             ->latest()
-            ->get()
-            ->map(fn (Campaign $c) => [
-                'id' => $c->id,
-                'uuid' => $c->uuid,
-                'name' => $c->name,
-                'slug' => $c->slug,
-                'type' => $c->type,
-                'status' => $c->status,
-                'wizard_step' => $c->wizard_step,
-                'created_at' => $c->created_at,
-                'published_at' => $c->published_at,
-                'bonuses_count' => $c->bonuses_count,
-                'emails_count' => $c->emails_count,
-                'funnels_count' => $c->funnels_count,
-                'tracked_links_count' => $c->tracked_links_count,
-                'knowledge_ready' => ($c->knowledge['status'] ?? '') === 'ready',
-            ]);
+            ->paginate(12)
+            ->withQueryString()
+            ->through(fn (Campaign $c) => $this->campaignListItem($c));
 
         return Inertia::render('campaigns/Index', [
             'campaigns' => $campaigns,
-            'stats' => [
-                'total' => $campaigns->count(),
-                'published' => $campaigns->where('status', 'published')->count(),
-                'draft' => $campaigns->where('status', 'draft')->count(),
+            'stats' => $stats,
+            'filters' => [
+                'search' => $search,
+                'status' => $statusFilter,
             ],
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function campaignListItem(Campaign $c): array
+    {
+        $generation = $this->generationProgress->get($c);
+        $genStatus = is_array($generation) ? (string) ($generation['status'] ?? '') : '';
+
+        return [
+            'id' => $c->id,
+            'uuid' => $c->uuid,
+            'name' => $c->name,
+            'slug' => $c->slug,
+            'type' => $c->type,
+            'status' => $c->status,
+            'wizard_step' => $c->wizard_step,
+            'created_at' => $c->created_at,
+            'published_at' => $c->published_at,
+            'bonuses_count' => $c->bonuses_count,
+            'emails_count' => $c->emails_count,
+            'funnels_count' => $c->funnels_count,
+            'tracked_links_count' => $c->tracked_links_count,
+            'knowledge_ready' => ($c->knowledge['status'] ?? '') === 'ready',
+            'is_generating' => $genStatus === 'running',
+            'generation_failed' => $genStatus === 'failed',
+            'generation_message' => is_array($generation) ? ($generation['message'] ?? null) : null,
+            'generation_progress' => is_array($generation) ? (int) ($generation['progress'] ?? 0) : 0,
+            'generation_error' => is_array($generation) ? ($generation['error'] ?? null) : null,
+        ];
     }
 
     public function create(Request $request): Response
