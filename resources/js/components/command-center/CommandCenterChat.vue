@@ -18,7 +18,7 @@ const emit = defineEmits<{
 }>();
 
 const draft = ref('');
-const sending = ref(false;
+const sending = ref(false);
 const error = ref<string | null>(null);
 const scroller = ref<HTMLElement | null>(null);
 const loadingOlder = ref(false);
