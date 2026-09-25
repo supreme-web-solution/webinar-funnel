@@ -9,6 +9,8 @@ return [
     /** Command Center web chat + WhatsApp inbound (Horizon: supervisor-ai). */
     'queue' => env('AI_EMPLOYEE_QUEUE', 'ai-employee'),
     'history_limit' => (int) env('AI_EMPLOYEE_HISTORY_LIMIT', 40),
+    /** Messages loaded initially and per “scroll up” page in Command Center. */
+    'messages_page_size' => (int) env('AI_EMPLOYEE_MESSAGES_PAGE_SIZE', 30),
     /** Clear stuck "Thinking…" UI if a queued turn never finishes (seconds). */
     'processing_timeout' => (int) env('AI_EMPLOYEE_PROCESSING_TIMEOUT', 210),
 

@@ -29,7 +29,40 @@ class CommandCenterController extends Controller
 
     public function state(Request $request): JsonResponse
     {
-        return response()->json($this->state->for($request->user()));
+        $includeMessages = $request->boolean('messages', true);
+
+        return response()->json($this->state->for($request->user(), $includeMessages));
+    }
+
+    public function messages(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'before' => ['nullable', 'string', 'max:64'],
+            'after' => ['nullable', 'string', 'max:64'],
+            'limit' => ['nullable', 'integer', 'min:10', 'max:50'],
+        ]);
+
+        if (! empty($validated['before']) && ! empty($validated['after'])) {
+            return response()->json(['message' => 'Use either before or after, not both.'], 422);
+        }
+
+        $session = $this->sessions->for($request->user());
+        $conversationId = $session->conversation_id;
+        $limit = isset($validated['limit']) ? (int) $validated['limit'] : null;
+
+        if (! empty($validated['after'])) {
+            return response()->json([
+                'data' => $this->state->messagesAfter($conversationId, (string) $validated['after'], $limit),
+            ]);
+        }
+
+        if (! empty($validated['before'])) {
+            $page = $this->state->messagesBefore($conversationId, (string) $validated['before'], $limit);
+
+            return response()->json($page);
+        }
+
+        return response()->json($this->state->messagesRecent($conversationId, $limit));
     }
 
     public function chat(Request $request): JsonResponse

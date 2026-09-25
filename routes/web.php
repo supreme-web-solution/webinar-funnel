@@ -68,6 +68,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('command-center')->name('command-center.')->group(function () {
         Route::get('/', [CommandCenterController::class, 'index'])->name('index');
         Route::get('state', [CommandCenterController::class, 'state'])->name('state');
+        Route::get('messages', [CommandCenterController::class, 'messages'])->name('messages');
         Route::post('chat', [CommandCenterController::class, 'chat'])
             ->middleware('throttle:command-center-chat')
             ->name('chat');

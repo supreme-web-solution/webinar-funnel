@@ -5,9 +5,12 @@ namespace Tests\Feature;
 use App\Ai\Agents\AppEmployeeAgent;
 use App\Ai\Tools\DeleteCampaignTool;
 use App\Models\AiActionApproval;
+use App\Models\AiEmployeeSession;
 use App\Models\AiEmployeeSetting;
 use App\Models\Campaign;
 use App\Models\User;
+use Illuminate\Support\Str;
+use Laravel\Ai\Models\ConversationMessage;
 use App\Services\AiEmployee\AiEmployeeSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -229,6 +232,47 @@ class CommandCenterTest extends TestCase
             ->assertOk();
 
         $this->assertDatabaseMissing('campaigns', ['id' => $campaign->id]);
+    }
+
+    public function test_command_center_loads_recent_messages_only(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user)->get(route('command-center.index'))->assertOk();
+
+        $session = AiEmployeeSession::query()->where('user_id', $user->id)->first();
+        $this->assertNotNull($session?->conversation_id);
+
+        for ($i = 0; $i < 35; $i++) {
+            ConversationMessage::query()->create([
+                'id' => (string) Str::uuid7(),
+                'conversation_id' => $session->conversation_id,
+                'user_id' => $user->id,
+                'agent' => AppEmployeeAgent::class,
+                'role' => $i % 2 === 0 ? 'user' : 'assistant',
+                'content' => 'Message '.$i,
+                'attachments' => [],
+                'tool_calls' => [],
+                'tool_results' => [],
+                'usage' => [],
+                'meta' => [],
+                'created_at' => now()->subMinutes(35 - $i),
+            ]);
+        }
+
+        $this->actingAs($user)
+            ->getJson(route('command-center.state'))
+            ->assertOk()
+            ->assertJsonCount(30, 'messages')
+            ->assertJsonPath('messages_meta.has_older', true);
+
+        $oldestId = $this->getJson(route('command-center.state'))->json('messages_meta.oldest_id');
+        $this->assertNotNull($oldestId);
+
+        $this->actingAs($user)
+            ->getJson(route('command-center.messages', ['before' => $oldestId]))
+            ->assertOk()
+            ->assertJsonPath('has_older', false)
+            ->assertJsonCount(5, 'data');
     }
 
     public function test_settings_strip_delete_tools_from_autopilot_allowlist(): void

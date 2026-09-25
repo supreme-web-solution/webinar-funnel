@@ -13,12 +13,18 @@ export type CommandCenterApproval = {
     status: string;
 };
 
+export type CommandCenterMessagesMeta = {
+    has_older: boolean;
+    oldest_id: string | null;
+};
+
 export type CommandCenterState = {
     employee: { name: string; title: string; avatar_url: string };
     conversation_id: string | null;
     processing: boolean;
     progress: string | null;
     messages: CommandCenterMessage[];
+    messages_meta?: CommandCenterMessagesMeta;
     approvals: CommandCenterApproval[];
     activity: Array<{
         id: number;
