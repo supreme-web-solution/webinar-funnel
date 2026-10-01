@@ -11,10 +11,13 @@ use App\Models\Campaign;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Laravel\Ai\Models\ConversationMessage;
+use App\Services\AiEmployee\AgentOrchestrator;
 use App\Services\AiEmployee\AiEmployeeSettingsService;
 use App\Services\AiEmployee\WhatsAppChannelService;
+use App\Jobs\ProcessAiChatTurnJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Tools\Request;
 use Tests\TestCase;
 
@@ -161,6 +164,41 @@ class CommandCenterTest extends TestCase
             '15551231234',
             AiEmployeeSetting::query()->where('user_id', $user->id)->value('whatsapp_phone')
         );
+    }
+
+    public function test_setup_does_not_start_a_new_code_when_whatsapp_is_already_linked(): void
+    {
+        $user = User::factory()->create();
+        AiEmployeeSetting::query()->create([
+            'user_id' => $user->id,
+            'killed' => false,
+            'autonomy' => AiEmployeeSetting::AUTONOMY_ASSISTED,
+            'whatsapp_phone' => '15551231234',
+            'pairing_code' => 'LINK-OLD111',
+            'pairing_expires_at' => now()->addMinutes(10),
+        ]);
+
+        $this->actingAs($user)->postJson(route('command-center.whatsapp.pairing'))->assertOk();
+
+        $this->assertSame(
+            'LINK-OLD111',
+            AiEmployeeSetting::query()->where('user_id', $user->id)->value('pairing_code')
+        );
+    }
+
+    public function test_whatsapp_message_queues_the_chat_turn(): void
+    {
+        Queue::fake();
+        AppEmployeeAgent::fake(['Queued.']);
+        $user = User::factory()->create();
+
+        app(AgentOrchestrator::class)->handle($user, 'Kdp', 'whatsapp');
+
+        Queue::assertPushed(ProcessAiChatTurnJob::class, function (ProcessAiChatTurnJob $job) use ($user): bool {
+            return $job->userId === $user->id
+                && $job->channel === 'whatsapp'
+                && $job->text === 'Kdp';
+        });
     }
 
     public function test_repeated_whatsapp_inbound_stores_one_user_message(): void

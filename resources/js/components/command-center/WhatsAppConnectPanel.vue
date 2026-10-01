@@ -43,17 +43,17 @@ async function copy(value: string, key: 'phone' | 'code'): Promise<void> {
                 <Icon icon="simple-icons:whatsapp" class="size-4 text-[#25D366]" />
                 <p class="text-sm font-semibold text-foreground">WhatsApp</p>
             </div>
-            <Button size="sm" variant="outline" class="cursor-pointer" @click="emit('setup')">
+            <Button v-if="!linkedPhone" size="sm" variant="outline" class="cursor-pointer" @click="emit('setup')">
                 Setup
             </Button>
         </div>
         <p class="text-xs text-muted-foreground">Same {{ employeeName }} brain from your phone.</p>
 
-        <p v-if="linkedPhone && !pairing" class="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+        <p v-if="linkedPhone" class="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
             Linked to {{ linkedPhone }}
         </p>
 
-        <div v-if="pairing" class="mt-4">
+        <div v-else-if="pairing" class="mt-4">
             <p class="mb-2 flex items-center gap-1.5 text-xs font-medium text-foreground">
                 <Icon icon="heroicons:device-phone-mobile" class="size-3.5 text-[#25D366]" />
                 Link from your phone

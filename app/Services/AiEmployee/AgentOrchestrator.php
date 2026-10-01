@@ -8,6 +8,9 @@ use App\Jobs\ProcessAiChatTurnJob;
 use App\Models\AiActionApproval;
 use App\Models\AiEmployeeSession;
 use App\Models\User;
+use Illuminate\Bus\UniqueLock;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Ai\Models\ConversationMessage;
 use Laravel\Ai\Tools\Request;
@@ -62,13 +65,33 @@ class AgentOrchestrator
 
         // User message is persisted by Laravel AI RememberConversation when the queued turn runs.
         $this->sessions->startTurn($session, $channel);
+
+        // WhatsApp already runs inside a queue worker. afterResponse() waits for
+        // the HTTP kernel to shut down, which a Horizon worker never does, so the
+        // turn would keep the unique lock and never save or reply.
+        if ($channel === 'whatsapp') {
+            $this->releaseTurnLock($user->id);
+        }
+
         $pending = ProcessAiChatTurnJob::dispatch($user->id, $session->conversation_id, $text, $channel);
 
-        if (! app()->runningUnitTests()) {
+        if ($channel !== 'whatsapp' && ! app()->runningUnitTests()) {
             $pending->afterResponse();
         }
 
+        Log::info('AI employee turn queued', [
+            'user_id' => $user->id,
+            'channel' => $channel,
+            'conversation_id' => $session->conversation_id,
+        ]);
+
         return $this->result($session, 'processing', null, true);
+    }
+
+    protected function releaseTurnLock(int $userId): void
+    {
+        $job = new ProcessAiChatTurnJob($userId, 'lock', 'lock', 'whatsapp');
+        (new UniqueLock(Cache::store()))->release($job);
     }
 
     public function runTurn(User $user, AiEmployeeSession $session, string $text): string

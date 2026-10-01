@@ -20,6 +20,9 @@ class ProcessAiChatTurnJob implements ShouldBeUnique, ShouldQueue
 
     public int $timeout = 180;
 
+    /** Drop a stuck unique lock if a previous turn never started. */
+    public int $uniqueFor = 300;
+
     public function __construct(
         public int $userId,
         public string $conversationId,

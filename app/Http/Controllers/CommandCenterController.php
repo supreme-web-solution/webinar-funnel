@@ -119,6 +119,13 @@ class CommandCenterController extends Controller
 
     public function pairing(Request $request): JsonResponse
     {
+        $setting = $this->settings->for($request->user());
+        if (is_string($setting->whatsapp_phone) && $setting->whatsapp_phone !== '') {
+            return response()->json([
+                'state' => $this->state->for($request->user()),
+            ]);
+        }
+
         $pairing = $this->pairing->start($request->user());
 
         return response()->json([
