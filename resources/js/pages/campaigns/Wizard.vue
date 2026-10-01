@@ -1610,18 +1610,24 @@ onMounted(() => {
                                     Change
                                 </Button>
                             </div>
-                            <a
+                            <Button
                                 v-if="affiliateRequestUrl(selectedKeywordOffer)"
-                                :href="affiliateRequestUrl(selectedKeywordOffer) ?? undefined"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="inline-flex items-center gap-1.5 text-sm font-medium text-blue-800 underline underline-offset-2"
+                                as-child
+                                variant="brand"
+                                class="h-10 w-full sm:w-auto"
                             >
-                                <Icon icon="heroicons:arrow-top-right-on-square" class="size-4" />
-                                Request affiliate link for this offer
-                            </a>
+                                <a
+                                    :href="affiliateRequestUrl(selectedKeywordOffer) ?? undefined"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="!text-white"
+                                >
+                                    <Icon icon="heroicons:arrow-top-right-on-square" class="size-4 !text-white" />
+                                    Request affiliate link
+                                </a>
+                            </Button>
                             <p class="text-xs text-blue-800/80">
-                                Opens the marketplace page where you request approval and copy your hop link. Paste that link below.
+                                Opens the marketplace so you can request approval and copy your hop link, then paste it in Affiliate link below.
                             </p>
                         </div>
 
