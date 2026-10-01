@@ -52,9 +52,44 @@ export function buildChatTimeline(messages: CommandCenterMessage[]): ChatTimelin
     return items;
 }
 
+export function isLocalChatMessageId(id: string | number): boolean {
+    return String(id).startsWith('local-');
+}
+
+function normalizedContent(content: string): string {
+    return content.trim();
+}
+
+function sortMessagesChronologically(messages: CommandCenterMessage[]): CommandCenterMessage[] {
+    return [...messages].sort((a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (ta !== tb) return ta - tb;
+        return String(a.id).localeCompare(String(b.id));
+    });
+}
+
+/** Drop optimistic user rows once the same text exists on a persisted message. */
+export function dropSupersededLocalMessages(messages: CommandCenterMessage[]): CommandCenterMessage[] {
+    const persisted = messages.filter((row) => !isLocalChatMessageId(row.id));
+    const locals = messages.filter((row) => isLocalChatMessageId(row.id));
+
+    const keptLocals = locals.filter((local) => {
+        if (local.role !== 'user') {
+            return true;
+        }
+        const text = normalizedContent(local.content);
+        return !persisted.some(
+            (row) => row.role === 'user' && normalizedContent(row.content) === text,
+        );
+    });
+
+    return sortMessagesChronologically([...persisted, ...keptLocals]);
+}
+
 export function mergeMessagesById(
     existing: CommandCenterMessage[],
-    incoming: CommandCenterMessage[],
+    incoming: CommandCenterMessage[] = [],
 ): CommandCenterMessage[] {
     const map = new Map<string, CommandCenterMessage>();
     for (const row of existing) {
@@ -64,10 +99,5 @@ export function mergeMessagesById(
         map.set(String(row.id), row);
     }
 
-    return [...map.values()].sort((a, b) => {
-        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-        if (ta !== tb) return ta - tb;
-        return String(a.id).localeCompare(String(b.id));
-    });
+    return dropSupersededLocalMessages(sortMessagesChronologically([...map.values()]));
 }

@@ -95,7 +95,7 @@ class BrevoEspAdapter implements EspProviderAdapter, EspSequenceAdapter
                 ->post(self::BASE.'/emailCampaigns', [
                     'name' => "{$prefix} — Email ".($index + 1),
                     'subject' => (string) ($email['subject'] ?? 'Update'),
-                    'sender' => ['name' => config('app.name', 'AffiliateOS'), 'email' => $senderEmail],
+                    'sender' => ['name' => config('app.name', 'AutoAffiliate360'), 'email' => $senderEmail],
                     'htmlContent' => $this->bodyToHtml((string) ($email['body'] ?? '')),
                     'recipients' => ['listIds' => [$listId]],
                 ]);

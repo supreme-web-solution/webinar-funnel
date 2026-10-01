@@ -1,4 +1,4 @@
-# Production runbook (AffiliateOS / dfy-webinar-forge)
+# Production runbook (AutoAffiliate360 / dfy-webinar-forge)
 
 ## Required processes
 

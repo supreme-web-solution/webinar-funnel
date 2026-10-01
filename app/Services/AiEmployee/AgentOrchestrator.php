@@ -60,9 +60,13 @@ class AgentOrchestrator
             return $this->result($session, 'complete', $reply);
         }
 
-        $this->recordUserMessage($user, $session, $text);
+        // User message is persisted by Laravel AI RememberConversation when the queued turn runs.
         $this->sessions->startTurn($session, $channel);
-        ProcessAiChatTurnJob::dispatch($user->id, $session->conversation_id, $text, $channel);
+        $pending = ProcessAiChatTurnJob::dispatch($user->id, $session->conversation_id, $text, $channel);
+
+        if (! app()->runningUnitTests()) {
+            $pending->afterResponse();
+        }
 
         return $this->result($session, 'processing', null, true);
     }

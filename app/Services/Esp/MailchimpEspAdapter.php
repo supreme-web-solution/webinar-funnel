@@ -105,7 +105,7 @@ class MailchimpEspAdapter implements EspProviderAdapter, EspSequenceAdapter
                     'settings' => [
                         'subject_line' => (string) ($email['subject'] ?? 'Update'),
                         'title' => $title,
-                        'from_name' => config('app.name', 'AffiliateOS'),
+                        'from_name' => config('app.name', 'AutoAffiliate360'),
                     ],
                 ]);
 

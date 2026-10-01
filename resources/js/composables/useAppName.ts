@@ -5,5 +5,5 @@ import { computed, type ComputedRef } from 'vue';
 export function useAppName(): ComputedRef<string> {
     const page = usePage();
 
-    return computed(() => String(page.props.name ?? import.meta.env.VITE_APP_NAME ?? 'App'));
+    return computed(() => String(page.props.name ?? import.meta.env.VITE_APP_NAME ?? 'AutoAffiliate360'));
 }

@@ -1,4 +1,4 @@
-# Go-live checklist — AffiliateOS
+# Go-live checklist — AutoAffiliate360
 
 Use with [DEPLOY.md](./DEPLOY.md) for env and queue details. Run in order before opening to customers.
 

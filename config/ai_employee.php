@@ -27,8 +27,8 @@ return [
     ],
 
     'whatsapp' => [
-        'account_id' => env('ZERNIO_WHATSAPP_ACCOUNT_ID'),
-        'phone' => env('ZERNIO_WHATSAPP_PHONE'),
+        'account_id' => env('ZERNIO_WHATSAPP_ACCOUNT_ID', env('ZERNIO_DEFAULT_SOCIAL_ACCOUNT_ID')),
+        'phone' => env('ZERNIO_WHATSAPP_PHONE', env('ZERNIO_FROM_NUMBER')),
         'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET'),
         'pairing_ttl_minutes' => (int) env('AI_EMPLOYEE_WHATSAPP_PAIRING_TTL', 30),
     ],

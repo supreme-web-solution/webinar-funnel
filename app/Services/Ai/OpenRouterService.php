@@ -56,7 +56,7 @@ class OpenRouterService
     {
         return [
             'HTTP-Referer' => (string) config('app.url'),
-            'X-Title' => (string) config('app.name', 'AffiliateOS AI'),
+            'X-Title' => (string) config('app.name', 'AutoAffiliate360'),
         ];
     }
 

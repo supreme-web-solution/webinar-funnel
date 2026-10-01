@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import CommandCenterChat from '@/components/command-center/CommandCenterChat.vue';
 import EmployeeAvatar from '@/components/command-center/EmployeeAvatar.vue';
-import { commandCenterFetch, type CommandCenterState } from '@/lib/commandCenter';
+import { commandCenterFetch, mergeCommandCenterState, type CommandCenterState } from '@/lib/commandCenter';
 
 const page = usePage();
 const open = ref(false);
@@ -78,7 +78,7 @@ onBeforeUnmount(() => {
                 v-if="state"
                 compact
                 :state="state"
-                @updated="state = $event"
+                @updated="state = state ? mergeCommandCenterState(state, $event) : $event"
             />
             <p v-else-if="loading" class="p-4 text-sm text-slate-500">Loading chat…</p>
         </div>

@@ -234,6 +234,36 @@ class CommandCenterTest extends TestCase
         $this->assertDatabaseMissing('campaigns', ['id' => $campaign->id]);
     }
 
+    public function test_chat_persists_one_user_message_per_send(): void
+    {
+        $user = User::factory()->create();
+        AppEmployeeAgent::fake(['Hi there! How can I assist you today?']);
+
+        $this->actingAs($user)
+            ->postJson(route('command-center.chat'), ['message' => 'hi, its a new day'])
+            ->assertOk()
+            ->assertJsonPath('processing', true);
+
+        $session = AiEmployeeSession::query()->where('user_id', $user->id)->first();
+        $this->assertNotNull($session);
+
+        $userRows = ConversationMessage::query()
+            ->where('conversation_id', $session->conversation_id)
+            ->where('role', 'user')
+            ->where('content', 'hi, its a new day')
+            ->get();
+
+        $this->assertCount(1, $userRows, 'Expected a single persisted user message for one chat send.');
+
+        $this->assertSame(
+            1,
+            ConversationMessage::query()
+                ->where('conversation_id', $session->conversation_id)
+                ->where('role', 'assistant')
+                ->count(),
+        );
+    }
+
     public function test_command_center_loads_recent_messages_only(): void
     {
         $user = User::factory()->create();

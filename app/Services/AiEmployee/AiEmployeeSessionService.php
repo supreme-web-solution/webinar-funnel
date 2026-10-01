@@ -5,6 +5,7 @@ namespace App\Services\AiEmployee;
 use App\Models\AiEmployeeSession;
 use App\Models\User;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Ai\Models\ConversationMessage;
 
 class AiEmployeeSessionService
 {
@@ -25,8 +26,33 @@ class AiEmployeeSessionService
         }
 
         $this->recoverStaleProcessing($session);
+        $this->recoverIfAssistantReplied($session);
 
         return $session->fresh() ?? $session;
+    }
+
+    /**
+     * Job finished but processing_at was not cleared (queue reset, timeout, etc.).
+     */
+    public function recoverIfAssistantReplied(AiEmployeeSession $session): void
+    {
+        if ($session->processing_at === null || ! is_string($session->conversation_id) || $session->conversation_id === '') {
+            return;
+        }
+
+        $last = ConversationMessage::query()
+            ->where('conversation_id', $session->conversation_id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($last === null || $last->role !== 'assistant') {
+            return;
+        }
+
+        if ($last->created_at !== null && $last->created_at->greaterThanOrEqualTo($session->processing_at)) {
+            $this->finishTurn($session);
+        }
     }
 
     /**

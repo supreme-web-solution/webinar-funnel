@@ -75,7 +75,7 @@ class CommandCenterController extends Controller
 
         return response()->json([
             ...$result,
-            'state' => $this->state->for($request->user()),
+            'state' => $this->state->for($request->user(), includeMessages: false),
         ]);
     }
 

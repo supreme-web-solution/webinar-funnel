@@ -84,3 +84,28 @@ export async function commandCenterFetch(url: string, init: RequestInit = {}): P
         },
     });
 }
+
+/** Avoid wiping chat history when a partial state payload omits or clears messages mid-turn. */
+export function mergeCommandCenterState(
+    previous: CommandCenterState,
+    incoming: CommandCenterState,
+): CommandCenterState {
+    const conversationChanged =
+        incoming.conversation_id != null &&
+        previous.conversation_id != null &&
+        incoming.conversation_id !== previous.conversation_id;
+
+    const incomingMessages = incoming.messages ?? [];
+    const previousMessages = previous.messages ?? [];
+
+    let messages = incomingMessages;
+    if (!conversationChanged && incomingMessages.length === 0 && previousMessages.length > 0) {
+        messages = previousMessages;
+    }
+
+    return {
+        ...previous,
+        ...incoming,
+        messages,
+    };
+}

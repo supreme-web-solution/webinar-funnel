@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { commandCenterFetch, type CommandCenterState } from '@/lib/commandCenter';
+import { commandCenterFetch, mergeCommandCenterState, type CommandCenterState } from '@/lib/commandCenter';
 
 const props = defineProps<CommandCenterState>();
 const state = ref<CommandCenterState>({
@@ -53,7 +53,7 @@ async function startPairing(): Promise<void> {
 }
 
 function applyState(next: CommandCenterState): void {
-    state.value = next;
+    state.value = mergeCommandCenterState(state.value, next);
 }
 
 function sendChip(message: string): void {
@@ -64,22 +64,24 @@ function sendChip(message: string): void {
 <template>
     <Head :title="`${state.employee.name} — ${state.employee.title}`" />
 
-    <div class="mx-auto flex w-full max-w-6xl flex-col gap-3 p-3 md:gap-4 md:p-4">
+    <div
+        class="mx-auto flex h-[calc(100dvh-3.5rem)] max-h-[calc(100dvh-3.5rem)] w-full max-w-6xl min-h-0 flex-col gap-2 overflow-hidden p-2 md:gap-2.5 md:p-4"
+    >
         <!-- Header -->
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div class="flex min-w-0 items-start gap-3">
+        <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex min-w-0 items-center gap-3">
                 <EmployeeAvatar
-                    size="size-11"
+                    size="size-10 shrink-0"
                     :src="state.employee.avatar_url"
                     :alt="state.employee.name"
                     :thinking="state.processing"
                 />
                 <div class="min-w-0">
-                    <h1 class="text-xl font-bold tracking-tight text-foreground md:text-2xl">
+                    <h1 class="truncate text-lg font-bold tracking-tight text-foreground md:text-xl">
                         {{ state.employee.name }}
                         <span class="font-normal text-muted-foreground">— {{ state.employee.title }}</span>
                     </h1>
-                    <p class="mt-0.5 max-w-2xl text-sm text-muted-foreground">
+                    <p class="hidden max-w-2xl text-xs text-muted-foreground xl:block">
                         One brain for web and WhatsApp. Staged actions need Approve or LAUNCH; Activity shows what ran.
                     </p>
                 </div>
@@ -103,14 +105,14 @@ function sendChip(message: string): void {
         </div>
 
         <!-- Suggestions -->
-        <div class="rounded-xl border border-border/60 bg-white p-3 shadow-sm md:p-4">
-            <p class="mb-2 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">Try asking</p>
-            <div class="flex flex-wrap gap-2">
+        <div class="shrink-0 rounded-xl border border-border/60 bg-white px-3 py-2 shadow-sm">
+            <p class="mb-1.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">Try asking</p>
+            <div class="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <button
                     v-for="chip in state.suggestions"
                     :key="chip"
                     type="button"
-                    class="cursor-pointer rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-900"
+                    class="shrink-0 cursor-pointer rounded-full border border-border/60 bg-muted/30 px-3 py-1 text-xs font-medium whitespace-nowrap text-foreground transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-900"
                     @click="sendChip(chip)"
                 >
                     {{ chip }}
@@ -119,7 +121,7 @@ function sendChip(message: string): void {
                     v-for="chip in shortcutChips"
                     :key="chip.label"
                     type="button"
-                    class="cursor-pointer rounded-full border border-dashed border-border/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-blue-300 hover:text-blue-800"
+                    class="shrink-0 cursor-pointer rounded-full border border-dashed border-border/60 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-muted-foreground hover:border-blue-300 hover:text-blue-800"
                     @click="sendChip(chip.message)"
                 >
                     {{ chip.label }}
@@ -131,17 +133,16 @@ function sendChip(message: string): void {
         </div>
 
         <!-- Main: chat + sidebar -->
-        <div class="grid min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-stretch">
+        <div
+            class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:grid-rows-1 lg:items-stretch"
+        >
             <div
-                class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm"
-                style="height: clamp(440px, calc(100dvh - 14rem), 760px)"
+                class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm lg:h-full lg:min-h-0"
             >
                 <CommandCenterChat ref="chatRef" class="h-full min-h-0" :state="state" @updated="applyState" />
             </div>
 
-            <aside
-                class="flex max-h-[clamp(440px,calc(100dvh-14rem),760px)] flex-col gap-3 overflow-y-auto lg:min-h-0"
-            >
+            <aside class="hidden min-h-0 flex-col gap-3 overflow-y-auto lg:flex">
                 <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">
                     <div class="mb-3 flex items-center justify-between">
                         <p class="text-sm font-semibold text-foreground">{{ state.employee.name }} settings</p>
@@ -207,7 +208,8 @@ function sendChip(message: string): void {
                         </p>
                     </div>
                     <p v-else-if="!state.whatsapp.configured" class="mt-2 text-xs text-muted-foreground/80">
-                        Set ZERNIO_WHATSAPP_ACCOUNT_ID and ZERNIO_WHATSAPP_PHONE in .env to enable pairing.
+                        Add ZERNIO_API_KEY and your business WhatsApp number (e.g. ZERNIO_FROM_NUMBER) in .env, then
+                        click Setup.
                     </p>
                 </div>
 

@@ -81,7 +81,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('templates', [TemplateController::class, 'index'])->name('templates.index');
 
-    // AffiliateOS campaigns
+    // AutoAffiliate360 campaigns
     Route::prefix('campaigns')->name('campaigns.')->group(function () {
         Route::get('/', [CampaignController::class, 'index'])->name('index');
         Route::get('create', [CampaignController::class, 'create'])->name('create');

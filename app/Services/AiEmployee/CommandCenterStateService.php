@@ -39,8 +39,7 @@ class CommandCenterStateService
             'suggestions' => config('ai_employee.suggestions', []),
             'execute_tools' => $this->executeTools(),
             'whatsapp' => [
-                'configured' => (string) config('ai_employee.whatsapp.account_id', '') !== ''
-                    || (string) config('ai_employee.whatsapp.phone', '') !== '',
+                'configured' => $this->whatsappConfigured(),
                 'phone' => config('ai_employee.whatsapp.phone'),
                 'pairing' => $this->pairing->current($user),
                 'linked_phone' => $setting->whatsapp_phone,
@@ -198,6 +197,17 @@ class CommandCenterStateService
     protected function pageSize(): int
     {
         return max(10, min(50, (int) config('ai_employee.messages_page_size', 30)));
+    }
+
+    protected function whatsappConfigured(): bool
+    {
+        if ((string) config('services.zernio.api_key', '') === '') {
+            return false;
+        }
+
+        return (string) config('ai_employee.whatsapp.phone', '') !== ''
+            || (string) config('ai_employee.whatsapp.account_id', '') !== ''
+            || (string) config('ai_employee.whatsapp.webhook_secret', '') !== '';
     }
 
     /**

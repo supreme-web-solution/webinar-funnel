@@ -28,11 +28,18 @@ const messages = ref<CommandCenterMessage[]>([...props.state.messages]);
 const hasOlder = ref(props.state.messages_meta?.has_older ?? false);
 
 let poll: ReturnType<typeof setInterval> | null = null;
+const awaitingReply = ref(false);
 
 const processing = computed(() => props.state.processing);
 const visibleMessages = computed(() =>
     messages.value.filter((m) => m.role === 'user' || m.role === 'assistant'),
 );
+const showAssistantTyping = computed(() => {
+    if (inferProcessingComplete(visibleMessages.value)) {
+        return false;
+    }
+    return sending.value || awaitingReply.value || props.state.processing;
+});
 const timeline = computed(() => buildChatTimeline(visibleMessages.value));
 
 function formatTime(iso: string | null): string {
@@ -65,36 +72,42 @@ function emitStatePatch(patch: Partial<CommandCenterState>): void {
 }
 
 function syncFromProps(force = false): void {
-    if (force || props.state.messages.length === 0) {
-        messages.value = [...props.state.messages];
+    const fromParent = props.state.messages ?? [];
+    if (force) {
+        messages.value = mergeMessagesById(fromParent, messages.value);
         hasOlder.value = props.state.messages_meta?.has_older ?? false;
+        return;
     }
+    if (fromParent.length === 0) {
+        return;
+    }
+    messages.value = mergeMessagesById(fromParent, messages.value);
+    hasOlder.value = props.state.messages_meta?.has_older ?? false;
 }
 
 watch(
     () => props.state.conversation_id,
     (next, prev) => {
         if (next !== prev) {
-            syncFromProps(true);
+            messages.value = [...(props.state.messages ?? [])];
+            hasOlder.value = props.state.messages_meta?.has_older ?? false;
             stickToBottom.value = true;
-        }
-    },
-);
-
-watch(
-    () => props.state.messages,
-    (next) => {
-        if (next.length === 0 && visibleMessages.value.length > 0) {
-            messages.value = [];
-            hasOlder.value = false;
+            error.value = null;
+            draft.value = '';
+            awaitingReply.value = false;
         }
     },
 );
 
 function mergeIncoming(next: CommandCenterState): CommandCenterState {
-    const locals = messages.value.filter((row) => isLocalId(String(row.id)));
-    const merged = mergeMessagesById(messages.value.filter((row) => !isLocalId(String(row.id))), next.messages);
-    messages.value = locals.length ? [...merged, ...locals] : merged;
+    const pendingLocals = messages.value.filter((row) => isLocalId(String(row.id)));
+    messages.value = mergeMessagesById(
+        messages.value.filter((row) => !isLocalId(String(row.id))),
+        next.messages ?? [],
+    );
+    if (pendingLocals.length) {
+        messages.value = mergeMessagesById(messages.value, pendingLocals);
+    }
     if (next.messages_meta) {
         hasOlder.value = next.messages_meta.has_older;
     }
@@ -151,7 +164,24 @@ async function loadOlder(): Promise<void> {
     }
 }
 
-async function refreshTail(): Promise<void> {
+function messageTime(iso: string | null): number {
+    return iso ? new Date(iso).getTime() : 0;
+}
+
+function inferProcessingComplete(rows: CommandCenterMessage[]): boolean {
+    if (rows.length === 0) {
+        return false;
+    }
+    const sorted = [...rows].sort((a, b) => {
+        const ta = messageTime(a.created_at);
+        const tb = messageTime(b.created_at);
+        if (ta !== tb) return ta - tb;
+        return String(a.id).localeCompare(String(b.id));
+    });
+    return sorted[sorted.length - 1]?.role === 'assistant';
+}
+
+async function refreshTail(): Promise<CommandCenterState | null> {
     const last = lastPersistedMessage();
     const stateUrl = '/command-center/state?messages=0';
     const fetches: Promise<Response>[] = [commandCenterFetch(stateUrl)];
@@ -160,24 +190,37 @@ async function refreshTail(): Promise<void> {
         fetches.push(
             commandCenterFetch(`/command-center/messages?after=${encodeURIComponent(String(last.id))}`),
         );
+    } else {
+        fetches.push(commandCenterFetch('/command-center/messages'));
     }
 
     const [stateRes, tailRes] = await Promise.all(fetches);
-    if (!stateRes.ok) return;
+    if (!stateRes.ok) return null;
 
     const stateData = (await stateRes.json()) as CommandCenterState;
 
     if (tailRes?.ok) {
-        const tail = (await tailRes.json()) as { data?: CommandCenterMessage[] };
+        const tail = (await tailRes.json()) as {
+            data?: CommandCenterMessage[];
+            has_older?: boolean;
+        };
         if (tail.data?.length) {
             messages.value = mergeMessagesById(messages.value, tail.data);
         }
-    } else if (!last) {
-        syncFromProps(true);
+        if (typeof tail.has_older === 'boolean') {
+            hasOlder.value = tail.has_older;
+        }
+    }
+
+    let processing = Boolean(stateData.processing);
+    if (processing && inferProcessingComplete(visibleMessages.value)) {
+        processing = false;
     }
 
     emit('updated', {
         ...stateData,
+        processing,
+        progress: processing ? stateData.progress ?? 'Thinking…' : null,
         messages: messages.value,
         messages_meta: {
             has_older: hasOlder.value,
@@ -185,9 +228,92 @@ async function refreshTail(): Promise<void> {
         },
     });
 
+    if (!processing) {
+        awaitingReply.value = false;
+        if (error.value) {
+            clearStaleSendUi();
+        }
+    }
+
     if (stickToBottom.value) {
         await scrollToBottom();
     }
+
+    return stateData;
+}
+
+function messageTextMatches(a: string, b: string): boolean {
+    return a.trim() === b.trim();
+}
+
+function hasPersistedUserMessage(text: string): boolean {
+    return visibleMessages.value.some(
+        (row) => row.role === 'user' && !isLocalId(String(row.id)) && messageTextMatches(row.content, text),
+    );
+}
+
+function hasAssistantReplyAfterUserMessage(text: string): boolean {
+    const msgs = visibleMessages.value;
+    let lastUserIdx = -1;
+    for (let i = 0; i < msgs.length; i++) {
+        const row = msgs[i];
+        if (row.role === 'user' && !isLocalId(String(row.id)) && messageTextMatches(row.content, text)) {
+            lastUserIdx = i;
+        }
+    }
+    if (lastUserIdx < 0) return false;
+    return msgs.slice(lastUserIdx + 1).some((row) => row.role === 'assistant');
+}
+
+function clearStaleSendUi(sentText?: string): void {
+    error.value = null;
+    if (sentText === undefined || messageTextMatches(draft.value, sentText)) {
+        draft.value = '';
+    }
+}
+
+async function parseJsonBody(response: Response): Promise<Record<string, unknown>> {
+    const text = await response.text();
+    if (!text.trim()) {
+        return {};
+    }
+    return JSON.parse(text) as Record<string, unknown>;
+}
+
+async function recoverAfterSendFailure(message: string, pending: CommandCenterMessage): Promise<boolean> {
+    try {
+        const stateData = await refreshTail();
+        const persisted = hasPersistedUserMessage(message);
+        const stillProcessing = Boolean(stateData?.processing);
+        const complete = persisted && hasAssistantReplyAfterUserMessage(message);
+
+        if (stillProcessing || persisted || complete) {
+            clearStaleSendUi(message);
+            if (!visibleMessages.value.some((row) => row.id === pending.id) && !persisted) {
+                messages.value = mergeMessagesById(messages.value, [pending]);
+            }
+            awaitingReply.value = stillProcessing;
+            if (stillProcessing) {
+                emitStatePatch({
+                    processing: true,
+                    progress: stateData?.progress ?? 'Thinking…',
+                });
+            } else if (stateData) {
+                emit('updated', {
+                    ...stateData,
+                    messages: messages.value,
+                    messages_meta: {
+                        has_older: hasOlder.value,
+                        oldest_id: visibleMessages.value[0]?.id ?? null,
+                    },
+                });
+            }
+            return true;
+        }
+    } catch {
+        // fall through
+    }
+    return false;
 }
 
 async function refresh(): Promise<void> {
@@ -196,7 +322,7 @@ async function refresh(): Promise<void> {
 
 async function send(text?: string): Promise<void> {
     const message = (text ?? draft.value).trim();
-    if (!message || sending.value || processing.value) return;
+    if (!message || sending.value || showAssistantTyping.value) return;
     sending.value = true;
     error.value = null;
     draft.value = '';
@@ -208,6 +334,7 @@ async function send(text?: string): Promise<void> {
         created_at: new Date().toISOString(),
     };
     messages.value = [...messages.value, pending];
+    awaitingReply.value = true;
     emitStatePatch({ processing: true, progress: 'Thinking…' });
 
     try {
@@ -215,29 +342,71 @@ async function send(text?: string): Promise<void> {
             method: 'POST',
             body: JSON.stringify({ message }),
         });
-        const payload = await response.json();
-        if (!response.ok) {
-            error.value = payload.message ?? 'Could not send.';
+
+        let payload: Record<string, unknown> = {};
+        try {
+            payload = await parseJsonBody(response);
+        } catch {
+            if (await recoverAfterSendFailure(message, pending)) {
+                return;
+            }
+            error.value = 'Network error.';
             draft.value = message;
             messages.value = messages.value.filter((row) => row.id !== pending.id);
+            awaitingReply.value = false;
             emitStatePatch({ processing: false, progress: null });
             return;
         }
-        if (payload.state) {
-            mergeIncoming(payload.state as CommandCenterState);
-            emit('updated', {
-                ...(payload.state as CommandCenterState),
-                messages: messages.value,
-                messages_meta: {
-                    has_older: hasOlder.value,
-                    oldest_id: visibleMessages.value[0]?.id ?? null,
-                },
-            });
+
+        if (!response.ok) {
+            if (await recoverAfterSendFailure(message, pending)) {
+                return;
+            }
+            error.value = (payload.message as string | undefined) ?? 'Could not send.';
+            draft.value = message;
+            messages.value = messages.value.filter((row) => row.id !== pending.id);
+            awaitingReply.value = false;
+            emitStatePatch({ processing: false, progress: null });
+            return;
+        }
+
+        const state = payload.state as CommandCenterState | undefined;
+        let isProcessing =
+            (payload.processing as boolean | undefined) ?? state?.processing ?? true;
+
+        if (state) {
+            mergeIncoming(state);
+        }
+
+        if (isProcessing && inferProcessingComplete(visibleMessages.value)) {
+            isProcessing = false;
+        }
+
+        clearStaleSendUi(message);
+
+        emit('updated', {
+            ...(state ?? props.state),
+            processing: isProcessing,
+            progress: isProcessing ? (state?.progress ?? 'Thinking…') : null,
+            messages: messages.value,
+            messages_meta: {
+                has_older: hasOlder.value,
+                oldest_id: visibleMessages.value[0]?.id ?? null,
+            },
+        });
+
+        awaitingReply.value = isProcessing;
+        if (!isProcessing) {
+            void refreshTail();
         }
     } catch {
+        if (await recoverAfterSendFailure(message, pending)) {
+            return;
+        }
         error.value = 'Network error.';
         draft.value = message;
-        messages.value = messages.value.filter((row) => !isLocalId(String(row.id)));
+        messages.value = messages.value.filter((row) => row.id !== pending.id);
+        awaitingReply.value = false;
         emitStatePatch({ processing: false, progress: null });
     } finally {
         sending.value = false;
@@ -294,8 +463,9 @@ watch(
 onMounted(async () => {
     syncFromProps(true);
     await scrollToBottom();
+    await refreshTail();
     poll = setInterval(() => {
-        if (props.state.processing) void refreshTail();
+        if (showAssistantTyping.value) void refreshTail();
     }, 1600);
 });
 
@@ -383,7 +553,7 @@ onBeforeUnmount(() => {
                 </div>
             </template>
 
-            <div v-if="processing" class="flex items-center gap-2 text-sm text-muted-foreground">
+            <div v-if="showAssistantTyping" class="flex items-center gap-2 text-sm text-muted-foreground">
                 <EmployeeAvatar
                     size="size-7"
                     :src="state.employee.avatar_url"
@@ -422,7 +592,7 @@ onBeforeUnmount(() => {
                     rows="1"
                     class="min-h-11 flex-1 resize-none rounded-xl border border-border/60 bg-white px-3 py-2.5 text-sm outline-none focus-visible:border-blue-400 focus-visible:ring-2 focus-visible:ring-blue-400/30"
                     :placeholder="compact ? `Message ${state.employee.name}…` : 'What do you want to accomplish?'"
-                    :disabled="sending || processing || state.settings.killed"
+                    :disabled="sending || showAssistantTyping || state.settings.killed"
                     @keydown="onKey"
                 />
                 <Button
@@ -430,7 +600,7 @@ onBeforeUnmount(() => {
                     size="icon"
                     variant="brand"
                     class="cursor-pointer"
-                    :disabled="sending || processing || !draft.trim()"
+                    :disabled="sending || showAssistantTyping || !draft.trim()"
                 >
                     <Icon icon="heroicons:paper-airplane" class="size-4" />
                 </Button>

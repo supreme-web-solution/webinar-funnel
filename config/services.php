@@ -157,7 +157,7 @@ return [
         'timeout' => env('ZERNIO_TIMEOUT', 60),
         'default_social_account_id' => env('ZERNIO_DEFAULT_SOCIAL_ACCOUNT_ID'),
         'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET'),
-        'whatsapp_account_id' => env('ZERNIO_WHATSAPP_ACCOUNT_ID'),
-        'whatsapp_phone' => env('ZERNIO_WHATSAPP_PHONE'),
+        'whatsapp_account_id' => env('ZERNIO_WHATSAPP_ACCOUNT_ID', env('ZERNIO_DEFAULT_SOCIAL_ACCOUNT_ID')),
+        'whatsapp_phone' => env('ZERNIO_WHATSAPP_PHONE', env('ZERNIO_FROM_NUMBER')),
     ],
 ];
