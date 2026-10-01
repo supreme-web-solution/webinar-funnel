@@ -133,15 +133,15 @@ function fmtDate(iso: string): string {
                     </p>
                 </div>
                 <div class="relative flex shrink-0 flex-wrap gap-2">
-                    <Button as-child size="sm" class="btn-hero-inverted h-9">
+                    <Button as-child size="sm" variant="ghost" class="btn-hero-inverted h-9 !text-white hover:!text-white">
                         <Link href="/campaigns/create">
-                            <Icon icon="heroicons:rocket-launch" class="size-3.5" />
+                            <Icon icon="heroicons:rocket-launch" class="size-3.5 !text-white" />
                             New Campaign
                         </Link>
                     </Button>
-                    <Button as-child variant="brand-outline-on-dark" size="sm">
+                    <Button as-child variant="brand-outline-on-dark" size="sm" class="!text-white hover:!text-white">
                         <Link href="/growth/opportunities">
-                            <Icon icon="heroicons:light-bulb" class="size-3.5" />
+                            <Icon icon="heroicons:light-bulb" class="size-3.5 !text-white" />
                             Find Offers
                         </Link>
                     </Button>

@@ -258,7 +258,7 @@
         background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 42%, #2563eb 78%, #1d4ed8 100%);
     }
     .btn-hero-inverted {
-        @apply inline-flex items-center justify-center gap-2 rounded-[10px] border border-transparent bg-white px-4 py-2.5 text-sm font-medium text-[#2563EB] shadow-[0_4px_14px_rgba(15,23,42,0.12)] transition-all duration-150 hover:bg-[#EFF6FF];
+        @apply inline-flex items-center justify-center gap-2 rounded-[10px] border border-white/40 bg-white/15 px-4 py-2.5 text-sm font-medium text-white shadow-[0_4px_14px_rgba(15,23,42,0.12)] transition-all duration-150 hover:bg-white/25;
     }
 
     .hero-banner::before {

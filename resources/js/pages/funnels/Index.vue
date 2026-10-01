@@ -102,12 +102,6 @@ function funnelIcon(funnel: FunnelItem): string {
                 </p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
-                <Button as-child variant="brand-outline" size="sm">
-                    <Link href="/funnels/create?scratch=1">
-                        <Icon icon="heroicons:sparkles" class="size-3.5" />
-                        Legacy scratch
-                    </Link>
-                </Button>
                 <Button as-child variant="brand" size="sm">
                     <Link href="/campaigns/create">
                         <Icon icon="heroicons:plus" class="size-3.5" />

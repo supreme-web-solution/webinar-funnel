@@ -836,6 +836,21 @@ async function searchOffersByKeyword() {
     }
 }
 
+function affiliateRequestUrl(offer: { marketplace: string; url: string }): string | null {
+    const marketplace = offer.marketplace.toLowerCase();
+    const url = offer.url.trim();
+    if (url === '') return null;
+
+    if (marketplace === 'jvzoo') {
+        const match = url.match(/productlibrary\/review\/(\d+)/i);
+        if (match) {
+            return `https://www.jvzoo.com/affiliate/affiliateinfo/index/${match[1]}`;
+        }
+    }
+
+    return url;
+}
+
 function pickKeywordOffer(offer: { title: string; marketplace: string; url: string; why?: string }) {
     selectedKeywordOffer.value = offer;
     createForm.offer_url = offer.url;
@@ -1312,9 +1327,9 @@ onMounted(() => {
                         ]"
                         @click="goToSection(s.id)"
                     >
-                        <Icon :icon="s.unlocked ? s.icon : 'heroicons:lock-closed'" class="size-4 shrink-0" />
+                        <Icon :icon="s.unlocked ? s.icon : 'heroicons:lock-closed'" class="size-4 shrink-0" :class="section === s.id ? '!text-white' : ''" />
                         <span class="flex-1 truncate">{{ s.label.replace(/^\d+\.\s/, '') }}</span>
-                        <Icon v-if="s.complete" icon="heroicons:check-circle" class="size-4 shrink-0 text-blue-500" :class="section === s.id ? 'text-blue-200' : ''" />
+                        <Icon v-if="s.complete" icon="heroicons:check-circle" class="size-4 shrink-0" :class="section === s.id ? '!text-white' : 'text-blue-500'" />
                     </button>
                 </div>
                 <div class="rounded-xl border border-border/60 bg-white p-3 shadow-sm">
@@ -1451,7 +1466,7 @@ onMounted(() => {
                     ]"
                     @click="goToSection(s.id)"
                 >
-                    <Icon v-if="s.complete" icon="heroicons:check-circle" class="size-3.5 text-blue-500" :class="section === s.id ? 'text-blue-200' : ''" />
+                    <Icon v-if="s.complete" icon="heroicons:check-circle" class="size-3.5" :class="section === s.id ? '!text-white' : 'text-blue-500'" />
                     <Icon v-else-if="!s.unlocked" icon="heroicons:lock-closed" class="size-3.5" />
                     <span>{{ s.label.replace(/^\d+\.\s/, '') }}</span>
                 </button>
@@ -1582,12 +1597,32 @@ onMounted(() => {
                                         <Badge variant="secondary" class="uppercase text-[10px]">{{ selectedKeywordOffer.marketplace }}</Badge>
                                         <p class="font-semibold text-blue-900">{{ selectedKeywordOffer.title }}</p>
                                     </div>
-                                    <p class="text-xs text-blue-700 break-all">{{ selectedKeywordOffer.url }}</p>
+                                    <a
+                                        :href="selectedKeywordOffer.url"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="block text-xs text-blue-700 break-all underline-offset-2 hover:underline"
+                                    >
+                                        {{ selectedKeywordOffer.url }}
+                                    </a>
                                 </div>
                                 <Button size="sm" variant="outline" class="shrink-0" @click="clearKeywordOfferSelection">
                                     Change
                                 </Button>
                             </div>
+                            <a
+                                v-if="affiliateRequestUrl(selectedKeywordOffer)"
+                                :href="affiliateRequestUrl(selectedKeywordOffer) ?? undefined"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center gap-1.5 text-sm font-medium text-blue-800 underline underline-offset-2"
+                            >
+                                <Icon icon="heroicons:arrow-top-right-on-square" class="size-4" />
+                                Request affiliate link for this offer
+                            </a>
+                            <p class="text-xs text-blue-800/80">
+                                Opens the marketplace page where you request approval and copy your hop link. Paste that link below.
+                            </p>
                         </div>
 
                         <div v-if="keywordSearchLinks.length && !selectedKeywordOffer" class="space-y-2">
