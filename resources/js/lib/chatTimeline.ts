@@ -99,5 +99,35 @@ export function mergeMessagesById(
         map.set(String(row.id), row);
     }
 
-    return dropSupersededLocalMessages(sortMessagesChronologically([...map.values()]));
+    return collapseAdjacentDuplicateUserMessages(
+        dropSupersededLocalMessages(sortMessagesChronologically([...map.values()])),
+    );
+}
+
+/** Hide a second copy of the same user text saved moments apart (WhatsApp webhook retries). */
+export function collapseAdjacentDuplicateUserMessages(messages: CommandCenterMessage[]): CommandCenterMessage[] {
+    const out: CommandCenterMessage[] = [];
+
+    for (const row of messages) {
+        const previous = out[out.length - 1];
+        if (
+            previous
+            && previous.role === 'user'
+            && row.role === 'user'
+            && normalizedContent(previous.content) === normalizedContent(row.content)
+        ) {
+            const previousAt = previous.created_at ? new Date(previous.created_at).getTime() : 0;
+            const rowAt = row.created_at ? new Date(row.created_at).getTime() : 0;
+            if (previousAt === 0 || rowAt === 0 || Math.abs(rowAt - previousAt) <= 180_000) {
+                if (row.channel === 'whatsapp' && previous.channel !== 'whatsapp') {
+                    out[out.length - 1] = row;
+                }
+                continue;
+            }
+        }
+
+        out.push(row);
+    }
+
+    return out;
 }

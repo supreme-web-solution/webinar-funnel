@@ -87,6 +87,57 @@ class AgentOrchestrator
         return (string) $response->text;
     }
 
+    public function stampTurnChannel(AiEmployeeSession $session, string $channel, string $userText): void
+    {
+        $channel = $channel === 'whatsapp' ? 'whatsapp' : 'web';
+        $userText = trim($userText);
+        if ($userText === '' || ! is_string($session->conversation_id) || $session->conversation_id === '') {
+            return;
+        }
+
+        $rows = ConversationMessage::query()
+            ->where('conversation_id', $session->conversation_id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(15)
+            ->get()
+            ->reverse()
+            ->values();
+
+        $start = null;
+        foreach ($rows as $index => $row) {
+            if ($row->role === 'user' && trim((string) $row->content) === $userText) {
+                $start = $index;
+            }
+        }
+
+        if ($start === null) {
+            return;
+        }
+
+        while ($start > 0) {
+            $previous = $rows[$start - 1];
+            if ($previous->role !== 'user' || trim((string) $previous->content) !== $userText) {
+                break;
+            }
+            $start--;
+        }
+
+        foreach ($rows->slice($start) as $row) {
+            if ($row->role === 'user' && trim((string) $row->content) !== $userText) {
+                break;
+            }
+
+            $meta = is_array($row->meta) ? $row->meta : [];
+            if (($meta['channel'] ?? null) === $channel) {
+                continue;
+            }
+
+            $meta['channel'] = $channel;
+            $row->forceFill(['meta' => $meta])->save();
+        }
+    }
+
     public function recordTurnFailure(User $user, AiEmployeeSession $session, string $userText, string $assistantText): void
     {
         $this->sessions->bind($session);

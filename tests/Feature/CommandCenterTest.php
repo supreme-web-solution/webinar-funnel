@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Support\Str;
 use Laravel\Ai\Models\ConversationMessage;
 use App\Services\AiEmployee\AiEmployeeSettingsService;
+use App\Services\AiEmployee\WhatsAppChannelService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Tools\Request;
@@ -162,6 +163,81 @@ class CommandCenterTest extends TestCase
         );
     }
 
+    public function test_repeated_whatsapp_inbound_stores_one_user_message(): void
+    {
+        Http::fake();
+        AppEmployeeAgent::fake(['Hello from WhatsApp.']);
+
+        $user = User::factory()->create();
+        AiEmployeeSetting::query()->create([
+            'user_id' => $user->id,
+            'killed' => false,
+            'autonomy' => AiEmployeeSetting::AUTONOMY_ASSISTED,
+            'whatsapp_phone' => '15551231234',
+        ]);
+
+        $payload = [
+            'id' => 'evt_wa_1',
+            'event' => 'message.received',
+            'account' => ['platform' => 'whatsapp', 'accountId' => 'acc_1'],
+            'conversation' => ['id' => 'conv_wa_1'],
+            'message' => [
+                'text' => 'What is my name?',
+                'sender' => ['phone' => '+15551231234'],
+            ],
+        ];
+
+        $channel = app(WhatsAppChannelService::class);
+        $channel->handleInbound($payload);
+        $payload['id'] = 'evt_wa_2';
+        $channel->handleInbound($payload);
+
+        $session = AiEmployeeSession::query()->where('user_id', $user->id)->first();
+        $this->assertNotNull($session);
+
+        $userRows = ConversationMessage::query()
+            ->where('conversation_id', $session->conversation_id)
+            ->where('role', 'user')
+            ->where('content', 'What is my name?')
+            ->get();
+
+        $this->assertCount(1, $userRows);
+        $this->assertSame('whatsapp', $userRows->first()->meta['channel'] ?? null);
+    }
+
+    public function test_whatsapp_actions_include_approve_and_reject_buttons(): void
+    {
+        $user = User::factory()->create();
+        $first = AiActionApproval::query()->create([
+            'user_id' => $user->id,
+            'tool_name' => 'delete_campaign',
+            'permission' => 'execute',
+            'summary' => 'Permanently delete campaign #1',
+            'payload' => ['campaign_id' => 1],
+            'status' => AiActionApproval::STATUS_PENDING,
+        ]);
+
+        $actions = app(WhatsAppChannelService::class)->whatsappActions($user);
+
+        $this->assertSame('LAUNCH '.$first->id, $actions['buttons'][0]['payload']);
+        $this->assertSame('Approve', $actions['buttons'][0]['title']);
+        $this->assertSame('REJECT '.$first->id, $actions['buttons'][1]['payload']);
+
+        AiActionApproval::query()->create([
+            'user_id' => $user->id,
+            'tool_name' => 'delete_campaign',
+            'permission' => 'execute',
+            'summary' => 'Permanently delete campaign #2',
+            'payload' => ['campaign_id' => 2],
+            'status' => AiActionApproval::STATUS_PENDING,
+        ]);
+
+        $listed = app(WhatsAppChannelService::class)->whatsappActions($user->fresh());
+
+        $this->assertSame('list', $listed['interactive']['type']);
+        $this->assertCount(4, $listed['interactive']['action']['sections'][0]['rows']);
+    }
+
     public function test_whatsapp_webhook_rejects_bad_signature(): void
     {
         config(['ai_employee.whatsapp.webhook_secret' => 'test-secret']);
@@ -254,6 +330,7 @@ class CommandCenterTest extends TestCase
             ->get();
 
         $this->assertCount(1, $userRows, 'Expected a single persisted user message for one chat send.');
+        $this->assertSame('web', $userRows->first()->meta['channel'] ?? null);
 
         $this->assertSame(
             1,

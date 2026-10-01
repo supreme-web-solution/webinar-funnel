@@ -2,6 +2,7 @@ export type CommandCenterMessage = {
     id: string;
     role: string;
     content: string;
+    channel?: 'web' | 'whatsapp' | string | null;
     created_at: string | null;
 };
 

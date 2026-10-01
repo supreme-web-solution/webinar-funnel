@@ -331,6 +331,7 @@ async function send(text?: string): Promise<void> {
         id: `local-${Date.now()}`,
         role: 'user',
         content: message,
+        channel: 'web',
         created_at: new Date().toISOString(),
     };
     messages.value = [...messages.value, pending];
@@ -531,6 +532,18 @@ onBeforeUnmount(() => {
                         :alt="state.employee.name"
                     />
                     <div class="max-w-[min(85%,28rem)] space-y-1">
+                        <p
+                            v-if="item.message.role === 'user'"
+                            class="flex items-center gap-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                            :class="item.message.role === 'user' ? 'justify-end' : ''"
+                        >
+                            <Icon
+                                :icon="item.message.channel === 'whatsapp' ? 'simple-icons:whatsapp' : 'heroicons:computer-desktop'"
+                                class="size-3"
+                                :class="item.message.channel === 'whatsapp' ? 'text-[#25D366]' : 'text-blue-600'"
+                            />
+                            {{ item.message.channel === 'whatsapp' ? 'WhatsApp' : 'Web' }}
+                        </p>
                         <div
                             class="rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words"
                             :class="
@@ -545,9 +558,11 @@ onBeforeUnmount(() => {
                             class="px-1 text-[11px] text-muted-foreground"
                             :class="item.message.role === 'user' ? 'text-right' : ''"
                         >
-                            <span v-if="item.message.role === 'user'" class="font-medium tracking-wide">WEB</span>
-                            <span v-else>{{ state.employee.name }}</span>
-                            <span v-if="item.message.created_at"> · {{ formatTime(item.message.created_at) }}</span>
+                            <span v-if="item.message.role === 'assistant'">{{ state.employee.name }}</span>
+                            <span v-if="item.message.created_at">
+                                <span v-if="item.message.role === 'assistant'"> · </span>
+                                {{ formatTime(item.message.created_at) }}
+                            </span>
                         </p>
                     </div>
                 </div>

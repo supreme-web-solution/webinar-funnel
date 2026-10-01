@@ -630,15 +630,46 @@ final class ZernioClient
     }
 
     /**
+     * Show a typing indicator in an inbox conversation.
+     * WhatsApp displays "typing…" for up to 25 seconds.
+     */
+    public function sendTypingIndicator(string $accountId, string $conversationId): void
+    {
+        if (! $this->isEnabled() || $accountId === '' || $conversationId === '') {
+            return;
+        }
+
+        try {
+            $response = $this->request()->post(
+                '/v1/inbox/conversations/'.rawurlencode($conversationId).'/typing',
+                ['accountId' => $accountId],
+            );
+
+            if (! $response->successful()) {
+                Log::warning('ZernioClient::sendTypingIndicator failed', [
+                    'status' => $response->status(),
+                    'body' => Str::limit($response->body(), 300, ''),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('ZernioClient::sendTypingIndicator exception', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Send a WhatsApp/inbox DM reply.
      *
      * @return array{success: bool, message_id?: string|null, error?: string}
+     */
+    /**
+     * @param  array{buttons?: list<array<string, string>>, interactive?: array<string, mixed>}  $actions
      */
     public function sendInboxMessage(
         string $accountId,
         string $conversationId,
         string $message,
         ?string $participantId = null,
+        array $actions = [],
     ): array {
         if (! $this->isEnabled()) {
             return ['success' => false, 'error' => 'Zernio is not configured.'];
@@ -654,6 +685,13 @@ final class ZernioClient
         ];
         if ($participantId !== null && $participantId !== '') {
             $payload['participantId'] = $participantId;
+        }
+        if (isset($actions['buttons']) && $actions['buttons'] !== []) {
+            $payload['buttons'] = $actions['buttons'];
+        }
+        if (isset($actions['interactive']) && is_array($actions['interactive'])) {
+            $payload['interactive'] = $actions['interactive'];
+            $payload['interactive']['body'] = ['text' => $message];
         }
 
         try {

@@ -49,8 +49,16 @@ class ProcessAiChatTurnJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if ($this->channel === 'whatsapp') {
+            $whatsApp->startTypingPulse(
+                (string) ($session->zernio_account_id ?: config('ai_employee.whatsapp.account_id', '')),
+                (string) ($session->zernio_conversation_id ?? ''),
+            );
+        }
+
         try {
             $reply = $orchestrator->runTurn($user, $session, $this->text);
+            $orchestrator->stampTurnChannel($session, $this->channel, $this->text);
             if ($this->channel === 'web') {
                 $orchestrator->recordTurnSuccess($user, $session, $reply);
             } elseif ($this->channel === 'whatsapp') {
@@ -60,10 +68,14 @@ class ProcessAiChatTurnJob implements ShouldBeUnique, ShouldQueue
             report($e);
             $reply = 'Something went wrong on my side. Try again in a moment, or type `status` to confirm I can reach your workspace.';
             $orchestrator->recordTurnFailure($user, $session, $this->text, $reply);
+            $orchestrator->stampTurnChannel($session, $this->channel, $this->text);
             if ($this->channel === 'whatsapp') {
                 $whatsApp->reply($session, $reply);
             }
         } finally {
+            if ($this->channel === 'whatsapp') {
+                $whatsApp->stopTypingPulse();
+            }
             $sessions->finishTurn($session->fresh() ?? $session);
         }
     }

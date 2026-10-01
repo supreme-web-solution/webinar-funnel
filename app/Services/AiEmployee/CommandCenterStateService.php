@@ -222,8 +222,53 @@ class CommandCenterStateService
                 'id' => $message->id,
                 'role' => $message->role,
                 'content' => $message->content,
+                'channel' => $this->messageChannel($message),
                 'created_at' => $message->created_at?->toIso8601String(),
             ];
+        }
+
+        return $this->collapseDuplicateUserMessages($out);
+    }
+
+    protected function messageChannel(ConversationMessage $message): string
+    {
+        $meta = $message->meta;
+        if (is_string($meta)) {
+            $decoded = json_decode($meta, true);
+            $meta = is_array($decoded) ? $decoded : [];
+        }
+
+        return is_array($meta) && ($meta['channel'] ?? null) === 'whatsapp' ? 'whatsapp' : 'web';
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    protected function collapseDuplicateUserMessages(array $rows): array
+    {
+        $out = [];
+
+        foreach ($rows as $row) {
+            $previous = $out === [] ? null : $out[array_key_last($out)];
+            if (
+                is_array($previous)
+                && ($previous['role'] ?? null) === 'user'
+                && ($row['role'] ?? null) === 'user'
+                && trim((string) ($previous['content'] ?? '')) === trim((string) ($row['content'] ?? ''))
+            ) {
+                $previousAt = strtotime((string) ($previous['created_at'] ?? '')) ?: 0;
+                $rowAt = strtotime((string) ($row['created_at'] ?? '')) ?: 0;
+                if ($previousAt === 0 || $rowAt === 0 || abs($rowAt - $previousAt) <= 180) {
+                    if (($row['channel'] ?? null) === 'whatsapp' && ($previous['channel'] ?? null) !== 'whatsapp') {
+                        $out[array_key_last($out)] = $row;
+                    }
+
+                    continue;
+                }
+            }
+
+            $out[] = $row;
         }
 
         return $out;
