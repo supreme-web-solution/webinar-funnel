@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import CommandCenterChat from '@/components/command-center/CommandCenterChat.vue';
 import EmployeeAvatar from '@/components/command-center/EmployeeAvatar.vue';
+import WhatsAppConnectPanel from '@/components/command-center/WhatsAppConnectPanel.vue';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { commandCenterFetch, mergeCommandCenterState, type CommandCenterState } from '@/lib/commandCenter';
@@ -180,38 +179,14 @@ function sendChip(message: string): void {
                     </div>
                 </div>
 
-                <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">
-                    <div class="mb-3 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <Icon icon="simple-icons:whatsapp" class="size-4 text-[#25d366]" />
-                            <p class="text-sm font-semibold text-foreground">WhatsApp</p>
-                        </div>
-                        <Button size="sm" variant="outline" class="cursor-pointer" @click="startPairing">
-                            Setup
-                        </Button>
-                    </div>
-                    <p class="text-xs text-muted-foreground">Same {{ state.employee.name }} brain from your phone.</p>
-                    <p v-if="state.whatsapp.linked_phone" class="mt-2 text-xs font-medium text-blue-700">
-                        Linked: {{ state.whatsapp.linked_phone }}
-                    </p>
-                    <div v-if="state.whatsapp.pairing" class="mt-3 space-y-2 text-xs text-muted-foreground">
-                        <img
-                            v-if="state.whatsapp.pairing.qr_url"
-                            :src="state.whatsapp.pairing.qr_url"
-                            alt="WhatsApp pairing QR"
-                            class="mx-auto size-36 rounded-lg border border-border/60"
-                        />
-                        <p>
-                            Send
-                            <code class="rounded bg-muted px-1">{{ state.whatsapp.pairing.code }}</code>
-                            to {{ state.whatsapp.pairing.phone || 'the business number' }}.
-                        </p>
-                    </div>
-                    <p v-else-if="!state.whatsapp.configured" class="mt-2 text-xs text-muted-foreground/80">
-                        Add ZERNIO_API_KEY and your business WhatsApp number (e.g. ZERNIO_FROM_NUMBER) in .env, then
-                        click Setup.
-                    </p>
-                </div>
+                <WhatsAppConnectPanel
+                    :employee-name="state.employee.name"
+                    :employee-avatar="state.employee.avatar_url"
+                    :configured="state.whatsapp.configured"
+                    :linked-phone="state.whatsapp.linked_phone"
+                    :pairing="state.whatsapp.pairing"
+                    @setup="startPairing"
+                />
 
                 <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">
                     <p class="mb-2 text-sm font-semibold text-foreground">Needs attention</p>
