@@ -19,6 +19,7 @@ class WhatsAppChannelService
         protected WhatsAppPairingService $pairing,
         protected ZernioClient $zernio,
         protected AiEmployeeSettingsService $settings,
+        protected WhatsAppTextFormatter $whatsappText,
     ) {}
 
     /**
@@ -292,7 +293,7 @@ class WhatsAppChannelService
             return;
         }
 
-        $text = Str::limit($text, 1000, '…');
+        $text = Str::limit($this->whatsappText->format($text), 1000, '…');
 
         try {
             $this->zernio->sendInboxMessage($accountId, $conversationId, $text, $participantId, $actions);
