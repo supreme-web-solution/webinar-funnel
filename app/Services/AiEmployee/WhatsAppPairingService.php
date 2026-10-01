@@ -27,6 +27,16 @@ class WhatsAppPairingService
         return $this->payload($setting);
     }
 
+    public function disconnect(User $user): void
+    {
+        $setting = $this->settings->for($user);
+        $setting->forceFill([
+            'whatsapp_phone' => null,
+            'pairing_code' => null,
+            'pairing_expires_at' => null,
+        ])->save();
+    }
+
     public function consumeCode(string $code): ?AiEmployeeSetting
     {
         $normalized = strtoupper(trim($code));

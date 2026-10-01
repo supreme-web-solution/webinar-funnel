@@ -76,6 +76,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('approvals/{approval}/reject', [CommandCenterController::class, 'reject'])->name('approvals.reject');
         Route::patch('settings', [CommandCenterController::class, 'updateSettings'])->name('settings.update');
         Route::post('whatsapp/pairing', [CommandCenterController::class, 'pairing'])->name('whatsapp.pairing');
+        Route::post('whatsapp/disconnect', [CommandCenterController::class, 'disconnectWhatsApp'])->name('whatsapp.disconnect');
         Route::post('clear', [CommandCenterController::class, 'clear'])->name('clear');
     });
 

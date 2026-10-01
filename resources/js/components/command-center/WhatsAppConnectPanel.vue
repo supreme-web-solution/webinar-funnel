@@ -19,6 +19,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     setup: [];
+    disconnect: [];
 }>();
 
 const copied = ref<'phone' | 'code' | null>(null);
@@ -49,9 +50,19 @@ async function copy(value: string, key: 'phone' | 'code'): Promise<void> {
         </div>
         <p class="text-xs text-muted-foreground">Same {{ employeeName }} brain from your phone.</p>
 
-        <p v-if="linkedPhone" class="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-            Linked to {{ linkedPhone }}
-        </p>
+        <div v-if="linkedPhone" class="mt-3 space-y-2">
+            <p class="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+                Linked to {{ linkedPhone }}
+            </p>
+            <Button
+                size="sm"
+                variant="destructive"
+                class="w-full cursor-pointer bg-red-600 text-white hover:bg-red-700"
+                @click="emit('disconnect')"
+            >
+                Disconnect WhatsApp
+            </Button>
+        </div>
 
         <div v-else-if="pairing" class="mt-4">
             <p class="mb-2 flex items-center gap-1.5 text-xs font-medium text-foreground">

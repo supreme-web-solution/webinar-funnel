@@ -134,6 +134,15 @@ class CommandCenterController extends Controller
         ]);
     }
 
+    public function disconnectWhatsApp(Request $request): JsonResponse
+    {
+        $this->pairing->disconnect($request->user());
+
+        return response()->json([
+            'state' => $this->state->for($request->user()),
+        ]);
+    }
+
     public function clear(Request $request): JsonResponse
     {
         $this->sessions->resetConversation($request->user());

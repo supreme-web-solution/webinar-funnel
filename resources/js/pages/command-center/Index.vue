@@ -51,6 +51,20 @@ async function startPairing(): Promise<void> {
     if (data.state) state.value = data.state;
 }
 
+async function disconnectWhatsApp(): Promise<void> {
+    const phone = state.value.whatsapp.linked_phone;
+    const confirmed = window.confirm(
+        phone
+            ? `Disconnect WhatsApp ${phone}? You can link it again with Setup.`
+            : 'Disconnect WhatsApp? You can link it again with Setup.',
+    );
+    if (!confirmed) return;
+
+    const response = await commandCenterFetch('/command-center/whatsapp/disconnect', { method: 'POST' });
+    const data = await response.json();
+    if (data.state) state.value = mergeCommandCenterState(state.value, data.state);
+}
+
 function applyState(next: CommandCenterState): void {
     state.value = mergeCommandCenterState(state.value, next);
 }
@@ -186,6 +200,7 @@ function sendChip(message: string): void {
                     :linked-phone="state.whatsapp.linked_phone"
                     :pairing="state.whatsapp.pairing"
                     @setup="startPairing"
+                    @disconnect="disconnectWhatsApp"
                 />
 
                 <div class="rounded-xl border border-border/60 bg-white p-4 shadow-sm">

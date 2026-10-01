@@ -186,6 +186,28 @@ class CommandCenterTest extends TestCase
         );
     }
 
+    public function test_disconnect_clears_the_linked_whatsapp_number(): void
+    {
+        $user = User::factory()->create();
+        AiEmployeeSetting::query()->create([
+            'user_id' => $user->id,
+            'killed' => false,
+            'autonomy' => AiEmployeeSetting::AUTONOMY_ASSISTED,
+            'whatsapp_phone' => '2349036802727',
+            'pairing_code' => 'LINK-OLD111',
+            'pairing_expires_at' => now()->addMinutes(10),
+        ]);
+
+        $this->actingAs($user)
+            ->postJson(route('command-center.whatsapp.disconnect'))
+            ->assertOk()
+            ->assertJsonPath('state.whatsapp.linked_phone', null);
+
+        $setting = AiEmployeeSetting::query()->where('user_id', $user->id)->first();
+        $this->assertNull($setting?->whatsapp_phone);
+        $this->assertNull($setting?->pairing_code);
+    }
+
     public function test_whatsapp_message_queues_the_chat_turn(): void
     {
         Queue::fake();
