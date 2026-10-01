@@ -217,13 +217,15 @@ class CommandCenterTest extends TestCase
             'status' => AiActionApproval::STATUS_PENDING,
         ]);
 
-        $actions = app(WhatsAppChannelService::class)->whatsappActions($user);
+        $actions = app(WhatsAppChannelService::class)->whatsappActionMessages($user);
 
-        $this->assertSame('LAUNCH '.$first->id, $actions['buttons'][0]['payload']);
-        $this->assertSame('Approve', $actions['buttons'][0]['title']);
-        $this->assertSame('REJECT '.$first->id, $actions['buttons'][1]['payload']);
+        $this->assertCount(1, $actions);
+        $this->assertSame('Permanently delete campaign #1', $actions[0]['text']);
+        $this->assertSame('LAUNCH-'.$first->id, $actions[0]['buttons'][0]['payload']);
+        $this->assertSame('Approve', $actions[0]['buttons'][0]['title']);
+        $this->assertSame('REJECT-'.$first->id, $actions[0]['buttons'][1]['payload']);
 
-        AiActionApproval::query()->create([
+        $second = AiActionApproval::query()->create([
             'user_id' => $user->id,
             'tool_name' => 'delete_campaign',
             'permission' => 'execute',
@@ -232,10 +234,48 @@ class CommandCenterTest extends TestCase
             'status' => AiActionApproval::STATUS_PENDING,
         ]);
 
-        $listed = app(WhatsAppChannelService::class)->whatsappActions($user->fresh());
+        $listed = app(WhatsAppChannelService::class)->whatsappActionMessages($user->fresh());
 
-        $this->assertSame('list', $listed['interactive']['type']);
-        $this->assertCount(4, $listed['interactive']['action']['sections'][0]['rows']);
+        $this->assertCount(2, $listed);
+        $this->assertSame('LAUNCH-'.$second->id, $listed[1]['buttons'][0]['payload']);
+        $this->assertSame('Reject', $listed[1]['buttons'][1]['title']);
+    }
+
+    public function test_whatsapp_reply_sends_action_buttons_with_the_text(): void
+    {
+        config([
+            'services.zernio.api_key' => 'test-key',
+            'services.zernio.base_url' => 'https://api.zernio.test',
+        ]);
+        Http::fake(['*' => Http::response(['success' => true], 200)]);
+
+        $user = User::factory()->create();
+        $approval = AiActionApproval::query()->create([
+            'user_id' => $user->id,
+            'tool_name' => 'delete_campaign',
+            'permission' => 'execute',
+            'summary' => 'Permanently delete campaign #1',
+            'payload' => ['campaign_id' => 1],
+            'status' => AiActionApproval::STATUS_PENDING,
+        ]);
+        $session = AiEmployeeSession::query()->create([
+            'user_id' => $user->id,
+            'conversation_id' => 'conv-local',
+            'channel' => 'whatsapp',
+            'zernio_conversation_id' => 'conv_wa',
+            'zernio_account_id' => 'acc_wa',
+        ]);
+
+        app(WhatsAppChannelService::class)->reply($session, 'Reply LAUNCH '.$approval->id.' to confirm.');
+
+        Http::assertSent(function ($request) use ($approval) {
+            if (! str_contains($request->url(), '/messages')) {
+                return false;
+            }
+
+            return ($request->data()['buttons'][0]['payload'] ?? null) === 'LAUNCH-'.$approval->id
+                && ($request->data()['buttons'][1]['title'] ?? null) === 'Reject';
+        });
     }
 
     public function test_whatsapp_webhook_rejects_bad_signature(): void

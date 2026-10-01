@@ -2,6 +2,7 @@
 
 namespace App\Services\AiEmployee;
 
+use App\Jobs\PulseWhatsAppTypingJob;
 use App\Models\AiEmployeeSession;
 use App\Models\AiEmployeeSetting;
 use App\Models\User;
@@ -9,7 +10,6 @@ use App\Services\Zernio\ZernioClient;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Symfony\Component\Process\Process;
 
 class WhatsAppChannelService
 {
@@ -20,10 +20,6 @@ class WhatsAppChannelService
         protected ZernioClient $zernio,
         protected AiEmployeeSettingsService $settings,
     ) {}
-
-    protected ?Process $typingPulse = null;
-
-    protected ?string $typingToken = null;
 
     /**
      * @param  array<string, mixed>  $payload
@@ -85,7 +81,7 @@ class WhatsAppChannelService
             'zernio_account_id' => $accountId !== '' ? $accountId : $session->zernio_account_id,
         ])->save();
 
-        $this->showTyping(
+        $this->startTypingPulse(
             $accountId !== '' ? $accountId : (string) $session->zernio_account_id,
             $conversationId !== '' ? $conversationId : (string) $session->zernio_conversation_id,
         );
@@ -104,63 +100,42 @@ class WhatsAppChannelService
             return;
         }
 
-        $this->stopTypingPulse();
+        $this->stopTypingPulse($conversationId);
         $user = $session->relationLoaded('user') ? $session->user : $session->user()->first();
-        $actions = $user instanceof User ? $this->whatsappActions($user) : [];
-        $this->send($accountId, $conversationId, null, $text, $actions);
+        $this->send($accountId, $conversationId, null, $text);
+        if (! $user instanceof User) {
+            return;
+        }
+
+        foreach ($this->whatsappActionMessages($user) as $card) {
+            $this->send($accountId, $conversationId, null, $card['text'], ['buttons' => $card['buttons']]);
+        }
     }
 
     /**
-     * WhatsApp reply buttons (up to 3) or a list when more approvals are waiting.
+     * One WhatsApp message per pending action, each with Approve and Reject.
+     * Reply buttons are capped at 3, so each approval is its own message.
      *
-     * @return array{buttons?: list<array<string, string>>, interactive?: array<string, mixed>}
+     * @return list<array{text: string, buttons: list<array{type: string, title: string, payload: string}>}>
      */
-    public function whatsappActions(User $user): array
+    public function whatsappActionMessages(User $user): array
     {
         $pending = app(ActionApprovalService::class)->pendingPayload($user);
-        if ($pending === []) {
-            return [];
-        }
+        $messages = [];
 
-        if (count($pending) === 1) {
-            $id = (int) $pending[0]['id'];
-
-            return [
-                'buttons' => [
-                    ['type' => 'postback', 'title' => 'Approve', 'payload' => 'LAUNCH '.$id],
-                    ['type' => 'postback', 'title' => 'Reject', 'payload' => 'REJECT '.$id],
-                ],
-            ];
-        }
-
-        $rows = [];
         foreach (array_slice($pending, 0, 5) as $approval) {
             $id = (int) $approval['id'];
-            $summary = Str::limit(trim((string) ($approval['summary'] ?? '')), 72, '');
-            $rows[] = [
-                'id' => 'LAUNCH '.$id,
-                'title' => Str::limit('Approve #'.$id, 24, ''),
-                'description' => $summary,
-            ];
-            $rows[] = [
-                'id' => 'REJECT '.$id,
-                'title' => Str::limit('Reject #'.$id, 24, ''),
-                'description' => $summary,
+            $summary = trim((string) ($approval['summary'] ?? ''));
+            $messages[] = [
+                'text' => $summary !== '' ? $summary : 'LAUNCH '.$id,
+                'buttons' => [
+                    ['type' => 'postback', 'title' => 'Approve', 'payload' => 'LAUNCH-'.$id],
+                    ['type' => 'postback', 'title' => 'Reject', 'payload' => 'REJECT-'.$id],
+                ],
             ];
         }
 
-        return [
-            'interactive' => [
-                'type' => 'list',
-                'action' => [
-                    'button' => 'Review actions',
-                    'sections' => [[
-                        'title' => 'Pending',
-                        'rows' => $rows,
-                    ]],
-                ],
-            ],
-        ];
+        return $messages;
     }
 
     public function showTyping(string $accountId, string $conversationId): void
@@ -170,63 +145,45 @@ class WhatsAppChannelService
 
     /**
      * Keep WhatsApp "typing…" visible while a reply is generated.
-     * The platform indicator expires after about 25 seconds.
+     * The indicator expires after about 25 seconds, so a fast-queue job
+     * refreshes it every 12 seconds until the reply is sent.
      */
     public function startTypingPulse(string $accountId, string $conversationId): void
     {
-        $this->showTyping($accountId, $conversationId);
-
-        if (app()->runningUnitTests() || $accountId === '' || $conversationId === '') {
+        if ($accountId === '' || $conversationId === '') {
             return;
         }
 
-        $this->stopTypingPulse();
+        $this->showTyping($accountId, $conversationId);
 
-        $token = (string) Str::uuid();
-        Cache::put($this->typingCacheKey($token), [
+        if (app()->runningUnitTests()) {
+            return;
+        }
+
+        $key = $this->typingCacheKey($conversationId);
+        $alreadyRunning = Cache::has($key);
+        Cache::put($key, [
             'account_id' => $accountId,
             'conversation_id' => $conversationId,
         ], now()->addMinutes(4));
 
-        $process = new Process([PHP_BINARY, base_path('artisan'), 'ai-employee:typing-pulse', $token]);
-        $process->setTimeout(null);
-        $process->disableOutput();
-
-        try {
-            $process->start();
-            $this->typingPulse = $process;
-            $this->typingToken = $token;
-        } catch (\Throwable $e) {
-            Cache::forget($this->typingCacheKey($token));
-            Log::warning('WhatsApp typing pulse failed to start', ['error' => $e->getMessage()]);
+        if (! $alreadyRunning) {
+            PulseWhatsAppTypingJob::dispatch($conversationId)->delay(now()->addSeconds(12));
         }
     }
 
-    public function stopTypingPulse(): void
+    public function stopTypingPulse(?string $conversationId = null): void
     {
-        if ($this->typingToken !== null) {
-            Cache::forget($this->typingCacheKey($this->typingToken));
-            $this->typingToken = null;
-        }
-
-        if ($this->typingPulse === null) {
+        if ($conversationId === null || $conversationId === '') {
             return;
         }
 
-        try {
-            if ($this->typingPulse->isRunning()) {
-                $this->typingPulse->stop(1);
-            }
-        } catch (\Throwable $e) {
-            Log::debug('WhatsApp typing pulse stop failed', ['error' => $e->getMessage()]);
-        }
-
-        $this->typingPulse = null;
+        Cache::forget($this->typingCacheKey($conversationId));
     }
 
-    protected function typingCacheKey(string $token): string
+    protected function typingCacheKey(string $conversationId): string
     {
-        return 'whatsapp-typing:'.$token;
+        return 'whatsapp-typing:'.$conversationId;
     }
 
     /**
@@ -318,8 +275,8 @@ class WhatsAppChannelService
 
         foreach ($candidates as $value) {
             $value = trim((string) $value);
-            if (preg_match('/^(LAUNCH|REJECT)\s+#?\d+$/i', $value) === 1) {
-                return strtoupper(strtok($value, ' ') ?: '').' '.preg_replace('/\D+/', '', $value);
+            if (preg_match('/^(LAUNCH|REJECT)[\s:#-]+#?(\d+)$/i', $value, $match) === 1) {
+                return strtoupper($match[1]).' '.$match[2];
             }
         }
 

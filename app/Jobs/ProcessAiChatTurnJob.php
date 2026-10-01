@@ -74,7 +74,7 @@ class ProcessAiChatTurnJob implements ShouldBeUnique, ShouldQueue
             }
         } finally {
             if ($this->channel === 'whatsapp') {
-                $whatsApp->stopTypingPulse();
+                $whatsApp->stopTypingPulse((string) ($session->zernio_conversation_id ?? ''));
             }
             $sessions->finishTurn($session->fresh() ?? $session);
         }

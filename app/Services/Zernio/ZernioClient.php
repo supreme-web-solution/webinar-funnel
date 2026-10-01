@@ -635,7 +635,7 @@ final class ZernioClient
      */
     public function sendTypingIndicator(string $accountId, string $conversationId): void
     {
-        if (! $this->isEnabled() || $accountId === '' || $conversationId === '') {
+        if (! $this->isConfigured() || $accountId === '' || $conversationId === '') {
             return;
         }
 
@@ -645,9 +645,11 @@ final class ZernioClient
                 ['accountId' => $accountId],
             );
 
-            if (! $response->successful()) {
+            $success = $response->json('success');
+            if (! $response->successful() || $success === false) {
                 Log::warning('ZernioClient::sendTypingIndicator failed', [
                     'status' => $response->status(),
+                    'success' => $success,
                     'body' => Str::limit($response->body(), 300, ''),
                 ]);
             }
@@ -702,13 +704,22 @@ final class ZernioClient
             if (! $response->successful()) {
                 Log::warning('ZernioClient::sendInboxMessage failed', [
                     'status' => $response->status(),
+                    'has_buttons' => isset($payload['buttons']),
                     'body' => Str::limit($response->body(), 400, ''),
                 ]);
 
                 return ['success' => false, 'error' => $this->parseApiErrorMessage($response)];
             }
 
-            $data = $response->json('data') ?? $response->json();
+            $json = $response->json();
+            if (is_array($json) && ((($json['warnings'] ?? []) !== []) || isset($json['data']['partialFailure']))) {
+                Log::warning('ZernioClient::sendInboxMessage accepted with warnings', [
+                    'warnings' => $json['warnings'] ?? null,
+                    'partial' => $json['data']['partialFailure'] ?? null,
+                ]);
+            }
+
+            $data = $response->json('data') ?? $json;
             $messageId = is_array($data) ? ($data['messageId'] ?? $data['id'] ?? null) : null;
 
             return [
