@@ -8,12 +8,38 @@ use Tests\TestCase;
 
 class LeadMagnetPdfServiceTest extends TestCase
 {
+    public function test_pdf_html_uses_solid_cover_colors_instead_of_gradients(): void
+    {
+        config(['app.url' => 'https://autoaffiliate360.com']);
+
+        $html = '<!DOCTYPE html><html><head><style>'
+            .':root { --primary: #4376b3; --secondary: #0ea5e9; --accent: #f59e0b; --bg: #f8fafc; --text: #1e293b; }'
+            .'.lm-cover { display: flex; background: linear-gradient(160deg, var(--primary) 0%, #2d4a6f 100%); color: #fff; }'
+            .'</style></head><body>'
+            .'<section class="lm-page lm-cover"><div class="lm-cover-inner">'
+            .'<p class="lm-cover-label">Free Guide</p>'
+            .'<h1 class="lm-cover-title">Title</h1>'
+            .'<a class="lm-footer-cta" href="/r/x4pm2bsa">Get the full solution →</a>'
+            .'</div></section>'
+            .'</body></html>';
+
+        $sanitized = app(LeadMagnetPdfService::class)->sanitizeHtmlForPdf($html);
+
+        $this->assertStringContainsString('background-color: #4376b3', $sanitized);
+        $this->assertStringNotContainsString('linear-gradient', $sanitized);
+        $this->assertStringNotContainsString('var(--primary)', $sanitized);
+        $this->assertStringNotContainsString('min-height: 90vh', $sanitized);
+        $this->assertStringNotContainsString('display: flex', $sanitized);
+        $this->assertStringContainsString('color:#ffffff', $sanitized);
+        $this->assertStringContainsString('href="https://autoaffiliate360.com/r/x4pm2bsa"', $sanitized);
+    }
+
     public function test_pdf_html_expands_relative_affiliate_links(): void
     {
         config(['app.url' => 'https://autoaffiliate360.com']);
         Storage::fake('public');
 
-        $html = '<!DOCTYPE html><html><body>'
+        $html = '<!DOCTYPE html><html><head><style>:root { --primary: #4f46e5; }</style></head><body>'
             .'<a class="lm-footer-cta" href="/r/x4pm2bsa">Get the full solution →</a>'
             .'</body></html>';
 
