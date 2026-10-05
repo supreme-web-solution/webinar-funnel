@@ -133,14 +133,6 @@ class LeadMagnetPdfService
             $html,
         ) ?? $html;
 
-        // Dompdf cannot vertical-center with flex — wrap cover copy in a full-page table cell.
-        $html = preg_replace(
-            '/(<section\b[^>]*\bclass="[^"]*\blm-cover\b[^"]*"[^>]*>)\s*<div class="lm-cover-inner">(.*?)<\/div>\s*(<\/section>)/is',
-            '$1<table class="lm-cover-table" width="100%" height="100%"><tr><td class="lm-cover-cell" valign="middle" align="center"><div class="lm-cover-inner">$2</div></td></tr></table>$3',
-            $html,
-            1,
-        ) ?? $html;
-
         return $html;
     }
 
@@ -208,7 +200,7 @@ class LeadMagnetPdfService
         $border = '#e2e8f0';
 
         return <<<CSS
-@page { margin: 48px 54px; }
+@page { margin: 40px 48px; }
 * { box-sizing: border-box; }
 html, body {
     margin: 0;
@@ -224,7 +216,7 @@ html, body {
 .lm-page {
     page-break-after: always;
     page-break-inside: auto;
-    padding: 8px 6px 20px;
+    padding: 12px 8px 20px;
     margin: 0;
     background: #ffffff;
 }
@@ -236,34 +228,18 @@ html, body {
     background-color: {$primary};
     background: {$primary};
     color: #ffffff;
-    padding: 0;
-    margin: -48px -54px 0;
-    width: auto;
-    height: 297mm;
-    min-height: 297mm;
+    padding: 96px 48px;
+    margin: -40px -48px 0;
+    min-height: 0;
     page-break-after: always;
     page-break-inside: avoid;
 }
-.lm-cover-table {
-    width: 100%;
-    height: 297mm;
-    border-collapse: collapse;
-    background-color: {$primary};
-}
-.lm-cover-cell {
-    height: 297mm;
-    vertical-align: middle;
-    text-align: center;
-    padding: 48px 64px;
-    background-color: {$primary};
-    color: #ffffff;
-}
 .lm-cover-inner {
     width: auto;
-    max-width: 480px;
+    max-width: 100%;
     margin: 0 auto;
     color: #ffffff;
-    padding: 0 8px;
+    padding: 0 12px;
 }
 .lm-cover-label {
     text-transform: uppercase;
@@ -443,12 +419,12 @@ html, body {
 .lm-footer-cta {
     display: block;
     width: auto;
-    max-width: 92%;
+    max-width: 88%;
     margin: 0 auto;
     background-color: {$primary};
     color: #ffffff !important;
     text-decoration: none;
-    padding: 10px 16px;
+    padding: 10px 18px;
     border-radius: 6px;
     font-weight: 700;
     font-size: 11px;
