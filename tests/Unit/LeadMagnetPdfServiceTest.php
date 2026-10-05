@@ -26,7 +26,10 @@ class LeadMagnetPdfServiceTest extends TestCase
         $sanitized = app(LeadMagnetPdfService::class)->sanitizeHtmlForPdf($html);
 
         $this->assertStringContainsString('background-color: #4376b3', $sanitized);
-        $this->assertStringContainsString('@page { margin: 32px 28px; }', $sanitized);
+        $this->assertStringContainsString('@page { margin: 48px 54px; }', $sanitized);
+        $this->assertStringContainsString('height: 297mm', $sanitized);
+        $this->assertStringContainsString('lm-cover-table', $sanitized);
+        $this->assertStringContainsString('vertical-align: middle', $sanitized);
         $this->assertStringContainsString('word-wrap: break-word', $sanitized);
         $this->assertStringContainsString('table-layout: fixed', $sanitized);
         $this->assertStringContainsString('max-width: 92%', $sanitized);

@@ -133,6 +133,14 @@ class LeadMagnetPdfService
             $html,
         ) ?? $html;
 
+        // Dompdf cannot vertical-center with flex — wrap cover copy in a full-page table cell.
+        $html = preg_replace(
+            '/(<section\b[^>]*\bclass="[^"]*\blm-cover\b[^"]*"[^>]*>)\s*<div class="lm-cover-inner">(.*?)<\/div>\s*(<\/section>)/is',
+            '$1<table class="lm-cover-table" width="100%" height="100%"><tr><td class="lm-cover-cell" valign="middle" align="center"><div class="lm-cover-inner">$2</div></td></tr></table>$3',
+            $html,
+            1,
+        ) ?? $html;
+
         return $html;
     }
 
@@ -200,7 +208,7 @@ class LeadMagnetPdfService
         $border = '#e2e8f0';
 
         return <<<CSS
-@page { margin: 32px 28px; }
+@page { margin: 48px 54px; }
 * { box-sizing: border-box; }
 html, body {
     margin: 0;
@@ -216,7 +224,7 @@ html, body {
 .lm-page {
     page-break-after: always;
     page-break-inside: auto;
-    padding: 8px 4px 16px;
+    padding: 8px 6px 20px;
     margin: 0;
     background: #ffffff;
 }
@@ -228,18 +236,34 @@ html, body {
     background-color: {$primary};
     background: {$primary};
     color: #ffffff;
-    padding: 96px 36px;
-    margin: -32px -28px 0;
-    min-height: 0;
+    padding: 0;
+    margin: -48px -54px 0;
+    width: auto;
+    height: 297mm;
+    min-height: 297mm;
     page-break-after: always;
     page-break-inside: avoid;
 }
+.lm-cover-table {
+    width: 100%;
+    height: 297mm;
+    border-collapse: collapse;
+    background-color: {$primary};
+}
+.lm-cover-cell {
+    height: 297mm;
+    vertical-align: middle;
+    text-align: center;
+    padding: 48px 64px;
+    background-color: {$primary};
+    color: #ffffff;
+}
 .lm-cover-inner {
     width: auto;
-    max-width: 100%;
+    max-width: 480px;
     margin: 0 auto;
     color: #ffffff;
-    padding: 0 12px;
+    padding: 0 8px;
 }
 .lm-cover-label {
     text-transform: uppercase;
