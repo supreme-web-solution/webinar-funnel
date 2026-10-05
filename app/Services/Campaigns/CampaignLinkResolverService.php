@@ -21,6 +21,15 @@ class CampaignLinkResolverService
             return null;
         }
 
+        $destination = app(TrackedLinkService::class)->unwrapInternalTrackedUrl($destination);
+        if (! app(TrackedLinkService::class)->isUsableDestination($destination)) {
+            return null;
+        }
+
+        if ($destination !== trim((string) ($campaign->affiliate_link ?? ''))) {
+            $campaign->forceFill(['affiliate_link' => $destination])->save();
+        }
+
         $link = TrackedLink::query()->where('campaign_id', $campaign->id)->where('label', self::AFFILIATE_LABEL)->first();
 
         if (! $link) {

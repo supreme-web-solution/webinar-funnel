@@ -98,6 +98,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('{campaign}/lead-magnet/suggest', [CampaignController::class, 'suggestLeadMagnets'])->name('lead-magnet.suggest');
         Route::post('{campaign}/lead-magnet/generate', [CampaignController::class, 'generateLeadMagnet'])->name('lead-magnet.generate');
         Route::post('{campaign}/lead-magnet/skip', [CampaignController::class, 'skipLeadMagnet'])->name('lead-magnet.skip');
+        Route::get('{campaign}/lead-magnet/pdf', [CampaignController::class, 'downloadLeadMagnetPdf'])->name('lead-magnet.pdf');
         Route::post('{campaign}/build-pages', [CampaignController::class, 'buildPages'])->name('build-pages');
         Route::patch('{campaign}/pages/{pageType}', [CampaignController::class, 'updatePage'])->name('pages.update');
         Route::post('{campaign}/bonuses/suggest', [CampaignController::class, 'suggestBonuses'])->name('bonuses.suggest');

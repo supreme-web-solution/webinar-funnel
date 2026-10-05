@@ -9,6 +9,7 @@ use App\Models\CampaignLead;
 use App\Models\CampaignPage;
 use App\Models\Funnel;
 use App\Models\IntegrationAccount;
+use App\Models\TrackedLink;
 use App\Services\Campaigns\CampaignAutoresponderService;
 use App\Services\Campaigns\CampaignBonusPresenterService;
 use App\Services\Campaigns\CampaignBuilderService;
@@ -21,6 +22,7 @@ use App\Services\Campaigns\CampaignPublicUrlService;
 use App\Services\Campaigns\CampaignTrafficHubService;
 use App\Services\Campaigns\LeadMagnetPdfService;
 use App\Services\Campaigns\OfferIntakeService;
+use App\Services\Campaigns\TrackedLinkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -261,6 +263,7 @@ class CampaignController extends Controller
         $this->generationState->syncFromContent($campaign);
         $leadMagnet = $campaign->pages()->where('page_type', 'lead_magnet')->first();
         $this->repairThankYouDownloadUrl($campaign, $leadMagnet);
+        $this->repairLeadMagnetAffiliateLinks($campaign, $leadMagnet);
         $this->reconcileGenerationProgress($campaign, $leadMagnet);
 
         // Always re-hydrate relations after sync/reconcile so Inertia gets fresh content.
@@ -813,6 +816,43 @@ class CampaignController extends Controller
         ]);
     }
 
+    public function downloadLeadMagnetPdf(Campaign $campaign): StreamedResponse
+    {
+        $this->authorizeCampaign($campaign);
+        $lm = $campaign->pages()->where('page_type', 'lead_magnet')->first();
+        $content = is_array($lm?->content) ? $lm->content : [];
+        $htmlPath = $content['download_path'] ?? null;
+
+        if (! is_string($htmlPath) || ! Storage::disk('public')->exists($htmlPath)) {
+            abort(404, 'Lead magnet file not found. Generate the lead magnet first.');
+        }
+
+        $this->repairLeadMagnetAffiliateLinks($campaign, $lm);
+        $lm?->refresh();
+        $content = is_array($lm?->content) ? $lm->content : $content;
+
+        $pdfPath = $this->leadMagnetPdf->ensurePdf(
+            $htmlPath,
+            is_string($content['pdf_path'] ?? null) ? $content['pdf_path'] : null,
+            force: true,
+        );
+
+        if (! is_string($pdfPath) || ! Storage::disk('public')->exists($pdfPath)) {
+            abort(500, 'Could not generate PDF. Try again in a moment.');
+        }
+
+        if (($content['pdf_path'] ?? null) !== $pdfPath) {
+            $content['pdf_path'] = $pdfPath;
+            $lm?->update(['content' => $content]);
+        }
+
+        $filename = Str::slug((string) ($content['title'] ?? $campaign->name)).'-guide.pdf';
+
+        return Storage::disk('public')->download($pdfPath, $filename, [
+            'Content-Type' => 'application/pdf',
+        ]);
+    }
+
     protected function authorizeCampaign(Campaign $campaign): void
     {
         abort_unless((int) $campaign->user_id === (int) auth()->id(), 403);
@@ -832,6 +872,58 @@ class CampaignController extends Controller
         if ($current !== '' && ! str_contains($current, 'campaign-download')) {
             unset($content['download_url']);
             $thankyou->update(['content' => $content]);
+        }
+    }
+
+    protected function repairLeadMagnetAffiliateLinks(Campaign $campaign, ?CampaignPage $leadMagnet): void
+    {
+        $content = is_array($leadMagnet?->content) ? $leadMagnet->content : [];
+        $htmlPath = $content['download_path'] ?? null;
+        if (! is_string($htmlPath) || $htmlPath === '') {
+            return;
+        }
+
+        $tracked = app(TrackedLinkService::class);
+        foreach ($campaign->trackedLinks as $link) {
+            if (! $tracked->isUsableDestination((string) $link->destination_url)) {
+                try {
+                    $tracked->effectiveDestination($link);
+                } catch (\Throwable) {
+                    // Leave alone when campaign also has no usable hop link.
+                }
+            }
+        }
+
+        $affiliateUrl = app(CampaignLinkResolverService::class)->affiliatePublicUrl($campaign);
+        if (! is_string($affiliateUrl) || $affiliateUrl === '') {
+            $cloak = (string) ($content['affiliate_cloak_code'] ?? '');
+            if ($cloak !== '') {
+                $link = $campaign->trackedLinks->firstWhere('code', $cloak)
+                    ?? TrackedLink::query()->where('code', $cloak)->first();
+                if ($link) {
+                    try {
+                        $tracked->effectiveDestination($link);
+                        $affiliateUrl = $link->publicUrl();
+                    } catch (\Throwable) {
+                        return;
+                    }
+                }
+            }
+        }
+
+        if (! is_string($affiliateUrl) || $affiliateUrl === '') {
+            return;
+        }
+
+        $pdfPath = $this->leadMagnetPdf->repairAffiliateHrefs(
+            $htmlPath,
+            is_string($content['pdf_path'] ?? null) ? $content['pdf_path'] : null,
+            $affiliateUrl,
+        );
+
+        if (is_string($pdfPath) && $pdfPath !== '' && ($content['pdf_path'] ?? null) !== $pdfPath) {
+            $content['pdf_path'] = $pdfPath;
+            $leadMagnet?->update(['content' => $content]);
         }
     }
 
@@ -983,6 +1075,25 @@ class CampaignController extends Controller
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    protected function leadMagnetPayload(Campaign $campaign, ?CampaignPage $leadMagnet): ?array
+    {
+        if ($leadMagnet === null) {
+            return null;
+        }
+
+        $content = is_array($leadMagnet->content) ? $leadMagnet->content : [];
+        $content['pdf_download_url'] = route('campaigns.lead-magnet.pdf', $campaign);
+        if (is_string($content['download_path'] ?? null) && $content['download_path'] !== '') {
+            $content['download_url'] = $content['download_url']
+                ?? Storage::disk('public')->url($content['download_path']);
+        }
+
+        return $content;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function campaignPayload(Campaign $campaign, string $username, ?CampaignPage $leadMagnet): array
@@ -1011,7 +1122,7 @@ class CampaignController extends Controller
             'generation' => $campaign->meta['generation'] ?? null,
             'generation_state' => $campaign->generation_state ?? [],
             'pages' => $campaign->pages,
-            'lead_magnet' => $leadMagnet?->content,
+            'lead_magnet' => $this->leadMagnetPayload($campaign, $leadMagnet),
             'bonuses' => $campaign->bonuses,
             'emails' => $campaign->emails,
             'funnels' => $this->funnelsForPayload($campaign, $username),

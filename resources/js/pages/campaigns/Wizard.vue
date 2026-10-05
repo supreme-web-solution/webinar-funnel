@@ -1898,7 +1898,39 @@ onMounted(() => {
                                     Enhanced ×{{ campaign.lead_magnet?.enhance_pass }}
                                 </Badge>
                             </p>
-                            <a v-if="campaign.lead_magnet?.download_url" :href="String(campaign.lead_magnet.download_url)" target="_blank" class="text-sm text-blue-600 underline">Open printable version / Save as PDF</a>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <Button
+                                    v-if="campaign.lead_magnet?.pdf_download_url || campaign.lead_magnet?.download_path"
+                                    as-child
+                                    variant="brand"
+                                    size="sm"
+                                    class="!text-white"
+                                >
+                                    <a
+                                        :href="String(campaign.lead_magnet?.pdf_download_url ?? `/campaigns/${campaign.id}/lead-magnet/pdf`)"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <Icon icon="heroicons:arrow-down-tray" class="mr-1.5 size-4" />
+                                        Download PDF
+                                    </a>
+                                </Button>
+                                <Button
+                                    v-if="campaign.lead_magnet?.download_url"
+                                    as-child
+                                    variant="outline"
+                                    size="sm"
+                                >
+                                    <a
+                                        :href="String(campaign.lead_magnet.download_url)"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <Icon icon="heroicons:printer" class="mr-1.5 size-4" />
+                                        Open printable version
+                                    </a>
+                                </Button>
+                            </div>
                             <div class="lead-magnet-preview mt-4 max-h-[32rem] space-y-6 overflow-auto rounded-lg border bg-white p-4">
                                 <div v-for="p in (campaign.lead_magnet?.pages as Array<Record<string,string>>)" :key="p.page" class="border-b pb-6 last:border-0">
                                     <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-600">Page {{ p.page }}</p>
