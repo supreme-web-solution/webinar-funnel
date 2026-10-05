@@ -184,6 +184,9 @@ class LeadMagnetPdfService
     }
 
     /**
+     * Dompdf-safe layout: page margins + word wrap so content is not clipped on
+     * the right, and keep CTA / cards from splitting awkwardly across pages.
+     *
      * @param  array{primary: string, secondary: string, accent: string, background: string, text: string}  $colors
      */
     protected function dompdfStyles(array $colors): string
@@ -197,9 +200,9 @@ class LeadMagnetPdfService
         $border = '#e2e8f0';
 
         return <<<CSS
-@page { margin: 0; }
+@page { margin: 32px 28px; }
 * { box-sizing: border-box; }
-body {
+html, body {
     margin: 0;
     padding: 0;
     font-family: DejaVu Sans, sans-serif;
@@ -207,14 +210,15 @@ body {
     background: #ffffff;
     line-height: 1.55;
     font-size: 12px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 .lm-page {
     page-break-after: always;
-    page-break-inside: avoid;
-    padding: 36px 40px;
+    page-break-inside: auto;
+    padding: 8px 4px 16px;
     margin: 0;
     background: #ffffff;
-    width: 100%;
 }
 .lm-page:last-child { page-break-after: auto; }
 .lm-page.lm-cover,
@@ -224,13 +228,18 @@ body {
     background-color: {$primary};
     background: {$primary};
     color: #ffffff;
-    padding: 120px 48px;
+    padding: 96px 36px;
+    margin: -32px -28px 0;
     min-height: 0;
+    page-break-after: always;
+    page-break-inside: avoid;
 }
 .lm-cover-inner {
-    width: 100%;
+    width: auto;
     max-width: 100%;
+    margin: 0 auto;
     color: #ffffff;
+    padding: 0 12px;
 }
 .lm-cover-label {
     text-transform: uppercase;
@@ -242,17 +251,19 @@ body {
 }
 .lm-cover-title {
     font-family: DejaVu Serif, serif;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
-    margin: 16px 0 14px;
-    line-height: 1.25;
+    margin: 16px 12px 14px;
+    line-height: 1.3;
     color: #ffffff;
+    word-wrap: break-word;
 }
 .lm-cover-sub {
-    font-size: 14px;
-    margin: 0 0 24px;
+    font-size: 13px;
+    margin: 0 16px 24px;
     font-weight: 400;
     color: #ffffff;
+    word-wrap: break-word;
 }
 .lm-cover-meta {
     font-size: 12px;
@@ -262,7 +273,7 @@ body {
 .lm-page-header {
     border-bottom: 2px solid {$primary};
     padding-bottom: 12px;
-    margin-bottom: 22px;
+    margin-bottom: 18px;
 }
 .lm-page-num {
     font-size: 10px;
@@ -273,28 +284,39 @@ body {
 }
 .lm-page-title {
     font-family: DejaVu Serif, serif;
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 700;
     margin: 6px 0 0;
     color: {$primary};
+    word-wrap: break-word;
 }
 .lm-page-body {
     font-family: DejaVu Serif, serif;
-    font-size: 12.5px;
+    font-size: 12px;
     color: {$text};
+    word-wrap: break-word;
+}
+.lm-page-body p,
+.lm-page-body li,
+.lm-page-body td,
+.lm-page-body th {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 .lm-page-body h2, .lm-page-body h3, .lm-page-body h4 {
     font-family: DejaVu Sans, sans-serif;
     color: {$primary};
+    word-wrap: break-word;
 }
-.lm-intro { font-size: 13.5px; line-height: 1.65; margin-bottom: 18px; color: {$text}; }
+.lm-intro { font-size: 13px; line-height: 1.6; margin-bottom: 16px; color: {$text}; }
 .lm-card {
     background-color: #f8fafc;
     border: 1px solid {$border};
     border-left: 4px solid {$primary};
     border-radius: 6px;
-    padding: 14px 16px;
-    margin: 16px 0;
+    padding: 12px 14px;
+    margin: 14px 0;
+    page-break-inside: avoid;
 }
 .lm-card-accent {
     border-left-color: {$accent};
@@ -306,7 +328,7 @@ body {
     font-size: 13px;
     color: {$primary};
 }
-.lm-checklist { list-style: disc; padding-left: 20px; margin: 12px 0; }
+.lm-checklist { list-style: disc; padding-left: 18px; margin: 10px 0; }
 .lm-checklist li {
     padding: 4px 0;
     border-bottom: 1px solid #f1f5f9;
@@ -315,76 +337,101 @@ body {
 .lm-tip {
     background-color: #ecfdf5;
     border-left: 4px solid {$secondary};
-    padding: 12px 14px;
-    margin: 16px 0;
+    padding: 10px 12px;
+    margin: 14px 0;
     font-size: 12px;
+    page-break-inside: avoid;
 }
 .lm-tip strong { color: {$secondary}; }
 .lm-warning {
     background-color: #fffbeb;
     border-left: 4px solid {$accent};
-    padding: 12px 14px;
-    margin: 16px 0;
+    padding: 10px 12px;
+    margin: 14px 0;
+    page-break-inside: avoid;
 }
-.lm-steps { list-style: decimal; padding-left: 22px; margin: 14px 0; }
+.lm-steps { list-style: decimal; padding-left: 20px; margin: 12px 0; }
 .lm-steps li {
     padding: 8px 10px;
     margin-bottom: 8px;
     background-color: #f8fafc;
     border-radius: 6px;
     color: {$text};
+    page-break-inside: avoid;
 }
-.lm-stat-grid { width: 100%; margin: 16px 0; }
+.lm-stat-grid { width: 100%; margin: 14px 0; page-break-inside: avoid; }
 .lm-stat {
     display: inline-block;
     width: 30%;
     vertical-align: top;
     background-color: {$bg};
     border-radius: 6px;
-    padding: 12px;
+    padding: 10px;
     text-align: center;
     border-top: 3px solid {$accent};
     margin-right: 2%;
 }
-.lm-stat strong { display: block; font-size: 20px; color: {$primary}; font-family: DejaVu Sans, sans-serif; }
-.lm-stat span { font-size: 10px; color: {$muted}; text-transform: uppercase; }
+.lm-stat strong { display: block; font-size: 18px; color: {$primary}; font-family: DejaVu Sans, sans-serif; }
+.lm-stat span { font-size: 9px; color: {$muted}; text-transform: uppercase; }
 .lm-quote {
     border-left: 4px solid {$accent};
-    padding: 10px 16px;
-    margin: 18px 0;
+    padding: 8px 14px;
+    margin: 16px 0;
     font-style: italic;
-    font-size: 13px;
+    font-size: 12px;
     color: {$muted};
+    page-break-inside: avoid;
 }
-.lm-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 11px; font-family: DejaVu Sans, sans-serif; }
-.lm-table th { background-color: {$primary}; color: #ffffff; padding: 8px 10px; text-align: left; }
-.lm-table td { padding: 8px 10px; border-bottom: 1px solid {$border}; color: {$text}; }
+.lm-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 10px;
+    font-family: DejaVu Sans, sans-serif;
+    page-break-inside: avoid;
+}
+.lm-table th { background-color: {$primary}; color: #ffffff; padding: 6px 8px; text-align: left; word-wrap: break-word; }
+.lm-table td { padding: 6px 8px; border-bottom: 1px solid {$border}; color: {$text}; word-wrap: break-word; }
 .lm-exercise {
     background-color: #f0fdf4;
     border: 2px dashed #86efac;
     border-radius: 8px;
-    padding: 14px 16px;
-    margin: 16px 0;
+    padding: 12px 14px;
+    margin: 14px 0;
+    page-break-inside: avoid;
 }
 .lm-exercise h4 { margin-top: 0; color: #15803d; font-family: DejaVu Sans, sans-serif; }
 .lm-footer {
-    margin-top: 28px;
-    padding-top: 14px;
+    margin-top: 22px;
+    padding-top: 12px;
     border-top: 2px solid {$border};
     text-align: center;
     clear: both;
+    page-break-inside: avoid;
 }
-.lm-footer p { font-size: 11px; color: {$muted}; margin-bottom: 10px; }
+.lm-footer p {
+    font-size: 11px;
+    color: {$muted};
+    margin: 0 8px 10px;
+    word-wrap: break-word;
+}
 .lm-footer-cta {
-    display: inline-block;
+    display: block;
+    width: auto;
+    max-width: 92%;
+    margin: 0 auto;
     background-color: {$primary};
     color: #ffffff !important;
     text-decoration: none;
-    padding: 10px 20px;
+    padding: 10px 16px;
     border-radius: 6px;
     font-weight: 700;
-    font-size: 12px;
+    font-size: 11px;
     font-family: DejaVu Sans, sans-serif;
+    word-wrap: break-word;
+    white-space: normal;
+    page-break-inside: avoid;
 }
 CSS;
     }
