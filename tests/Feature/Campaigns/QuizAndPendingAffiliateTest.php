@@ -7,10 +7,13 @@ use App\Models\Campaign;
 use App\Models\CampaignLead;
 use App\Models\CampaignPage;
 use App\Models\User;
+use App\Services\Ai\OpenRouterService;
 use App\Services\Campaigns\CampaignGenerationProgressService;
+use App\Services\Campaigns\LeadMagnetGeneratorService;
 use App\Services\Campaigns\TrackedLinkService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class QuizAndPendingAffiliateTest extends TestCase
@@ -84,6 +87,39 @@ class QuizAndPendingAffiliateTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame('https://hop.example.com/abc', $link->fresh()->destination_url);
+    }
+
+    public function test_lead_magnet_generation_runs_without_hop_link(): void
+    {
+        $this->mock(OpenRouterService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('leadMagnetTimeout')->andReturn(30);
+            $mock->shouldReceive('modelFor')->andReturn('test-model');
+            $mock->shouldReceive('chatJsonWithFallback')->andReturn(['ok' => false, 'data' => null, 'error' => 'AI offline']);
+        });
+
+        $user = User::factory()->create();
+        $campaign = Campaign::query()->create([
+            'user_id' => $user->id,
+            'name' => 'No Link',
+            'slug' => 'no-link',
+            'type' => 'sales',
+            'status' => 'draft',
+        ]);
+        CampaignPage::query()->create([
+            'campaign_id' => $campaign->id,
+            'page_type' => 'lead_magnet',
+            'content' => ['suggestions' => [['id' => 'lm1', 'title' => 'Guide', 'format' => 'ebook']]],
+        ]);
+
+        $result = app(LeadMagnetGeneratorService::class)->generate($campaign, 'lm1');
+
+        $this->assertFalse($result['ok']);
+        $this->assertStringNotContainsString('hop link', (string) $result['error']);
+        $this->assertDatabaseHas('tracked_links', [
+            'campaign_id' => $campaign->id,
+            'label' => 'Lead magnet footer CTA',
+            'destination_url' => '#',
+        ]);
     }
 
     public function test_saving_hop_link_resumes_failed_quick_start(): void
