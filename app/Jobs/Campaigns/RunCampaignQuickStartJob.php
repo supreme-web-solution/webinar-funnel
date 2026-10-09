@@ -56,18 +56,20 @@ class RunCampaignQuickStartJob implements ShouldBeUnique, ShouldQueue
                 'detail' => 'Knowledge → pages → bonuses → emails'.($campaign->type === 'webinar' ? ' → webinar funnels' : ''),
             ]);
 
-            $progress->update($campaign, 'knowledge', 'Pass 1 & 2 — building knowledge base…', 10);
-            $knowledgeResult = $knowledge->build($campaign);
-            if (! ($knowledgeResult['ok'] ?? false)) {
-                $progress->fail($campaign, $knowledgeResult['error'] ?? 'Knowledge build failed.');
+            if (! $generationState->isGenerated($campaign, 'knowledge')) {
+                $progress->update($campaign, 'knowledge', 'Pass 1 & 2 — building knowledge base…', 10);
+                $knowledgeResult = $knowledge->build($campaign);
+                if (! ($knowledgeResult['ok'] ?? false)) {
+                    $progress->fail($campaign, $knowledgeResult['error'] ?? 'Knowledge build failed.');
 
-                return;
+                    return;
+                }
+                $generationState->mark($campaign, 'knowledge');
             }
-            $generationState->mark($campaign, 'knowledge');
 
             if ($campaign->type === Campaign::TYPE_WEBINAR) {
                 $generationState->mark($campaign, 'lead_magnet_skip');
-            } else {
+            } elseif (! $generationState->isGenerated($campaign, 'lead_magnet')) {
                 $progress->update($campaign, 'lead_magnet_suggest', 'Loading lead magnet ideas…', 25);
                 $suggest = $leadMagnet->suggest($campaign);
                 if (! ($suggest['ok'] ?? false)) {
@@ -104,37 +106,39 @@ class RunCampaignQuickStartJob implements ShouldBeUnique, ShouldQueue
             }
             $generationState->mark($campaign, 'pages');
 
-            if ($campaign->type === Campaign::TYPE_WEBINAR) {
+            if ($campaign->type === Campaign::TYPE_WEBINAR && ! $generationState->isGenerated($campaign, 'webinar')) {
                 $progress->update($campaign, 'webinar', 'Creating registration + pitch/replay funnels…', 62);
                 $builder->buildWebinarFunnels($campaign, $offer);
                 $generationState->mark($campaign, 'webinar');
             }
 
-            $progress->update($campaign, 'bonuses_suggest', 'Generating bonus ideas…', 72);
-            $bonusSuggest = $bonusGenerator->suggest($campaign, 'ebook');
-            if (! ($bonusSuggest['ok'] ?? false)) {
-                $progress->fail($campaign, $bonusSuggest['error'] ?? 'Bonus suggestions failed.');
+            if (! $generationState->isGenerated($campaign, 'bonuses')) {
+                $progress->update($campaign, 'bonuses_suggest', 'Generating bonus ideas…', 72);
+                $bonusSuggest = $bonusGenerator->suggest($campaign, 'ebook');
+                if (! ($bonusSuggest['ok'] ?? false)) {
+                    $progress->fail($campaign, $bonusSuggest['error'] ?? 'Bonus suggestions failed.');
 
-                return;
+                    return;
+                }
+                $generationState->mark($campaign, 'bonuses_suggest', ['bonus_type' => 'ebook']);
+
+                $bonusFirst = is_array($bonusSuggest['suggestions'][0] ?? null) ? $bonusSuggest['suggestions'][0] : null;
+                $bonusId = (string) ($bonusFirst['id'] ?? '');
+                if ($bonusId === '') {
+                    $progress->fail($campaign, 'No bonus concepts returned from knowledge.');
+
+                    return;
+                }
+
+                $progress->update($campaign, 'bonuses', 'Generating ebook bonus…', 82);
+                $bonusResult = $bonusGenerator->generate($campaign, $bonusId, 'ebook');
+                if (! ($bonusResult['ok'] ?? false)) {
+                    $progress->fail($campaign, $bonusResult['error'] ?? 'Bonus generation failed.');
+
+                    return;
+                }
+                $generationState->mark($campaign, 'bonuses', ['bonus_type' => 'ebook']);
             }
-            $generationState->mark($campaign, 'bonuses_suggest', ['bonus_type' => 'ebook']);
-
-            $bonusFirst = is_array($bonusSuggest['suggestions'][0] ?? null) ? $bonusSuggest['suggestions'][0] : null;
-            $bonusId = (string) ($bonusFirst['id'] ?? '');
-            if ($bonusId === '') {
-                $progress->fail($campaign, 'No bonus concepts returned from knowledge.');
-
-                return;
-            }
-
-            $progress->update($campaign, 'bonuses', 'Generating ebook bonus…', 82);
-            $bonusResult = $bonusGenerator->generate($campaign, $bonusId, 'ebook');
-            if (! ($bonusResult['ok'] ?? false)) {
-                $progress->fail($campaign, $bonusResult['error'] ?? 'Bonus generation failed.');
-
-                return;
-            }
-            $generationState->mark($campaign, 'bonuses', ['bonus_type' => 'ebook']);
 
             $progress->update($campaign, 'emails', 'Writing email swipes…', 90);
             $emailResult = $content->generateEmails($campaign, 'full_launch', 5, false);

@@ -123,9 +123,7 @@ class BonusGeneratorService
             ->delete();
 
         $ctx = $this->knowledge->contextForGeneration($campaign);
-        $affiliate = (string) ($campaign->affiliate_link ?? '#');
-        $cloaked = $this->trackedLinks->createForCampaign($campaign, $affiliate, 'Bonus CTA');
-        $affiliateUrl = $cloaked->publicUrl();
+        $affiliateUrl = $this->trackedLinks->createForCampaignAffiliate($campaign, 'Bonus CTA')->publicUrl();
 
         $result = $bonusType === 'mini_course'
             ? $this->generateMiniCourse($campaign, $selected, $ctx, $affiliateUrl)

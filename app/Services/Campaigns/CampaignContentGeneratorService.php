@@ -260,8 +260,7 @@ class CampaignContentGeneratorService
         $bonusPage = $ctx['pass2']['bonus_page_strategy'] ?? [];
 
         $product = (string) ($offer['product_name'] ?? $campaign->name);
-        $affiliate = (string) ($campaign->affiliate_link ?: '#');
-        $affiliateLink = $this->trackedLinks->createForCampaign($campaign, $affiliate, 'Affiliate offer');
+        $affiliateLink = $this->trackedLinks->createForCampaignAffiliate($campaign, 'Affiliate offer');
 
         $pages = [
             'squeeze' => [
@@ -315,7 +314,6 @@ class CampaignContentGeneratorService
         $bonusPage = $ctx['pass2']['bonus_page_strategy'] ?? [];
 
         $product = (string) ($offer['product_name'] ?? $campaign->name);
-        $affiliate = (string) ($campaign->affiliate_link ?: '#');
 
         $lm = $campaign->pages()->where('page_type', 'lead_magnet')->first();
         $lmTitle = is_array($lm?->content) ? (string) ($lm->content['title'] ?? '') : '';
@@ -324,7 +322,7 @@ class CampaignContentGeneratorService
             $lmDownload = Storage::disk('public')->url($lm->content['download_path']);
         }
 
-        $affiliateLink = $this->trackedLinks->createForCampaign($campaign, $affiliate, 'Affiliate offer');
+        $affiliateLink = $this->trackedLinks->createForCampaignAffiliate($campaign, 'Affiliate offer');
         $quizQuestions = $this->resolveQuizQuestions($campaign, $ctx, $product);
 
         $pages = [
@@ -355,7 +353,7 @@ class CampaignContentGeneratorService
                 'intro' => (string) ($quiz['purpose'] ?? 'Answer a few questions to get your personalized guide.'),
                 'questions' => $quizQuestions,
                 'result_headline' => 'Your results are ready!',
-                'result_body' => 'Download your guide on the next page.',
+                'result_body' => 'Enter your email below and we\'ll send your free guide right away.',
                 'editable' => true,
             ],
             'bonus' => [

@@ -67,13 +67,7 @@ class CampaignBuilderService
         $product = (string) ($offer['product_name'] ?? $campaign->name);
         $headline = (string) ($offer['headline'] ?? "Get {$product}");
         $sub = (string) ($offer['subheadline'] ?? ($offer['description'] ?? ''));
-        $affiliate = (string) ($campaign->affiliate_link ?: '#');
-
-        $affiliateLink = $this->trackedLinks->createForCampaign(
-            $campaign,
-            $affiliate,
-            'Affiliate offer'
-        );
+        $affiliateLink = $this->trackedLinks->createForCampaignAffiliate($campaign, 'Affiliate offer');
         $pages = [
             'squeeze' => [
                 'headline' => $headline ?: "Free Training: {$product}",

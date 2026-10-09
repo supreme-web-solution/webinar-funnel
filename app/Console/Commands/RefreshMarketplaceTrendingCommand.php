@@ -21,8 +21,8 @@ class RefreshMarketplaceTrendingCommand extends Command
         $summary = (new RefreshMarketplaceTrendingJob)->refresh($search, $scoring, $store);
 
         $this->table(
-            ['Keyword', 'Offers found'],
-            collect($summary['keywords'])->map(fn (int $count, string $keyword): array => [$keyword, $count])->values()->all(),
+            ['Marketplace', 'Offers listed'],
+            collect($summary['marketplaces'])->map(fn (int $count, string $marketplace): array => [$marketplace, $count])->values()->all(),
         );
 
         foreach ($summary['errors'] as $error) {
@@ -35,7 +35,7 @@ class RefreshMarketplaceTrendingCommand extends Command
             return self::FAILURE;
         }
 
-        $this->info("Saved {$summary['count']} trending offers (sources: ".implode(', ', $summary['sources']).').');
+        $this->info("Saved {$summary['count']} marketplace offers — the top 20 show on Opportunities, all are searchable (sources: ".implode(', ', $summary['sources']).').');
 
         return self::SUCCESS;
     }

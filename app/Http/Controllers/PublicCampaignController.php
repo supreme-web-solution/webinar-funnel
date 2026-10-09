@@ -228,6 +228,14 @@ class PublicCampaignController extends Controller
             }
         }
 
+        if ($page === 'quiz') {
+            $leadMagnet = CampaignPage::query()
+                ->where('campaign_id', $campaign->id)
+                ->where('page_type', 'lead_magnet')
+                ->first();
+            $content['lead_magnet_title'] = is_array($leadMagnet?->content) ? ($leadMagnet->content['title'] ?? null) : null;
+        }
+
         if ($page === 'bonus') {
             $content['bonuses'] = $this->bonusPresenter->featuredForPage($campaign, $content, $username);
             $content['total_value_label'] = $this->totalValueLabel($content['bonuses']);
@@ -254,20 +262,29 @@ class PublicCampaignController extends Controller
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:255'],
+            'quiz_answers' => ['nullable', 'array', 'max:20'],
+            'quiz_answers.*.question' => ['required', 'string', 'max:300'],
+            'quiz_answers.*.answer' => ['required', 'string', 'max:300'],
         ]);
 
         $hash = hash('sha256', strtolower($validated['email']));
         $token = Str::random(48);
 
+        $leadAttributes = [
+            'name' => $validated['name'] ?? '',
+            'email' => $validated['email'],
+            'download_token' => $token,
+            'ip_address' => $request->ip(),
+            'user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
+        ];
+
+        if (! empty($validated['quiz_answers'])) {
+            $leadAttributes['metadata'] = ['source' => 'quiz', 'quiz_answers' => $validated['quiz_answers']];
+        }
+
         CampaignLead::query()->updateOrCreate(
             ['campaign_id' => $campaign->id, 'email_hash' => $hash],
-            [
-                'name' => $validated['name'] ?? '',
-                'email' => $validated['email'],
-                'download_token' => $token,
-                'ip_address' => $request->ip(),
-                'user_agent' => Str::limit((string) $request->userAgent(), 500, ''),
-            ]
+            $leadAttributes,
         );
 
         $campaignLead = CampaignLead::query()

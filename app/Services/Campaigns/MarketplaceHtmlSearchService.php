@@ -7,36 +7,37 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * Fetches live marketplace search results via rendered page content.
+ * Fetches the public JVZoo / WarriorPlus marketplace listings via rendered page content.
  *
  * JVZoo and WarriorPlus are Vue/JS apps — plain HTTP returns empty shells.
  * We use Jina Reader (free, renders JS) with ScrapingBee JS as optional fallback.
+ * Their search runs client-side, so a server-side fetch always gets the default
+ * front-page listing whatever the search term — keyword filtering happens in
+ * MarketplaceOfferSearchService.
  */
 class MarketplaceHtmlSearchService
 {
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function searchJvzoo(string $keyword): array
+    public function jvzooListings(int $limit): array
     {
         if (! config('services.marketplace.jvzoo_html_enabled', true)) {
             return [];
         }
 
-        $url = 'https://jvzoomarket.com/?s='.urlencode($keyword);
-        $content = $this->fetchRenderedContent($url, 'jvzoo');
+        $content = $this->fetchRenderedContent('https://jvzoomarket.com/?s=', 'jvzoo');
 
         if ($content === null) {
-            Log::info('[MarketplaceHtmlSearch] jvzoo fetch failed', ['keyword' => $keyword]);
+            Log::info('[MarketplaceHtmlSearch] jvzoo fetch failed');
 
             return [];
         }
 
-        $results = $this->parseJvzooMarkdown($content);
+        $results = $this->parseJvzooMarkdown($content, $limit);
 
         Log::info('[MarketplaceHtmlSearch] parsed', [
             'marketplace' => 'jvzoo',
-            'keyword' => $keyword,
             'count' => count($results),
             'method' => 'jvzoomarket_jina',
         ]);
@@ -47,26 +48,24 @@ class MarketplaceHtmlSearchService
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function searchWarriorPlus(string $keyword): array
+    public function warriorPlusListings(int $limit): array
     {
         if (! config('services.marketplace.warriorplus_html_enabled', true)) {
             return [];
         }
 
-        $url = 'https://warriorplus.com/marketplace/search?q='.urlencode($keyword);
-        $content = $this->fetchRenderedContent($url, 'warriorplus');
+        $content = $this->fetchRenderedContent('https://warriorplus.com/marketplace/search?q=', 'warriorplus');
 
         if ($content === null) {
-            Log::info('[MarketplaceHtmlSearch] warriorplus fetch failed', ['keyword' => $keyword]);
+            Log::info('[MarketplaceHtmlSearch] warriorplus fetch failed');
 
             return [];
         }
 
-        $results = $this->parseWarriorPlusMarkdown($content);
+        $results = $this->parseWarriorPlusMarkdown($content, $limit);
 
         Log::info('[MarketplaceHtmlSearch] parsed', [
             'marketplace' => 'warriorplus',
-            'keyword' => $keyword,
             'count' => count($results),
             'method' => 'marketplace_search_jina',
         ]);
@@ -169,7 +168,7 @@ class MarketplaceHtmlSearchService
     /**
      * @return array<int, array<string, mixed>>
      */
-    protected function parseJvzooMarkdown(string $markdown): array
+    protected function parseJvzooMarkdown(string $markdown, int $max): array
     {
         preg_match_all(
             '#\((https://jvzoomarket\.com/productlibrary/review/\d+[^)]*)\)#i',
@@ -187,7 +186,6 @@ class MarketplaceHtmlSearchService
         $titles = $titleMatches[1] ?? [];
 
         $results = [];
-        $max = (int) config('services.marketplace.max_results', 12);
 
         foreach (array_slice($urls, 0, $max) as $i => $href) {
             $title = $titles[$i] ?? $this->titleFromJvzooUrl($href);
@@ -206,7 +204,7 @@ class MarketplaceHtmlSearchService
     /**
      * @return array<int, array<string, mixed>>
      */
-    protected function parseWarriorPlusMarkdown(string $markdown): array
+    protected function parseWarriorPlusMarkdown(string $markdown, int $max): array
     {
         preg_match_all(
             '#\[([^\]]+)\]\((https://warriorplus\.com/o/view/[^)]+)\)#i',
@@ -217,7 +215,6 @@ class MarketplaceHtmlSearchService
 
         $seen = [];
         $results = [];
-        $max = (int) config('services.marketplace.max_results', 12);
 
         foreach ($matches as $match) {
             $title = $this->cleanTitle($match[1]);
@@ -253,7 +250,7 @@ class MarketplaceHtmlSearchService
             'url' => $url,
             'gravity_hint' => '',
             'epc_hint' => '',
-            'why' => 'From live '.ucfirst($marketplace).' marketplace search',
+            'why' => 'Listed on the '.($marketplace === 'warriorplus' ? 'WarriorPlus' : 'JVZoo').' marketplace today',
             'source' => $marketplace.'_html',
         ];
     }

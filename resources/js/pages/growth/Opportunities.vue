@@ -40,9 +40,9 @@ const marketplaceOptions = [
 ];
 
 const statCards = computed(() => [
-    { label: 'Results', value: props.results.length, sub: props.keyword ? 'matches' : 'trending', icon: 'heroicons:light-bulb' },
+    { label: 'Results', value: props.results.length, sub: props.keyword ? 'matches' : 'top today', icon: 'heroicons:light-bulb' },
     { label: 'ClickBank', value: props.integrations.clickbank_live ? 'Live' : 'Cache', sub: props.integrations.clickbank_live ? 'via Apify' : 'fallback', icon: 'heroicons:globe-alt' },
-    { label: 'JVZoo & W+', value: 'Live', sub: 'via Jina', icon: 'heroicons:magnifying-glass' },
+    { label: 'JVZoo & W+', value: 'Daily', sub: 'listings', icon: 'heroicons:magnifying-glass' },
     { label: 'ScrapingBee', value: props.integrations.scrapingbee_configured ? 'On' : 'Off', sub: 'optional', icon: 'heroicons:bolt' },
 ]);
 
@@ -98,7 +98,7 @@ function buildCampaignNow(offer: MarketplaceOffer, type: 'sales' | 'webinar' = '
             <div class="min-w-0">
                 <h1 class="text-xl font-bold tracking-tight text-foreground md:text-2xl">AI opportunity finder</h1>
                 <p class="mt-0.5 text-sm text-muted-foreground">
-                    JVZoo & WarriorPlus via Jina. ClickBank via Apify with cached fallback — search, score, and launch in one click.
+                    JVZoo & WarriorPlus: today's marketplace listings, filtered by your keyword. ClickBank: live keyword search via Apify — score and launch in one click.
                 </p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
@@ -188,7 +188,8 @@ function buildCampaignNow(offer: MarketplaceOffer, type: 'sales' | 'webinar' = '
         </div>
 
         <div v-if="!keyword && results.length && !searching" class="space-y-0.5">
-            <p class="text-xs text-muted-foreground">Ranked by composite score — gravity, EPC, refunds, and marketplace signals.</p>
+            <p class="text-sm font-medium text-foreground">Today's top marketplace offers</p>
+            <p class="text-xs text-muted-foreground">Ranked by composite score — gravity, EPC, refunds, and marketplace signals. Search a keyword to filter all of today's listings.</p>
         </div>
 
         <!-- Top pick -->

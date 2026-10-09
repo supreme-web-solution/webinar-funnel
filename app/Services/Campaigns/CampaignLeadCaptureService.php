@@ -25,10 +25,12 @@ class CampaignLeadCaptureService
     /**
      * Mirror campaign squeeze opt-ins into the main leads table + ESP integrations.
      *
-     * @param  array{name?: string|null, email: string}  $validated
+     * @param  array{name?: string|null, email: string, quiz_answers?: list<array{question: string, answer: string}>|null}  $validated
      */
     public function capture(Campaign $campaign, array $validated, Request $request): ?Lead
     {
+        $quizAnswers = ! empty($validated['quiz_answers']) ? $validated['quiz_answers'] : null;
+
         $funnel = $this->resolveLeadFunnel($campaign);
         if (! $funnel) {
             Log::warning('[CampaignLeadCapture] No funnel available for ESP routing', [
@@ -52,11 +54,12 @@ class CampaignLeadCaptureService
                 'source' => 'campaign_optin',
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
-                'metadata' => [
+                'metadata' => array_filter([
                     'campaign_id' => $campaign->id,
                     'campaign_slug' => $campaign->slug,
                     'campaign_name' => $campaign->name,
-                ],
+                    'quiz_answers' => $quizAnswers,
+                ], fn ($value) => $value !== null),
             ]
         );
 
@@ -64,12 +67,13 @@ class CampaignLeadCaptureService
             'lead_id' => $lead->id,
             'event_type' => 'captured',
             'status' => 'success',
-            'payload' => [
+            'payload' => array_filter([
                 'funnel_id' => $funnel->id,
                 'campaign_id' => $campaign->id,
                 'campaign_slug' => $campaign->slug,
-                'source' => 'campaign_squeeze',
-            ],
+                'source' => $quizAnswers ? 'campaign_quiz' : 'campaign_squeeze',
+                'quiz_answers' => $quizAnswers,
+            ], fn ($value) => $value !== null),
         ]);
 
         $enabledIntegrations = $funnel->integrations()

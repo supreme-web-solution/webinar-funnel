@@ -91,8 +91,8 @@ export function useMarketplaceSearch() {
 export function sourceLabel(source: string): string {
     if (source.includes('clickbank_apify')) return 'Live ClickBank';
     if (source.includes('clickbank_cache')) return 'Cached ClickBank';
-    if (source.includes('jvzoo_html')) return 'JVZoo search';
-    if (source.includes('warriorplus_html')) return 'WarriorPlus search';
+    if (source.includes('jvzoo_html')) return 'JVZoo marketplace';
+    if (source.includes('warriorplus_html')) return 'WarriorPlus marketplace';
     if (source.includes('daily_cache')) return 'Daily scan';
 
     return source;

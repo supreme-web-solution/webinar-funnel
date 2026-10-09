@@ -312,9 +312,29 @@ class CampaignController extends Controller
 
         if (array_key_exists('affiliate_link', $validated) && ($validated['affiliate_link'] ?? null) !== $oldAffiliate) {
             $this->linkResolver->syncAffiliateDestination($campaign->fresh());
+            $this->resumeFailedQuickStart($campaign->fresh());
         }
 
         return back();
+    }
+
+    protected function resumeFailedQuickStart(Campaign $campaign): void
+    {
+        if (! ($campaign->meta['quick_start'] ?? false) || blank($campaign->affiliate_link)) {
+            return;
+        }
+
+        if (($this->generationProgress->get($campaign)['status'] ?? null) !== 'failed') {
+            return;
+        }
+
+        $this->generationProgress->start($campaign, 'quick_start', 'Resuming campaign build…');
+        RunCampaignQuickStartJob::dispatch($campaign->id);
+
+        Inertia::flash('toast', [
+            'type' => 'info',
+            'message' => 'Hop link saved — resuming the campaign build where it stopped.',
+        ]);
     }
 
     public function updatePage(Request $request, Campaign $campaign, string $pageType): RedirectResponse

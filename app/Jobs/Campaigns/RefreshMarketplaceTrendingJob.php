@@ -24,52 +24,48 @@ class RefreshMarketplaceTrendingJob implements ShouldQueue
     }
 
     /**
-     * @return array{saved: bool, count: int, keywords: array<string, int>, sources: array<int, string>, errors: array<int, string>}
+     * JVZoo / WarriorPlus are fetched once (their listing ignores search terms);
+     * ClickBank is searched per trending keyword because its Apify actor supports real search.
+     *
+     * @return array{saved: bool, count: int, marketplaces: array<string, int>, sources: array<int, string>, errors: array<int, string>}
      */
     public function refresh(MarketplaceOfferSearchService $search, OfferScoringService $scoring, MarketplaceTrendingStore $store): array
     {
-        $keywords = config('services.marketplace.trending_keywords', [
-            'ai software',
-            'weight loss',
-            'email marketing',
-        ]);
-
-        $merged = [];
-        $sources = [];
+        $listings = $search->fetchMarketplaceListings();
+        $merged = $listings['results'];
+        $sources = $listings['sources'];
         $errors = [];
-        $perKeyword = [];
+
+        $keywords = config('services.marketplace.trending_keywords', ['ai software', 'weight loss', 'email marketing']);
 
         foreach ($keywords as $keyword) {
             if (! is_string($keyword) || trim($keyword) === '') {
                 continue;
             }
 
-            $keyword = trim($keyword);
-            $payload = $search->search($keyword);
-            $perKeyword[$keyword] = count($payload['results'] ?? []);
+            $clickbank = $search->searchClickBank(trim($keyword));
+            if (! $clickbank['enabled']) {
+                break;
+            }
 
-            foreach ($payload['results'] ?? [] as $row) {
-                $row['search_keyword'] = $keyword;
-                if (! isset($row['trend'])) {
-                    $row['trend'] = 'rising';
-                }
+            foreach ($clickbank['results'] as $row) {
+                $row['search_keyword'] = trim($keyword);
                 $merged[] = $row;
+                $sources[] = 'clickbank_apify';
             }
 
-            foreach ($payload['sources'] ?? [] as $source) {
-                $sources[] = $source;
-            }
+            if (is_string($clickbank['error']) && $clickbank['error'] !== '') {
+                $errors[] = $clickbank['error'];
 
-            if (is_string($payload['error'] ?? null) && $payload['error'] !== '') {
-                $errors[] = $payload['error'];
+                break;
             }
         }
 
-        $merged = $this->dedupe($merged);
+        $merged = array_map(fn (array $row): array => $row + ['trend' => 'rising'], $this->dedupe($merged));
         $summary = [
             'saved' => false,
             'count' => count($merged),
-            'keywords' => $perKeyword,
+            'marketplaces' => array_count_values(array_map(fn (array $row): string => (string) ($row['marketplace'] ?? 'other'), $merged)),
             'sources' => array_values(array_unique($sources)),
             'errors' => array_values(array_unique($errors)),
         ];
@@ -84,6 +80,7 @@ class RefreshMarketplaceTrendingJob implements ShouldQueue
 
         $store->put([
             'results' => array_slice($scored['results'], 0, 20),
+            'listings' => $scored['results'],
             'top_pick' => $scored['top_pick'],
             'sources' => $summary['sources'],
             'refreshed_at' => now()->toIso8601String(),

@@ -255,8 +255,13 @@ function stepIsGenerated(step: string): boolean {
 
 const isGenerationRunning = computed(() => liveGeneration.value?.status === 'running');
 
+const quickStartFailedWithoutLink = computed(() =>
+    Boolean(props.campaign?.quick_start && !props.campaign.affiliate_link && liveGeneration.value?.status === 'failed'),
+);
+
 const generationModalOpen = computed({
-    get: () => isGenerationRunning.value || liveGeneration.value?.status === 'failed',
+    get: () => isGenerationRunning.value
+        || (liveGeneration.value?.status === 'failed' && !quickStartFailedWithoutLink.value),
     set: (v: boolean) => {
         if (!v && liveGeneration.value?.status === 'failed') {
             liveGeneration.value = null;
@@ -276,6 +281,7 @@ const needsAffiliateLinkPrompt = computed(() => {
 
     return flow.emailsReady.value
         || liveGeneration.value?.status === 'completed'
+        || quickStartFailedWithoutLink.value
         || c.generation_state?.emails?.generated === true;
 });
 

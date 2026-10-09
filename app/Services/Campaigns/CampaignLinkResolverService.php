@@ -61,6 +61,11 @@ class CampaignLinkResolverService
             ->where('label', self::AFFILIATE_LABEL)
             ->update(['destination_url' => $destination, 'is_active' => true]);
 
+        TrackedLink::query()
+            ->where('campaign_id', $campaign->id)
+            ->where(fn ($q) => $q->whereIn('destination_url', ['', '#'])->orWhereNull('destination_url'))
+            ->update(['destination_url' => $destination]);
+
         $publicUrl = $this->affiliatePublicUrl($campaign->fresh());
 
         if ($publicUrl === null) {

@@ -33,6 +33,27 @@ class TrackedLinkService
         ]);
     }
 
+    /**
+     * Campaign CTA link that may be created before the affiliate hop link is known.
+     * Until then it stores a "#" placeholder; redirects fall back to campaign.affiliate_link
+     * and CampaignLinkResolverService::syncAffiliateDestination repoints it once saved.
+     */
+    public function createForCampaignAffiliate(Campaign $campaign, string $label, ?int $funnelId = null): TrackedLink
+    {
+        $seen = [];
+        $destination = $this->unwrapInternalTrackedUrl((string) ($campaign->affiliate_link ?? ''), $seen);
+
+        return TrackedLink::query()->create([
+            'user_id' => $campaign->user_id,
+            'campaign_id' => $campaign->id,
+            'funnel_id' => $funnelId,
+            'code' => $this->uniqueCode(),
+            'label' => $label,
+            'destination_url' => $this->isUsableDestination($destination) ? $destination : '#',
+            'is_active' => true,
+        ]);
+    }
+
     public function createForUser(
         int $userId,
         string $destinationUrl,

@@ -298,21 +298,9 @@ class LeadMagnetGeneratorService
         $ctx = $this->knowledge->contextForGeneration($campaign);
         $timeout = $this->openRouter->leadMagnetTimeout();
 
-        $affiliate = trim((string) ($campaign->affiliate_link ?? ''));
-        if ($affiliate === '' || $affiliate === '#') {
-            return [
-                'ok' => false,
-                'content' => null,
-                'error' => 'Add a full affiliate hop link on Import Offer before generating the lead magnet.',
-            ];
-        }
-
-        try {
-            $cloaked = $this->trackedLinks->createForCampaign($campaign, $affiliate, 'Lead magnet footer CTA');
-        } catch (\InvalidArgumentException $e) {
-            return ['ok' => false, 'content' => null, 'error' => $e->getMessage()];
-        }
-        $affiliateUrl = $cloaked->publicUrl();
+        $affiliateUrl = $this->trackedLinks
+            ->createForCampaignAffiliate($campaign, 'Lead magnet footer CTA')
+            ->publicUrl();
 
         $state = [
             'status' => $existing['status'] ?? 'generating',
