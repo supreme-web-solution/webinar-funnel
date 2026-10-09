@@ -12,10 +12,7 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
-            RolesAndPermissionsSeeder::class,
-            ProductTableSeeder::class,
-        ]);
+        $this->call(JvzooAccessSeeder::class);
 
         User::factory()->create([
             'name' => 'Test User',

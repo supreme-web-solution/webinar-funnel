@@ -31,6 +31,7 @@ class CreateNewUser implements CreatesNewUsers
         'storage',
         'up',
         'leads',
+        'reseller',
     ];
 
     /**

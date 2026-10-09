@@ -44,7 +44,7 @@ class JVZooWebhookController extends Controller
 
         return match ($type) {
             'SALE' => $this->handleSale($email, $product->funnel),
-            'RFND' => $this->handleRefund($email),
+            'RFND' => $this->handleRefund($email, $product->funnel),
             default => response()->json(['message' => 'Invalid transaction type!'], 422),
         };
     }
@@ -92,7 +92,7 @@ class JVZooWebhookController extends Controller
         }
     }
 
-    private function handleRefund(string $email): JsonResponse
+    private function handleRefund(string $email, string $roleName): JsonResponse
     {
         $user = User::query()->where('email', $email)->first();
 
@@ -100,7 +100,7 @@ class JVZooWebhookController extends Controller
             return response()->json(['message' => 'User not found!'], 404);
         }
 
-        $this->provisioner->revokeAccess($user);
+        $this->provisioner->revokeRole($user, $roleName);
 
         return response()->json(['message' => 'User access revoked successfully!']);
     }

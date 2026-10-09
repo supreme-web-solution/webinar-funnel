@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureCustomDomainRequest;
 use App\Http\Middleware\EnsurePaidAdsEnabled;
+use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ResolveCustomDomain;
@@ -34,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'paid-ads' => EnsurePaidAdsEnabled::class,
             'custom-domain' => EnsureCustomDomainRequest::class,
+            'access' => EnsureUserHasPermission::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

@@ -9,26 +9,51 @@ use Spatie\Permission\PermissionRegistrar;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
+    /**
+     * Role name => permissions. Role names must match the `funnel` column in ProductTableSeeder.
+     *
+     * @var array<string, list<string>>
+     */
+    public const ROLE_PERMISSIONS = [
+        'FE' => [
+            'view_app_features',
+        ],
+        'Bundle' => [
+            'view_app_features',
+            'access_reseller',
+            'access_affiliate_campaign_vault',
+            'access_profit_multiplier',
+        ],
+        'Reseller' => [
+            'access_reseller',
+        ],
+        'Affiliate Campaign Vault' => [
+            'access_affiliate_campaign_vault',
+        ],
+        'Profit Multiplier' => [
+            'access_profit_multiplier',
+        ],
+    ];
+
     public function run(): void
     {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
-        foreach (['FE', 'Bundle'] as $roleName) {
-            Role::query()->firstOrCreate(['name' => $roleName]);
-        }
+        $permissionNames = collect(self::ROLE_PERMISSIONS)->flatten()->unique()->values();
 
-        foreach (['view_app_features', 'view_extra_features'] as $permissionName) {
+        Permission::query()
+            ->whereNotIn('name', $permissionNames)
+            ->get()
+            ->each(fn (Permission $permission) => $permission->delete());
+
+        foreach ($permissionNames as $permissionName) {
             Permission::query()->firstOrCreate(['name' => $permissionName]);
         }
 
-        Role::query()->where('name', 'FE')->first()?->syncPermissions([
-            'view_app_features',
-        ]);
+        foreach (self::ROLE_PERMISSIONS as $roleName => $permissions) {
+            Role::query()->firstOrCreate(['name' => $roleName])->syncPermissions($permissions);
+        }
 
-        // Bundle includes everything in FE today, plus future bundle-only menus via view_extra_features.
-        Role::query()->where('name', 'Bundle')->first()?->syncPermissions([
-            'view_app_features',
-            'view_extra_features',
-        ]);
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
     }
 }

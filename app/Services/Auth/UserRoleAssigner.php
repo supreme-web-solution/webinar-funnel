@@ -11,7 +11,7 @@ final class UserRoleAssigner
     public const DEFAULT_ROLE = 'FE';
 
     /** @var list<string> */
-    public const ASSIGNABLE_ROLES = ['FE', 'Bundle'];
+    public const ASSIGNABLE_ROLES = ['FE', 'Bundle', 'Reseller', 'Affiliate Campaign Vault', 'Profit Multiplier'];
 
     public function rolesEnabled(): bool
     {
@@ -51,19 +51,16 @@ final class UserRoleAssigner
         $user->assignRole(self::DEFAULT_ROLE);
     }
 
-    public function syncRole(User $user, ?string $role): void
+    /**
+     * @param  list<string>  $roles
+     */
+    public function syncRoles(User $user, array $roles): void
     {
         if (! $this->rolesEnabled()) {
             return;
         }
 
-        if ($role === null || $role === '') {
-            $user->syncRoles([]);
-
-            return;
-        }
-
-        $user->syncRoles([$role]);
+        $user->syncRoles(array_values(array_unique(array_filter($roles, fn ($role): bool => is_string($role) && $role !== ''))));
     }
 
     /**

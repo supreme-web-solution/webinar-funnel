@@ -26,9 +26,12 @@ class JvzooUserProvisioner
         'up',
         'leads',
         'ipn',
+        'reseller',
     ];
 
     /**
+     * Grants the role on top of any roles the buyer already has, so add-on purchases keep earlier access.
+     *
      * @return array{user: User, password: string|null, created: bool}
      */
     public function provision(string $email, string $roleName): array
@@ -36,7 +39,9 @@ class JvzooUserProvisioner
         $user = User::query()->where('email', $email)->first();
 
         if ($user) {
-            $user->syncRoles([$roleName]);
+            if (! $user->hasRole($roleName)) {
+                $user->assignRole($roleName);
+            }
 
             return [
                 'user' => $user,
@@ -45,28 +50,40 @@ class JvzooUserProvisioner
             ];
         }
 
-        $password = Str::random(12);
-        $name = Str::before($email, '@');
+        return [
+            ...$this->createUser($email, $roleName),
+            'created' => true,
+        ];
+    }
 
-        $user = User::create([
+    /**
+     * @return array{user: User, password: string}
+     */
+    public function createUser(string $email, string $roleName, ?string $name = null, ?User $reseller = null): array
+    {
+        $password = Str::random(12);
+        $name = $name !== null && trim($name) !== '' ? trim($name) : Str::before($email, '@');
+
+        $user = new User([
             'name' => $name !== '' ? $name : 'User',
             'username' => $this->uniqueUsername($name !== '' ? $name : 'user'),
             'email' => $email,
             'password' => Hash::make($password),
         ]);
+        $user->reseller_id = $reseller?->id;
+        $user->save();
 
         $user->assignRole($roleName);
 
         return [
             'user' => $user,
             'password' => $password,
-            'created' => true,
         ];
     }
 
-    public function revokeAccess(User $user): void
+    public function revokeRole(User $user, string $roleName): void
     {
-        $user->syncRoles([]);
+        $user->removeRole($roleName);
     }
 
     private function uniqueUsername(string $name): string

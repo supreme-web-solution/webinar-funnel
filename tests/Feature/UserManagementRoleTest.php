@@ -31,14 +31,36 @@ class UserManagementRoleTest extends TestCase
                 'name' => $user->name,
                 'username' => $user->username,
                 'email' => $user->email,
-                'role' => 'Bundle',
+                'roles' => ['Bundle'],
             ])
             ->assertRedirect();
 
         $user->refresh();
 
         $this->assertTrue($user->hasRole('Bundle'));
-        $this->assertTrue($user->can('view_extra_features'));
+        $this->assertTrue($user->can('access_reseller'));
+    }
+
+    public function test_admin_can_assign_multiple_roles(): void
+    {
+        $admin = User::factory()->create(['email' => 'admin@example.com', 'username' => 'admin_user4']);
+        $user = User::factory()->create(['email' => 'multi@example.com', 'username' => 'multi_user']);
+        $user->assignRole('FE');
+
+        $this->actingAs($admin)
+            ->patch(route('users.update', $user), [
+                'name' => $user->name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'roles' => ['FE', 'Profit Multiplier'],
+            ])
+            ->assertRedirect();
+
+        $user->refresh();
+
+        $this->assertTrue($user->hasRole('FE'));
+        $this->assertTrue($user->hasRole('Profit Multiplier'));
+        $this->assertFalse($user->can('access_reseller'));
     }
 
     public function test_admin_can_change_user_password_when_updating(): void
@@ -58,7 +80,7 @@ class UserManagementRoleTest extends TestCase
                 'email' => $user->email,
                 'password' => 'new-password-99',
                 'password_confirmation' => 'new-password-99',
-                'role' => 'FE',
+                'roles' => ['FE'],
             ])
             ->assertRedirect();
 
@@ -78,7 +100,6 @@ class UserManagementRoleTest extends TestCase
                 'email' => 'managed@example.com',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
-                'role' => 'FE',
             ])
             ->assertRedirect();
 

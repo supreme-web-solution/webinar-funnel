@@ -23,7 +23,8 @@ interface UserRow {
     email: string;
     email_verified_at: string | null;
     created_at: string;
-    role?: string | null;
+    roles?: string[];
+    reseller_email?: string | null;
 }
 
 interface PaginationLink {
@@ -84,7 +85,7 @@ const createForm = useForm({
     email: '',
     password: '',
     password_confirmation: '',
-    role: props.defaultRole ?? 'FE',
+    roles: [props.defaultRole ?? 'FE'] as string[],
 });
 
 const editForm = useForm({
@@ -93,7 +94,7 @@ const editForm = useForm({
     email: '',
     password: '',
     password_confirmation: '',
-    role: props.defaultRole ?? 'FE',
+    roles: [] as string[],
 });
 
 function fmtDate(dt: string): string {
@@ -104,9 +105,8 @@ function isProtectedAdmin(user: UserRow): boolean {
     return props.adminEmails.includes((user.email ?? '').toLowerCase());
 }
 
-function roleLabel(role: string | null | undefined): string {
-    if (!role) return 'FE (default)';
-    return role;
+function roleLabels(roles: string[] | undefined): string[] {
+    return roles && roles.length > 0 ? roles : ['FE (default)'];
 }
 
 function avatarInitials(name: string): string {
@@ -116,7 +116,7 @@ function avatarInitials(name: string): string {
 function openCreate(): void {
     showCreate.value = true;
     createForm.reset();
-    createForm.role = props.defaultRole ?? 'FE';
+    createForm.roles = [props.defaultRole ?? 'FE'];
     createForm.clearErrors();
 }
 
@@ -140,7 +140,7 @@ function openEdit(user: UserRow): void {
     editForm.email = user.email;
     editForm.password = '';
     editForm.password_confirmation = '';
-    editForm.role = user.role ?? props.defaultRole ?? 'FE';
+    editForm.roles = [...(user.roles ?? [])];
     editForm.clearErrors();
 }
 
@@ -250,7 +250,7 @@ function deleteUser(user: UserRow): void {
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">User</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Username</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Email</th>
-                            <th v-if="rolesEnabled" class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Role</th>
+                            <th v-if="rolesEnabled" class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Access</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Status</th>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Joined</th>
                             <th class="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Actions</th>
@@ -269,9 +269,19 @@ function deleteUser(user: UserRow): void {
                             <td class="px-4 py-3 text-muted-foreground">@{{ user.username }}</td>
                             <td class="px-4 py-3 text-foreground">{{ user.email }}</td>
                             <td v-if="rolesEnabled" class="px-4 py-3">
-                                <Badge variant="outline" class="border-blue-200 bg-blue-50 text-[0.65rem] text-blue-700">
-                                    {{ roleLabel(user.role) }}
-                                </Badge>
+                                <div class="flex flex-wrap gap-1">
+                                    <Badge
+                                        v-for="role in roleLabels(user.roles)"
+                                        :key="role"
+                                        variant="outline"
+                                        class="border-blue-200 bg-blue-50 text-[0.65rem] text-blue-700"
+                                    >
+                                        {{ role }}
+                                    </Badge>
+                                </div>
+                                <p v-if="user.reseller_email" class="mt-1 text-[0.65rem] text-muted-foreground">
+                                    via reseller {{ user.reseller_email }}
+                                </p>
                             </td>
                             <td class="px-4 py-3">
                                 <Badge
@@ -367,14 +377,14 @@ function deleteUser(user: UserRow): void {
                         <PasswordInput v-model="createForm.password_confirmation" required />
                     </div>
                     <div v-if="rolesEnabled && (assignableRoles?.length ?? 0) > 0" class="space-y-1">
-                        <label class="text-xs font-medium text-muted-foreground">Role</label>
-                        <select
-                            v-model="createForm.role"
-                            class="h-9 w-full rounded-xl border border-border/60 bg-white px-3 text-sm shadow-sm"
-                        >
-                            <option v-for="role in assignableRoles" :key="role" :value="role">{{ role }}</option>
-                        </select>
-                        <p v-if="createForm.errors.role" class="text-xs text-destructive">{{ createForm.errors.role }}</p>
+                        <label class="text-xs font-medium text-muted-foreground">Access</label>
+                        <div class="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-white p-3">
+                            <label v-for="role in assignableRoles" :key="role" class="flex items-center gap-2 text-sm text-foreground">
+                                <input v-model="createForm.roles" type="checkbox" :value="role" class="size-4 rounded border-border accent-blue-600" />
+                                {{ role }}
+                            </label>
+                        </div>
+                        <p v-if="createForm.errors.roles" class="text-xs text-destructive">{{ createForm.errors.roles }}</p>
                     </div>
                     <DialogFooter class="border-t border-border/60 bg-muted/10 px-0 pt-4 sm:justify-end">
                         <Button type="button" variant="outline" size="sm" @click="closeCreate">Cancel</Button>
@@ -426,14 +436,14 @@ function deleteUser(user: UserRow): void {
                         </div>
                     </div>
                     <div v-if="rolesEnabled && (assignableRoles?.length ?? 0) > 0" class="space-y-1">
-                        <label class="text-xs font-medium text-muted-foreground">Role</label>
-                        <select
-                            v-model="editForm.role"
-                            class="h-9 w-full rounded-xl border border-border/60 bg-white px-3 text-sm shadow-sm"
-                        >
-                            <option v-for="role in assignableRoles" :key="role" :value="role">{{ role }}</option>
-                        </select>
-                        <p v-if="editForm.errors.role" class="text-xs text-destructive">{{ editForm.errors.role }}</p>
+                        <label class="text-xs font-medium text-muted-foreground">Access</label>
+                        <div class="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-white p-3">
+                            <label v-for="role in assignableRoles" :key="role" class="flex items-center gap-2 text-sm text-foreground">
+                                <input v-model="editForm.roles" type="checkbox" :value="role" class="size-4 rounded border-border accent-blue-600" />
+                                {{ role }}
+                            </label>
+                        </div>
+                        <p v-if="editForm.errors.roles" class="text-xs text-destructive">{{ editForm.errors.roles }}</p>
                     </div>
                     <DialogFooter class="border-t border-border/60 bg-muted/10 px-0 pt-4 sm:justify-end">
                         <Button type="button" variant="outline" size="sm" @click="closeEdit">Cancel</Button>

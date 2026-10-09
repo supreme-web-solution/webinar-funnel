@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AffiliateCampaignVaultController;
 use App\Http\Controllers\BonusLibraryController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CampaignTrafficController;
@@ -20,9 +21,11 @@ use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\JVZooWebhookController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\MentionController;
+use App\Http\Controllers\ProfitMultiplierController;
 use App\Http\Controllers\PromotionCalendarController;
 use App\Http\Controllers\PublicCampaignController;
 use App\Http\Controllers\PublicFunnelController;
+use App\Http\Controllers\ResellerController;
 use App\Http\Controllers\StandaloneTrafficController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TrackedLinkController;
@@ -55,7 +58,7 @@ Route::middleware('custom-domain')->group(function () {
         ->name('public.domain.bonus.download');
 });
 
-$reservedPublicPrefix = '^(?!(tutorial|dashboard|templates|funnels|campaigns|bonuses|tracked-links|growth|r|integrations|settings|users|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads|command-center|webhooks)$)[A-Za-z0-9_-]+';
+$reservedPublicPrefix = '^(?!(tutorial|dashboard|templates|funnels|campaigns|bonuses|tracked-links|growth|r|integrations|settings|users|reseller|affiliate-campaign-vault|profit-multiplier|mentions|login|register|password|verification|confirm-password|logout|sanctum|api|storage|up|leads|command-center|webhooks)$)[A-Za-z0-9_-]+';
 
 // Route::inertia('/', 'Welcome', [
 //     'canRegister' => Features::enabled(Features::registration()),
@@ -303,6 +306,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('integrations/{integration}', [IntegrationController::class, 'destroy'])->name('integrations.destroy');
     Route::post('integrations/{integration}/test', [IntegrationController::class, 'test'])->name('integrations.test');
     Route::get('leads', [LeadController::class, 'index'])->name('leads.index');
+
+    Route::middleware('access:access_reseller')->prefix('reseller')->name('reseller.')->group(function () {
+        Route::get('/', [ResellerController::class, 'index'])->name('index');
+        Route::post('accounts', [ResellerController::class, 'store'])->name('accounts.store');
+        Route::delete('accounts/{account}', [ResellerController::class, 'destroy'])->name('accounts.destroy');
+    });
+    Route::get('affiliate-campaign-vault', AffiliateCampaignVaultController::class)
+        ->middleware('access:access_affiliate_campaign_vault')
+        ->name('affiliate-campaign-vault');
+    Route::get('profit-multiplier', ProfitMultiplierController::class)
+        ->middleware('access:access_profit_multiplier')
+        ->name('profit-multiplier');
 
     Route::get('users', [UserManagementController::class, 'index'])->name('users.index');
     Route::post('users', [UserManagementController::class, 'store'])->name('users.store');

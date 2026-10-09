@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\Auth\UserRoleAssigner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -24,8 +25,8 @@ class UserManagementController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         $query = User::query()
-            ->with('roles:id,name')
-            ->select(['id', 'uuid', 'name', 'username', 'email', 'email_verified_at', 'created_at'])
+            ->with(['roles:id,name', 'reseller:id,email'])
+            ->select(['id', 'uuid', 'reseller_id', 'name', 'username', 'email', 'email_verified_at', 'created_at'])
             ->latest();
 
         if ($search !== '') {
@@ -64,7 +65,7 @@ class UserManagementController extends Controller
             'username' => ['required', 'string', 'max:80', 'alpha_dash', 'unique:users,username'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => $this->roleRules(),
+            ...$this->roleRules(),
         ]);
 
         $user = User::query()->create([
@@ -74,9 +75,7 @@ class UserManagementController extends Controller
             'password' => Hash::make($validated['password']),
         ]);
 
-        if ($this->roles->rolesEnabled()) {
-            $this->roles->syncRole($user, $validated['role'] ?? UserRoleAssigner::DEFAULT_ROLE);
-        }
+        $this->roles->syncRoles($user, $validated['roles'] ?? [UserRoleAssigner::DEFAULT_ROLE]);
 
         return back()->with('success', 'User created successfully.');
     }
@@ -90,7 +89,7 @@ class UserManagementController extends Controller
             'username' => ['required', 'string', 'max:80', 'alpha_dash', 'unique:users,username,'.$user->id],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,'.$user->id],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
-            'role' => $this->roleRules(),
+            ...$this->roleRules(),
         ]);
 
         $updates = [
@@ -105,8 +104,8 @@ class UserManagementController extends Controller
 
         $user->update($updates);
 
-        if ($this->roles->rolesEnabled() && array_key_exists('role', $validated)) {
-            $this->roles->syncRole($user, $validated['role'] ?? UserRoleAssigner::DEFAULT_ROLE);
+        if (array_key_exists('roles', $validated)) {
+            $this->roles->syncRoles($user, $validated['roles'] ?? []);
         }
 
         return back()->with('success', ! empty($validated['password'])
@@ -148,20 +147,27 @@ class UserManagementController extends Controller
             'email' => $user->email,
             'email_verified_at' => $user->email_verified_at,
             'created_at' => $user->created_at,
-            'role' => $user->roles->first()?->name,
+            'roles' => $user->roles->pluck('name')->values()->all(),
+            'reseller_email' => $user->reseller?->email,
         ];
     }
 
     /**
-     * @return array<int, mixed>
+     * @return array<string, array<int, mixed>>
      */
     private function roleRules(): array
     {
         if (! $this->roles->rolesEnabled()) {
-            return ['nullable', 'string'];
+            return [
+                'roles' => ['nullable', 'array'],
+                'roles.*' => ['string'],
+            ];
         }
 
-        return ['nullable', 'string', Rule::in($this->roles->assignableRoles())];
+        return [
+            'roles' => ['nullable', 'array'],
+            'roles.*' => ['string', Rule::in($this->roles->assignableRoles())],
+        ];
     }
 
     private function authorizeAdmin(Request $request): void
@@ -173,7 +179,7 @@ class UserManagementController extends Controller
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, string>
+     * @return Collection<int, string>
      */
     private function adminEmails()
     {

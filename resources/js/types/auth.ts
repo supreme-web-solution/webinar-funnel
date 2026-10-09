@@ -15,7 +15,6 @@ export type Auth = {
     is_admin?: boolean;
     permissions?: string[];
     can_view_app_features?: boolean;
-    can_view_bundle_features?: boolean;
 };
 
 export type TwoFactorConfigContent = {

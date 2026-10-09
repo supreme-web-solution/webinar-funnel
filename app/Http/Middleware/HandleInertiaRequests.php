@@ -53,7 +53,6 @@ class HandleInertiaRequests extends Middleware
                 'is_admin' => $currentEmail !== '' && $adminEmails->contains($currentEmail),
                 'permissions' => $permissions,
                 'can_view_app_features' => in_array('view_app_features', $permissions, true),
-                'can_view_bundle_features' => in_array('view_extra_features', $permissions, true),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'commandCenter' => $user ? [

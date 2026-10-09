@@ -3,26 +3,29 @@
 namespace Tests\Feature;
 
 use App\Mail\WelcomeMail;
-use App\Models\Product;
 use App\Models\User;
-use Database\Seeders\ProductTableSeeder;
-use Database\Seeders\RolesAndPermissionsSeeder;
+use Database\Seeders\JvzooAccessSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class JvzooWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const ALL_PERMISSIONS = [
+        'view_app_features',
+        'access_reseller',
+        'access_affiliate_campaign_vault',
+        'access_profit_multiplier',
+    ];
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->seed([
-            RolesAndPermissionsSeeder::class,
-            ProductTableSeeder::class,
-        ]);
+        $this->seed(JvzooAccessSeeder::class);
 
         config(['jvzoo.secret_key' => 'test-secret-key']);
     }
@@ -31,14 +34,7 @@ class JvzooWebhookTest extends TestCase
     {
         Mail::fake();
 
-        $payload = $this->signedPayload([
-            'ctransaction' => 'SALE',
-            'ccustemail' => 'buyer@example.com',
-            'ctransreceipt' => 'TX-123',
-            'cproditem' => '444707',
-        ]);
-
-        $response = $this->post('/ipn/jvzoo', $payload);
+        $response = $this->post('/ipn/jvzoo', $this->sale('buyer@example.com', '455425'));
 
         $response->assertOk()
             ->assertJson([
@@ -51,7 +47,9 @@ class JvzooWebhookTest extends TestCase
         $this->assertNotNull($user);
         $this->assertTrue($user->hasRole('FE'));
         $this->assertTrue($user->can('view_app_features'));
-        $this->assertFalse($user->can('view_extra_features'));
+        $this->assertFalse($user->can('access_reseller'));
+        $this->assertFalse($user->can('access_affiliate_campaign_vault'));
+        $this->assertFalse($user->can('access_profit_multiplier'));
 
         Mail::assertSent(WelcomeMail::class, function (WelcomeMail $mail): bool {
             return $mail->hasTo('buyer@example.com')
@@ -60,50 +58,124 @@ class JvzooWebhookTest extends TestCase
         });
     }
 
-    public function test_bundle_product_assigns_bundle_role(): void
+    /**
+     * @return array<string, array{string, string, list<string>}>
+     */
+    public static function productAccessProvider(): array
     {
-        Mail::fake();
-
-        $payload = $this->signedPayload([
-            'ctransaction' => 'SALE',
-            'ccustemail' => 'bundle@example.com',
-            'ctransreceipt' => 'TX-456',
-            'cproditem' => (string) Product::query()->where('funnel', 'Bundle')->value('product_id'),
-        ]);
-
-        $this->post('/ipn/jvzoo', $payload)->assertOk();
-
-        $user = User::query()->where('email', 'bundle@example.com')->first();
-
-        $this->assertTrue($user->hasRole('Bundle'));
-        $this->assertTrue($user->can('view_extra_features'));
+        return [
+            'FE' => ['455425', 'FE', ['view_app_features']],
+            'Bundle' => ['455427', 'Bundle', self::ALL_PERMISSIONS],
+            'Fast-pass bundle 1' => ['456171', 'Bundle', self::ALL_PERMISSIONS],
+            'Fast-pass bundle 2' => ['456173', 'Bundle', self::ALL_PERMISSIONS],
+            'Reseller 1' => ['456225', 'Reseller', ['access_reseller']],
+            'Reseller 2' => ['456227', 'Reseller', ['access_reseller']],
+            'Affiliate Campaign Vault 1' => ['456183', 'Affiliate Campaign Vault', ['access_affiliate_campaign_vault']],
+            'Affiliate Campaign Vault 2' => ['456187', 'Affiliate Campaign Vault', ['access_affiliate_campaign_vault']],
+            'Profit Multiplier 1' => ['456221', 'Profit Multiplier', ['access_profit_multiplier']],
+            'Profit Multiplier 2' => ['456223', 'Profit Multiplier', ['access_profit_multiplier']],
+        ];
     }
 
-    public function test_refund_revokes_user_roles(): void
+    /**
+     * @param  list<string>  $expectedPermissions
+     */
+    #[DataProvider('productAccessProvider')]
+    public function test_each_product_grants_the_right_access(string $productId, string $role, array $expectedPermissions): void
     {
         Mail::fake();
 
-        $salePayload = $this->signedPayload([
-            'ctransaction' => 'SALE',
-            'ccustemail' => 'refund@example.com',
-            'ctransreceipt' => 'TX-789',
-            'cproditem' => '444707',
-        ]);
+        $this->post('/ipn/jvzoo', $this->sale('product@example.com', $productId))->assertOk();
 
-        $this->post('/ipn/jvzoo', $salePayload)->assertOk();
+        $user = User::query()->where('email', 'product@example.com')->firstOrFail();
 
-        $refundPayload = $this->signedPayload([
+        $this->assertTrue($user->hasRole($role));
+
+        foreach (self::ALL_PERMISSIONS as $permission) {
+            $this->assertSame(
+                in_array($permission, $expectedPermissions, true),
+                $user->can($permission),
+                "Product {$productId} has wrong value for {$permission}",
+            );
+        }
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function oldProductProvider(): array
+    {
+        return [
+            '444707' => ['444707'],
+            '444709' => ['444709'],
+            '445139' => ['445139'],
+            '445141' => ['445141'],
+        ];
+    }
+
+    #[DataProvider('oldProductProvider')]
+    public function test_old_product_ids_are_rejected(string $productId): void
+    {
+        $this->post('/ipn/jvzoo', $this->sale('old@example.com', $productId))->assertNotFound();
+
+        $this->assertNull(User::query()->where('email', 'old@example.com')->first());
+    }
+
+    public function test_add_on_purchase_keeps_existing_access(): void
+    {
+        Mail::fake();
+
+        $this->post('/ipn/jvzoo', $this->sale('stack@example.com', '455425'))->assertOk();
+        $this->post('/ipn/jvzoo', $this->sale('stack@example.com', '456225', 'TX-2'))
+            ->assertOk()
+            ->assertJson(['message' => 'User role updated successfully!']);
+
+        $user = User::query()->where('email', 'stack@example.com')->firstOrFail();
+
+        $this->assertTrue($user->hasRole('FE'));
+        $this->assertTrue($user->hasRole('Reseller'));
+        $this->assertTrue($user->can('view_app_features'));
+        $this->assertTrue($user->can('access_reseller'));
+        Mail::assertSentCount(1);
+    }
+
+    public function test_refund_only_revokes_the_refunded_product_role(): void
+    {
+        Mail::fake();
+
+        $this->post('/ipn/jvzoo', $this->sale('refund@example.com', '455425'))->assertOk();
+        $this->post('/ipn/jvzoo', $this->sale('refund@example.com', '456221', 'TX-PM'))->assertOk();
+
+        $this->post('/ipn/jvzoo', $this->signedPayload([
             'ctransaction' => 'RFND',
             'ccustemail' => 'refund@example.com',
-            'ctransreceipt' => 'TX-789-R',
-            'cproditem' => '444707',
-        ]);
-
-        $this->post('/ipn/jvzoo', $refundPayload)
+            'ctransreceipt' => 'TX-PM-R',
+            'cproditem' => '456221',
+        ]))
             ->assertOk()
             ->assertJson(['message' => 'User access revoked successfully!']);
 
-        $user = User::query()->where('email', 'refund@example.com')->first();
+        $user = User::query()->where('email', 'refund@example.com')->firstOrFail();
+
+        $this->assertTrue($user->hasRole('FE'));
+        $this->assertFalse($user->hasRole('Profit Multiplier'));
+        $this->assertFalse($user->can('access_profit_multiplier'));
+    }
+
+    public function test_refund_of_only_product_removes_all_roles(): void
+    {
+        Mail::fake();
+
+        $this->post('/ipn/jvzoo', $this->sale('refund-fe@example.com', '455425'))->assertOk();
+
+        $this->post('/ipn/jvzoo', $this->signedPayload([
+            'ctransaction' => 'RFND',
+            'ccustemail' => 'refund-fe@example.com',
+            'ctransreceipt' => 'TX-FE-R',
+            'cproditem' => '455425',
+        ]))->assertOk();
+
+        $user = User::query()->where('email', 'refund-fe@example.com')->firstOrFail();
 
         $this->assertSame(0, $user->roles()->count());
     }
@@ -112,14 +184,7 @@ class JvzooWebhookTest extends TestCase
     {
         Mail::fake();
 
-        $payload = $this->signedPayload([
-            'ctransaction' => 'SALE',
-            'ccustemail' => 'json-buyer@example.com',
-            'ctransreceipt' => 'TX-JSON-1',
-            'cproditem' => '444707',
-        ]);
-
-        $this->postJson('/ipn/jvzoo', $payload)
+        $this->postJson('/ipn/jvzoo', $this->sale('json-buyer@example.com', '455425'))
             ->assertOk()
             ->assertJson(['message' => 'User created successfully!']);
 
@@ -132,14 +197,7 @@ class JvzooWebhookTest extends TestCase
             ->once()
             ->andThrow(new \RuntimeException('Resend API error'));
 
-        $payload = $this->signedPayload([
-            'ctransaction' => 'SALE',
-            'ccustemail' => 'mail-fail@example.com',
-            'ctransreceipt' => 'TX-MAIL-FAIL',
-            'cproditem' => '444707',
-        ]);
-
-        $this->post('/ipn/jvzoo', $payload)
+        $this->post('/ipn/jvzoo', $this->sale('mail-fail@example.com', '455425'))
             ->assertOk()
             ->assertJson([
                 'email_sent' => false,
@@ -154,11 +212,24 @@ class JvzooWebhookTest extends TestCase
             'ctransaction' => 'SALE',
             'ccustemail' => 'buyer@example.com',
             'ctransreceipt' => 'TX-000',
-            'cproditem' => '444707',
+            'cproditem' => '455425',
             'cverify' => 'INVALID',
         ]);
 
         $response->assertForbidden();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function sale(string $email, string $productId, string $transactionId = 'TX-1'): array
+    {
+        return $this->signedPayload([
+            'ctransaction' => 'SALE',
+            'ccustemail' => $email,
+            'ctransreceipt' => $transactionId,
+            'cproditem' => $productId,
+        ]);
     }
 
     /**

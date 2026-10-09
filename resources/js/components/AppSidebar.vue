@@ -49,25 +49,44 @@ const connectNav: NavItem[] = [
     { title: 'Tutorial', href: '/tutorial', icon: 'heroicons:academic-cap' },
 ];
 
+const upgradesNav: Array<NavItem & { permission: string }> = [
+    { title: 'Reseller', href: '/reseller', icon: 'heroicons:user-plus', permission: 'access_reseller' },
+    {
+        title: 'Affiliate Campaign Vault',
+        href: '/affiliate-campaign-vault',
+        icon: 'heroicons:archive-box',
+        permission: 'access_affiliate_campaign_vault',
+    },
+    { title: 'Profit Multiplier', href: '/profit-multiplier', icon: 'heroicons:arrow-trending-up', permission: 'access_profit_multiplier' },
+];
+
 const page = usePage<{
     auth?: {
         is_admin?: boolean;
+        permissions?: string[];
         can_view_app_features?: boolean;
-        can_view_bundle_features?: boolean;
     };
 }>();
 
 const navGroups = computed<NavGroup[]>(() => {
     const canViewApp = page.props.auth?.can_view_app_features ?? true;
-    if (!canViewApp) return [];
+    const permissions = page.props.auth?.permissions ?? [];
 
-    const groups: NavGroup[] = [
-        { label: 'Main', items: mainNav },
-        { label: 'Assets', items: assetsNav },
-        { label: 'Funnels & Leads', items: funnelNav },
-        { label: 'Growth', items: growthNav },
-        { label: 'Connect', items: connectNav },
-    ];
+    const groups: NavGroup[] = canViewApp
+        ? [
+              { label: 'Main', items: mainNav },
+              { label: 'Assets', items: assetsNav },
+              { label: 'Funnels & Leads', items: funnelNav },
+              { label: 'Growth', items: growthNav },
+              { label: 'Connect', items: connectNav },
+          ]
+        : [];
+
+    const upgrades = upgradesNav.filter((item) => permissions.includes(item.permission));
+
+    if (upgrades.length > 0) {
+        groups.push({ label: 'Upgrades', items: upgrades });
+    }
 
     if (page.props.auth?.is_admin) {
         groups.push({

@@ -24,7 +24,8 @@ Use with [DEPLOY.md](./DEPLOY.md) for env and queue details. Run in order before
 - [ ] `OPENROUTER_API_KEY` — Command Center, campaigns, promotion text/images
 - [ ] `ZERNIO_API_KEY` + connect test account in **Settings → Social posting**
 - [ ] `ZERNIO_WEBHOOK_SECRET` — WhatsApp/inbox webhooks (required in production)
-- [ ] `JVZOO_SECRET_KEY` + product rows seeded for IPN (`products` table)
+- [ ] `JVZOO_SECRET_KEY` + product rows seeded for IPN: `php artisan migrate --force && php artisan db:seed --class=JvzooAccessSeeder --force`
+- [ ] `PROFIT_MULTIPLIER_LINK_1_URL` / `PROFIT_MULTIPLIER_LINK_2_URL` set (Profit Multiplier page)
 - [ ] D-ID enabled in `.env` (`services.did` — see `.env.example`) if you advertise video posts
 - [ ] `APIFY_API_TOKEN` (optional) — Opportunity Finder / ClickBank live
 - [ ] ESP credentials in **Integrations** if leads should sync to Mailchimp, etc.
