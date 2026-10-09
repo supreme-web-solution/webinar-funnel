@@ -3,10 +3,10 @@
 namespace App\Jobs\Campaigns;
 
 use App\Services\Campaigns\MarketplaceOfferSearchService;
+use App\Services\Campaigns\MarketplaceTrendingStore;
 use App\Services\Campaigns\OfferScoringService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -14,7 +14,19 @@ class RefreshMarketplaceTrendingJob implements ShouldQueue
 {
     use Queueable;
 
-    public function handle(MarketplaceOfferSearchService $search, OfferScoringService $scoring): void
+    public int $timeout = 900;
+
+    public int $tries = 1;
+
+    public function handle(MarketplaceOfferSearchService $search, OfferScoringService $scoring, MarketplaceTrendingStore $store): void
+    {
+        $this->refresh($search, $scoring, $store);
+    }
+
+    /**
+     * @return array{saved: bool, count: int, keywords: array<string, int>, sources: array<int, string>, errors: array<int, string>}
+     */
+    public function refresh(MarketplaceOfferSearchService $search, OfferScoringService $scoring, MarketplaceTrendingStore $store): array
     {
         $keywords = config('services.marketplace.trending_keywords', [
             'ai software',
@@ -24,15 +36,20 @@ class RefreshMarketplaceTrendingJob implements ShouldQueue
 
         $merged = [];
         $sources = [];
+        $errors = [];
+        $perKeyword = [];
 
         foreach ($keywords as $keyword) {
             if (! is_string($keyword) || trim($keyword) === '') {
                 continue;
             }
 
-            $payload = $search->search(trim($keyword));
+            $keyword = trim($keyword);
+            $payload = $search->search($keyword);
+            $perKeyword[$keyword] = count($payload['results'] ?? []);
+
             foreach ($payload['results'] ?? [] as $row) {
-                $row['search_keyword'] = trim($keyword);
+                $row['search_keyword'] = $keyword;
                 if (! isset($row['trend'])) {
                     $row['trend'] = 'rising';
                 }
@@ -42,20 +59,40 @@ class RefreshMarketplaceTrendingJob implements ShouldQueue
             foreach ($payload['sources'] ?? [] as $source) {
                 $sources[] = $source;
             }
+
+            if (is_string($payload['error'] ?? null) && $payload['error'] !== '') {
+                $errors[] = $payload['error'];
+            }
         }
 
         $merged = $this->dedupe($merged);
-        $scored = $scoring->scoreAndRank($merged);
-        $ttl = (int) config('services.marketplace.trending_cache_ttl', 86400);
+        $summary = [
+            'saved' => false,
+            'count' => count($merged),
+            'keywords' => $perKeyword,
+            'sources' => array_values(array_unique($sources)),
+            'errors' => array_values(array_unique($errors)),
+        ];
 
-        Cache::put('marketplace.trending', [
+        if ($merged === []) {
+            Log::warning('[MarketplaceTrending] Scan returned no offers — keeping previous results', $summary);
+
+            return $summary;
+        }
+
+        $scored = $scoring->scoreAndRank($merged);
+
+        $store->put([
             'results' => array_slice($scored['results'], 0, 20),
             'top_pick' => $scored['top_pick'],
-            'sources' => array_values(array_unique($sources)),
+            'sources' => $summary['sources'],
             'refreshed_at' => now()->toIso8601String(),
-        ], $ttl);
+        ]);
 
-        Log::info('[MarketplaceTrending] Refreshed cache', ['count' => count($merged)]);
+        $summary['saved'] = true;
+        Log::info('[MarketplaceTrending] Refreshed', $summary);
+
+        return $summary;
     }
 
     /**

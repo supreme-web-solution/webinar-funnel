@@ -102,7 +102,7 @@ final class PromotionGenerationCoordinator
             FunnelPromotionPost::STATUS_DRAFT,
         ], true)) {
             $post->update([
-                'status' => FunnelPromotionPost::STATUS_READY,
+                'status' => $post->generatedStatus(),
                 'last_error' => null,
             ]);
             $post->refresh();

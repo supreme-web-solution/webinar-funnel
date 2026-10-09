@@ -28,13 +28,13 @@ use App\Services\Promotion\PromotionTopicSuggestionService;
 use App\Services\Traffic\TrafficHubResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FunnelPromotionController extends Controller
 {
@@ -244,7 +244,8 @@ class FunnelPromotionController extends Controller
 
             $scheduled = 0;
             foreach ($posts as $post) {
-                if ($post->content_type === FunnelPromotionPost::TYPE_EMAIL) {
+                if ($post->content_type === FunnelPromotionPost::TYPE_EMAIL
+                    || in_array($post->status, [FunnelPromotionPost::STATUS_PUBLISHED, FunnelPromotionPost::STATUS_PUBLISHING], true)) {
                     continue;
                 }
 
@@ -252,7 +253,9 @@ class FunnelPromotionController extends Controller
                 $post->update([
                     'scheduled_for' => $scheduledFor,
                     'timezone' => $validated['timezone'] ?? (string) config('promotion.default_timezone', 'UTC'),
-                    'status' => FunnelPromotionPost::STATUS_SCHEDULED,
+                    'status' => $post->status === FunnelPromotionPost::STATUS_GENERATING
+                        ? FunnelPromotionPost::STATUS_GENERATING
+                        : FunnelPromotionPost::STATUS_SCHEDULED,
                     'last_error' => null,
                 ]);
 
@@ -456,13 +459,21 @@ class FunnelPromotionController extends Controller
             ]);
         }
 
+        if (in_array($post->status, [FunnelPromotionPost::STATUS_PUBLISHED, FunnelPromotionPost::STATUS_PUBLISHING], true)) {
+            return back()->withErrors([
+                'schedule' => 'This post is already published. Copy it to schedule it again.',
+            ]);
+        }
+
         $validated = $request->validated();
         $from = $post->scheduled_for;
 
         $post->update([
             'scheduled_for' => $validated['scheduled_for'],
             'timezone' => $validated['timezone'] ?? (string) config('promotion.default_timezone', 'UTC'),
-            'status' => FunnelPromotionPost::STATUS_SCHEDULED,
+            'status' => $post->status === FunnelPromotionPost::STATUS_GENERATING
+                ? FunnelPromotionPost::STATUS_GENERATING
+                : FunnelPromotionPost::STATUS_SCHEDULED,
             'last_error' => null,
         ]);
 
@@ -476,6 +487,35 @@ class FunnelPromotionController extends Controller
         ]);
 
         return back()->with('success', 'Post scheduled.');
+    }
+
+    public function unschedule(Request $request, Funnel $funnel, FunnelPromotionPost $post): RedirectResponse
+    {
+        $this->authorizePost($request, $funnel, $post);
+
+        if ($post->scheduled_for === null) {
+            return back();
+        }
+
+        $from = $post->scheduled_for;
+
+        $post->update([
+            'scheduled_for' => null,
+            'status' => $post->status === FunnelPromotionPost::STATUS_SCHEDULED
+                ? FunnelPromotionPost::STATUS_READY
+                : $post->status,
+        ]);
+
+        FunnelPromotionScheduleEvent::query()->create([
+            'post_id' => $post->id,
+            'actor_id' => $request->user()->id,
+            'from_time' => $from,
+            'to_time' => null,
+            'action' => FunnelPromotionScheduleEvent::ACTION_CANCELLED,
+            'meta' => ['timezone' => $post->timezone],
+        ]);
+
+        return back()->with('success', 'Schedule removed.');
     }
 
     public function duplicate(

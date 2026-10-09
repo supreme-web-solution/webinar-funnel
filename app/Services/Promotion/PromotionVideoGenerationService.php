@@ -23,25 +23,25 @@ class PromotionVideoGenerationService
             Log::info('[D-ID] Video generation disabled – returning script-only result.', ['post_id' => $post->id]);
 
             return [
-                'success'          => true,
-                'script'           => $script,
-                'status'           => 'ready',
-                'video_url'        => null,
-                'thumbnail_url'    => null,
+                'success' => true,
+                'script' => $script,
+                'status' => 'ready',
+                'video_url' => null,
+                'thumbnail_url' => null,
                 'duration_seconds' => null,
             ];
         }
 
         try {
-            $ctx         = is_array($post->generation_context) ? $post->generation_context : [];
-            $voiceId     = (string) ($ctx['voice_id'] ?? config('services.did.default_voice_id', 'en-US-JennyNeural'));
+            $ctx = is_array($post->generation_context) ? $post->generation_context : [];
+            $voiceId = (string) ($ctx['voice_id'] ?? config('services.did.default_voice_id', 'en-US-JennyNeural'));
             $presenterId = $this->resolvePresenterId((string) ($ctx['avatar_id'] ?? ''));
 
             Log::info('[D-ID] Starting video generation', [
-                'post_id'       => $post->id,
-                'voice_id'      => $voiceId,
-                'presenter_id'  => $presenterId,
-                'script_chars'  => strlen($script),
+                'post_id' => $post->id,
+                'voice_id' => $voiceId,
+                'presenter_id' => $presenterId,
+                'script_chars' => strlen($script),
             ]);
 
             $clipData = $this->did->createClip($presenterId, $script, $voiceId);
@@ -55,21 +55,21 @@ class PromotionVideoGenerationService
                 return ['success' => false, 'script' => $script, 'error' => 'D-ID did not return a clip ID.'];
             }
 
-            $poll   = $this->did->getClip($clipId);
+            $poll = $this->did->getClip($clipId);
             $status = (string) ($poll['status'] ?? 'created');
 
             Log::info('[D-ID] Clip polled', ['clip_id' => $clipId, 'status' => $status]);
 
-            $videoUrl     = isset($poll['result_url']) && is_string($poll['result_url']) ? $poll['result_url'] : null;
+            $videoUrl = isset($poll['result_url']) && is_string($poll['result_url']) ? $poll['result_url'] : null;
             $thumbnailUrl = isset($poll['thumbnail_url']) && is_string($poll['thumbnail_url']) ? $poll['thumbnail_url'] : null;
 
             return [
-                'success'          => true,
-                'script'           => $script,
-                'remote_id'        => $clipId,
-                'status'           => $status === 'done' ? 'ready' : 'processing',
-                'video_url'        => $videoUrl,
-                'thumbnail_url'    => $thumbnailUrl,
+                'success' => true,
+                'script' => $script,
+                'remote_id' => $clipId,
+                'status' => $status === 'done' ? 'ready' : 'processing',
+                'video_url' => $videoUrl,
+                'thumbnail_url' => $thumbnailUrl,
                 'duration_seconds' => null,
             ];
         } catch (\Throwable $e) {
@@ -103,23 +103,23 @@ class PromotionVideoGenerationService
             }
 
             return [
-                'state'          => 'failed',
-                'error'          => (string) $error,
-                'remote_status'  => $status,
+                'state' => 'failed',
+                'error' => (string) $error,
+                'remote_status' => $status,
             ];
         }
 
         if ($status === 'done' || $videoUrl !== null) {
             return [
-                'state'          => 'ready',
-                'video_url'      => $videoUrl,
-                'thumbnail_url'  => $thumbnailUrl,
-                'remote_status'  => $status !== '' ? $status : 'done',
+                'state' => 'ready',
+                'video_url' => $videoUrl,
+                'thumbnail_url' => $thumbnailUrl,
+                'remote_status' => $status !== '' ? $status : 'done',
             ];
         }
 
         return [
-            'state'         => 'processing',
+            'state' => 'processing',
             'remote_status' => $status !== '' ? $status : 'processing',
         ];
     }
@@ -139,26 +139,26 @@ class PromotionVideoGenerationService
                 ->first();
 
             $videoAsset->update([
-                'status'        => FunnelPromotionAsset::STATUS_READY,
-                'url'           => $poll['video_url'] ?? $videoAsset->url,
+                'status' => FunnelPromotionAsset::STATUS_READY,
+                'url' => $poll['video_url'] ?? $videoAsset->url,
                 'thumbnail_url' => $poll['thumbnail_url'] ?? $videoAsset->thumbnail_url,
-                'meta'          => array_merge((array) ($videoAsset->meta ?? []), [
-                    'status'        => $poll['remote_status'] ?? 'done',
-                    'polled_at'     => now()->toIso8601String(),
+                'meta' => array_merge((array) ($videoAsset->meta ?? []), [
+                    'status' => $poll['remote_status'] ?? 'done',
+                    'polled_at' => now()->toIso8601String(),
                 ]),
             ]);
 
             $post->update([
                 'primary_asset_id' => $videoAsset->id,
-                'status'           => FunnelPromotionPost::STATUS_READY,
-                'last_error'       => null,
-                'text_body'        => $post->text_body ?: $scriptAsset?->source_prompt,
+                'status' => $post->generatedStatus(),
+                'last_error' => null,
+                'text_body' => $post->text_body ?: $scriptAsset?->source_prompt,
             ]);
 
             Log::info('[D-ID] Clip ready', [
-                'post_id'       => $post->id,
-                'clip_id'       => $videoAsset->remote_id,
-                'video_url'     => $videoAsset->url,
+                'post_id' => $post->id,
+                'clip_id' => $videoAsset->remote_id,
+                'video_url' => $videoAsset->url,
                 'has_thumbnail' => $videoAsset->thumbnail_url !== null,
             ]);
 
@@ -170,15 +170,15 @@ class PromotionVideoGenerationService
 
             $videoAsset->update([
                 'status' => FunnelPromotionAsset::STATUS_FAILED,
-                'meta'   => array_merge((array) ($videoAsset->meta ?? []), [
-                    'status'    => $poll['remote_status'] ?? 'failed',
-                    'error'     => $error,
+                'meta' => array_merge((array) ($videoAsset->meta ?? []), [
+                    'status' => $poll['remote_status'] ?? 'failed',
+                    'error' => $error,
                     'polled_at' => now()->toIso8601String(),
                 ]),
             ]);
 
             $post->update([
-                'status'     => FunnelPromotionPost::STATUS_FAILED,
+                'status' => FunnelPromotionPost::STATUS_FAILED,
                 'last_error' => $error,
             ]);
 
@@ -189,7 +189,7 @@ class PromotionVideoGenerationService
 
         $videoAsset->update([
             'meta' => array_merge((array) ($videoAsset->meta ?? []), [
-                'status'    => $poll['remote_status'] ?? 'processing',
+                'status' => $poll['remote_status'] ?? 'processing',
                 'polled_at' => now()->toIso8601String(),
             ]),
         ]);
@@ -240,9 +240,9 @@ class PromotionVideoGenerationService
         }
 
         // Fallback: build a short script from the topic + CTA.
-        $topic    = $post->topic ?: $funnel->name;
+        $topic = $post->topic ?: $funnel->name;
         $ctaLabel = $post->cta_label ?: 'Learn more';
-        $ctaUrl   = $post->cta_url  ?: '';
+        $ctaUrl = $post->cta_url ?: '';
 
         return implode(' ', [
             "If you are struggling with {$topic}, this is for you.",

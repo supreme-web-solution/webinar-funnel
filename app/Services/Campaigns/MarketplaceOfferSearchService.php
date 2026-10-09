@@ -3,7 +3,6 @@
 namespace App\Services\Campaigns;
 
 use App\Services\ApifyService;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -15,6 +14,7 @@ class MarketplaceOfferSearchService
         protected ApifyService $apify,
         protected MarketplaceHtmlSearchService $htmlSearch,
         protected OfferScoringService $scoring,
+        protected MarketplaceTrendingStore $trendingStore,
     ) {}
 
     /**
@@ -105,7 +105,7 @@ class MarketplaceOfferSearchService
      */
     public function weeklyPromotePick(): array
     {
-        $cached = Cache::get('marketplace.trending');
+        $cached = $this->trendingStore->get();
         if (! is_array($cached)) {
             return ['top_pick' => null, 'refreshed_at' => null, 'results' => []];
         }
@@ -124,7 +124,7 @@ class MarketplaceOfferSearchService
      */
     protected function searchTrendingCache(string $keyword, ?string $marketplace = null): array
     {
-        $cached = Cache::get('marketplace.trending');
+        $cached = $this->trendingStore->get();
         if (! is_array($cached) || ($cached['results'] ?? []) === []) {
             return [];
         }
@@ -163,7 +163,7 @@ class MarketplaceOfferSearchService
 
     public function trending(): array
     {
-        $cached = Cache::get('marketplace.trending');
+        $cached = $this->trendingStore->get();
         if (is_array($cached) && ($cached['results'] ?? []) !== []) {
             return [
                 'ok' => true,

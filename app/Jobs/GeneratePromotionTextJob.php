@@ -105,7 +105,7 @@ class GeneratePromotionTextJob implements ShouldQueue
             ]);
 
             if (! $isImagePost && ! $isVideoPost) {
-                $post->status = FunnelPromotionPost::STATUS_READY;
+                $post->status = $post->generatedStatus();
             }
 
             $post->save();

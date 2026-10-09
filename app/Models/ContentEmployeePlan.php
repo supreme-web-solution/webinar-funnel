@@ -17,6 +17,8 @@ class ContentEmployeePlan extends Model
 
     public const STATUS_EXECUTING = 'executing';
 
+    public const STATUS_SCHEDULED = 'scheduled';
+
     public const STATUS_COMPLETED = 'completed';
 
     protected $fillable = [

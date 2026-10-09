@@ -26,6 +26,13 @@ return [
         'publish' => env('PROMOTION_QUEUE_PUBLISH', 'promotion-publish'),
     ],
 
+    'content_employee' => [
+        /** Each planned post is generated this many minutes before its planned time, then auto-published at that time. */
+        'generation_lead_minutes' => (int) env('CONTENT_EMPLOYEE_GENERATION_LEAD_MINUTES', 60),
+        /** Queued items more than this many minutes past their time (e.g. scheduler was down) are marked missed. */
+        'missed_grace_minutes' => (int) env('CONTENT_EMPLOYEE_MISSED_GRACE_MINUTES', 15),
+    ],
+
     'carousel' => [
         /** Hard cap for slide copy + rendered images (env: PROMOTION_CAROUSEL_MAX_SLIDES). */
         'max_slide_images' => (int) env('PROMOTION_CAROUSEL_MAX_SLIDES', 6),

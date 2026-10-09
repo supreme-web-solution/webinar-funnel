@@ -21,7 +21,7 @@ class ExecuteContentPlanTool extends GatedTool
 
     public function description(): string
     {
-        return 'Approve and execute a content-employee plan, generating the weekly posts.';
+        return 'Approve and schedule a content-employee plan. Each post is generated shortly before its planned time and published automatically; items already past their time are skipped.';
     }
 
     public function schema(JsonSchema $schema): array

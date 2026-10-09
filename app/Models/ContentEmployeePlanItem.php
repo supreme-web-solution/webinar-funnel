@@ -9,6 +9,10 @@ class ContentEmployeePlanItem extends Model
 {
     public const STATUS_PLANNED = 'planned';
 
+    public const STATUS_QUEUED = 'queued';
+
+    public const STATUS_MISSED = 'missed';
+
     public const STATUS_CREATED = 'created';
 
     public const STATUS_GENERATING = 'generating';

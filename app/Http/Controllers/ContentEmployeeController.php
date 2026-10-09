@@ -115,7 +115,7 @@ class ContentEmployeeController extends Controller
 
         $queued = (int) data_get($plan->meta, 'execute_summary.queued', 0);
 
-        return back()->with('success', "Plan executed — {$queued} posts queued for generation.");
+        return back()->with('success', "Plan scheduled — {$queued} posts will be created before their planned times.");
     }
 
     public function destroy(Request $request, ContentEmployeePlan $plan): RedirectResponse

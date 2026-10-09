@@ -1331,12 +1331,122 @@ function destroy(post: PromotionPost): void {
     });
 }
 
+// ─── Scheduling ───────────────────────────────────────────────────────────────
+// Picking a date only stores a draft; the primary button then reads "Schedule" and saves it.
+const scheduleDrafts = ref<Record<number, string>>({});
+const schedulingPostId = ref<number | null>(null);
+
+function toLocalInputValue(iso: string | null): string {
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function scheduleInputValue(post: PromotionPost): string {
+    return scheduleDrafts.value[post.id] ?? toLocalInputValue(post.scheduled_for);
+}
+
+function setScheduleDraft(post: PromotionPost, value: string): void {
+    scheduleDrafts.value = { ...scheduleDrafts.value, [post.id]: value };
+}
+
+function clearScheduleDraft(post: PromotionPost): void {
+    const next = { ...scheduleDrafts.value };
+    delete next[post.id];
+    scheduleDrafts.value = next;
+}
+
+function hasPendingSchedule(post: PromotionPost): boolean {
+    const draft = scheduleDrafts.value[post.id];
+
+    return draft !== undefined && draft !== '' && draft !== toLocalInputValue(post.scheduled_for);
+}
+
+function isScheduledAhead(post: PromotionPost): boolean {
+    return post.status === 'scheduled' && !!post.scheduled_for && new Date(post.scheduled_for).getTime() > Date.now();
+}
+
+function canSchedulePost(post: PromotionPost): boolean {
+    if (post.content_type === 'email' || post.status === 'publishing') return false;
+
+    return post.status !== 'published' || needsRepublish(post);
+}
+
+function canRunPrimaryAction(post: PromotionPost): boolean {
+    if (schedulingPostId.value === post.id) return false;
+    if (hasPendingSchedule(post)) return canSchedulePost(post);
+
+    return canPublishPost(post);
+}
+
+function primaryActionLabel(post: PromotionPost): string {
+    if (isPublishingPost(post)) return 'Publishing…';
+    if (schedulingPostId.value === post.id) return 'Scheduling…';
+    if (hasPendingSchedule(post)) return post.scheduled_for ? 'Reschedule' : 'Schedule';
+    if (isScheduledAhead(post)) return 'Publish now';
+
+    return publishButtonLabel(post);
+}
+
+function primaryActionIcon(post: PromotionPost): string {
+    if (isPublishingPost(post) || schedulingPostId.value === post.id) return 'heroicons:arrow-path';
+
+    return hasPendingSchedule(post) ? 'heroicons:calendar-days' : 'heroicons:paper-airplane';
+}
+
+function runPrimaryAction(post: PromotionPost): void {
+    if (hasPendingSchedule(post)) {
+        schedule(post, scheduleDrafts.value[post.id]);
+
+        return;
+    }
+
+    if (isScheduledAhead(post) && !confirm(`This post is scheduled for ${fmtDate(post.scheduled_for)}. Publish it now instead?`)) {
+        return;
+    }
+
+    publish(post);
+}
+
 function schedule(post: PromotionPost, value: string): void {
-    if (!value) return;
+    const when = new Date(value);
+    if (!value || Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+        toast.error('Pick a date and time in the future.');
+
+        return;
+    }
+
+    schedulingPostId.value = post.id;
     router.patch(`/funnels/${props.funnel.id}/promotion/posts/${post.id}/schedule`, {
-        scheduled_for: new Date(value).toISOString(),
+        scheduled_for: when.toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
-    }, { preserveScroll: true });
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            clearScheduleDraft(post);
+            toast.success(`Scheduled for ${fmtDate(when.toISOString())}. It will publish automatically.`);
+        },
+        onError: (errors) => {
+            const bag = errors as Record<string, string>;
+            const msg = bag.schedule ?? bag.scheduled_for;
+            if (msg) toast.error(msg);
+        },
+        onFinish: () => {
+            schedulingPostId.value = null;
+        },
+    });
+}
+
+function clearSchedule(post: PromotionPost): void {
+    clearScheduleDraft(post);
+    if (!post.scheduled_for) return;
+
+    router.delete(`/funnels/${props.funnel.id}/promotion/posts/${post.id}/schedule`, {
+        preserveScroll: true,
+        onSuccess: () => toast.success('Schedule removed.'),
+    });
 }
 
 function displayStatus(post: PromotionPost): string {
@@ -2556,7 +2666,7 @@ const statItems = computed(() => [
                     <!-- Schedule / published date -->
                     <div v-if="post.scheduled_for || post.published_at" class="flex items-center justify-end">
                         <span v-if="post.scheduled_for" class="text-xs text-muted-foreground flex items-center gap-1">
-                            <Icon icon="heroicons:calendar" class="size-3.5" />{{ fmtDate(post.scheduled_for) }}
+                            <Icon icon="heroicons:calendar" class="size-3.5" />Scheduled for {{ fmtDate(post.scheduled_for) }}
                         </span>
                         <span v-else-if="post.published_at" class="text-xs text-blue-600 flex items-center gap-1">
                             <Icon icon="heroicons:check-circle" class="size-3.5" />{{ fmtDate(post.published_at) }}
@@ -2576,13 +2686,27 @@ const statItems = computed(() => [
                 <!-- ── Action bar ───────────────────────────────────────── -->
                 <div class="shrink-0 border-t border-border/50 bg-muted/10 px-4 py-2.5 space-y-2">
                     <!-- Schedule input -->
-                    <input
-                        v-if="post.content_type !== 'email'"
-                        type="datetime-local"
-                        class="w-full h-8 rounded-lg border bg-background px-2.5 text-xs text-muted-foreground"
-                        :value="post.scheduled_for ? new Date(post.scheduled_for).toISOString().slice(0, 16) : ''"
-                        @change="schedule(post, ($event.target as HTMLInputElement).value)"
-                    />
+                    <div v-if="canSchedulePost(post)" class="flex items-center gap-1.5">
+                        <input
+                            type="datetime-local"
+                            class="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-xs text-muted-foreground"
+                            :class="hasPendingSchedule(post) ? 'border-primary text-foreground' : ''"
+                            :min="toLocalInputValue(new Date().toISOString())"
+                            :value="scheduleInputValue(post)"
+                            title="Pick a date, then click Schedule"
+                            @input="setScheduleDraft(post, ($event.target as HTMLInputElement).value)"
+                        />
+                        <Button
+                            v-if="post.scheduled_for || scheduleDrafts[post.id]"
+                            size="sm"
+                            variant="ghost"
+                            class="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+                            title="Clear schedule"
+                            @click="clearSchedule(post)"
+                        >
+                            <Icon icon="heroicons:x-mark" class="size-3.5" />
+                        </Button>
+                    </div>
                     <!-- Buttons row -->
                     <div class="flex items-center gap-1.5">
                         <!-- Preview -->
@@ -2652,20 +2776,20 @@ const statItems = computed(() => [
                                 Copy email
                             </Button>
                         </template>
-                        <!-- Publish (social) -->
+                        <!-- Schedule / publish (social) -->
                         <Button
                             v-else
                             size="sm"
                             class="h-8 px-3 text-xs gap-1.5 bg-primary text-primary-foreground hover:opacity-90"
-                            :disabled="isPublishingPost(post) || !canPublishPost(post)"
-                            @click="publish(post)"
+                            :disabled="isPublishingPost(post) || !canRunPrimaryAction(post)"
+                            @click="runPrimaryAction(post)"
                         >
                             <Icon
-                                :icon="isPublishingPost(post) ? 'heroicons:arrow-path' : 'heroicons:paper-airplane'"
+                                :icon="primaryActionIcon(post)"
                                 class="size-3.5 shrink-0"
-                                :class="{ 'animate-spin': isPublishingPost(post) }"
+                                :class="{ 'animate-spin': isPublishingPost(post) || schedulingPostId === post.id }"
                             />
-                            {{ isPublishingPost(post) ? 'Publishing…' : publishButtonLabel(post) }}
+                            {{ primaryActionLabel(post) }}
                         </Button>
                         <!-- Delete -->
                         <Button
@@ -2799,7 +2923,8 @@ const statItems = computed(() => [
                                         size="sm"
                                         class="h-7 px-2 text-[0.62rem] gap-1 bg-primary text-primary-foreground hover:opacity-90"
                                         :disabled="isPublishingPost(post) || !canPublishPost(post)"
-                                        @click="publish(post)"
+                                        :title="primaryActionLabel(post)"
+                                        @click="runPrimaryAction(post)"
                                     >
                                         <Icon
                                             :icon="isPublishingPost(post) ? 'heroicons:arrow-path' : 'heroicons:paper-airplane'"

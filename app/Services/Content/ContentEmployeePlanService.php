@@ -77,6 +77,7 @@ final class ContentEmployeePlanService
 
         if ($existing && in_array($existing->status, [
             ContentEmployeePlan::STATUS_EXECUTING,
+            ContentEmployeePlan::STATUS_SCHEDULED,
             ContentEmployeePlan::STATUS_COMPLETED,
         ], true)) {
             return $existing->load('items');
@@ -148,6 +149,11 @@ final class ContentEmployeePlanService
         return $plan->fresh(['items']);
     }
 
+    /**
+     * Schedules the plan: nothing is generated now. Each item becomes a post
+     * {@see generationLeadMinutes()} before its planned time (via processDueItems), then publishes at that time.
+     * Items whose planned time has already passed are marked missed.
+     */
     public function execute(ContentEmployeePlan $plan, User $user): ContentEmployeePlan
     {
         if (! in_array($plan->status, [
@@ -157,105 +163,239 @@ final class ContentEmployeePlanService
             return $plan->load('items');
         }
 
-        $plan->update(['status' => ContentEmployeePlan::STATUS_EXECUTING]);
-        $funnel = Funnel::query()->findOrFail($plan->funnel_id);
-        $funnel->loadMissing('campaign', 'settings');
-        $cta = $this->ctaResolver->resolve($funnel->loadMissing('user', 'campaign'));
-        $connected = $this->platformCatalog->connectedPlatformKeys((int) $user->id);
-        $generationBase = $this->generationContextBase($funnel, $plan);
-
-        if ($connected === []) {
+        if ($this->platformCatalog->connectedPlatformKeys((int) $user->id) === []) {
             throw ValidationException::withMessages([
                 'plan' => 'Connect at least one social account before creating posts.',
             ]);
         }
 
+        $now = now();
         $queued = 0;
-        $skipped = 0;
+        $missed = 0;
 
         foreach ($plan->items as $item) {
-            if ($item->promotion_post_id !== null) {
+            if ($item->promotion_post_id !== null || $item->status !== ContentEmployeePlanItem::STATUS_PLANNED) {
                 continue;
             }
 
-            $formatKey = $item->format_key;
-            $spec = $this->formatCatalog->format($formatKey);
-            if ($spec === null) {
-                $item->update(['status' => ContentEmployeePlanItem::STATUS_FAILED]);
-                $skipped++;
-
-                continue;
-            }
-
-            $platform = $this->mapPlatformForPromotion((string) ($spec['platform'] ?? $item->platform));
-            if (! in_array($platform, $connected, true)) {
-                $item->update([
-                    'status' => ContentEmployeePlanItem::STATUS_FAILED,
-                    'metadata' => array_merge((array) ($item->metadata ?? []), [
-                        'error' => 'No connected account for '.$platform,
-                    ]),
-                ]);
-                $skipped++;
+            if ($item->scheduled_for === null || $item->scheduled_for->lte($now)) {
+                $this->markMissed($item, 'Planned time had already passed when the posts were scheduled.');
+                $missed++;
 
                 continue;
             }
 
-            $platforms = [$platform];
-            $contentType = $this->formatCatalog->mapToPromotionContentType($formatKey);
-
-            $post = FunnelPromotionPost::query()->create([
-                'user_id' => $user->id,
-                'funnel_id' => $funnel->id,
-                'topic' => $item->topic,
-                'content_type' => $contentType,
-                'platforms' => $platforms,
-                'publish_mode' => FunnelPromotionPost::MODE_APPROVE_FIRST,
-                'status' => FunnelPromotionPost::STATUS_GENERATING,
-                'cta_url' => $cta['url'],
-                'cta_label' => $cta['label'],
-                'scheduled_for' => $item->scheduled_for,
-                'timezone' => (string) config('promotion.default_timezone', 'UTC'),
-                'generation_context' => array_merge($generationBase, [
-                    'content_format' => $formatKey,
-                    'angle' => $item->angle,
-                    'include_text' => true,
-                    'include_image' => $contentType === FunnelPromotionPost::TYPE_IMAGE,
-                    'source' => 'content_employee',
-                    'conversion_goal' => 'Drive measurable growth — clicks, saves, and sign-ups. Specific beats generic.',
-                ]),
-                'metadata' => [
-                    'format_key' => $formatKey,
-                    'content_employee_plan_id' => $plan->id,
-                    'content_employee_item_id' => $item->id,
-                    'format_spec' => $spec,
-                    'media_spec' => $this->formatCatalog->mediaSpec($spec),
-                ],
-            ]);
-
-            $item->update([
-                'promotion_post_id' => $post->id,
-                'status' => ContentEmployeePlanItem::STATUS_GENERATING,
-            ]);
-
-            $this->generationDispatcher->dispatch(
-                $post,
-                $this->generationDispatcher->generationTypesForPost($post),
-            );
+            $item->update(['status' => ContentEmployeePlanItem::STATUS_QUEUED]);
             $queued++;
         }
 
         $plan->update([
-            'status' => ContentEmployeePlan::STATUS_COMPLETED,
+            'status' => ContentEmployeePlan::STATUS_SCHEDULED,
             'meta' => array_merge((array) ($plan->meta ?? []), [
                 'execute_summary' => [
                     'queued' => $queued,
-                    'skipped' => $skipped,
-                    'executed_at' => now()->toIso8601String(),
+                    'missed' => $missed,
+                    'created' => 0,
+                    'skipped' => 0,
+                    'lead_minutes' => $this->generationLeadMinutes(),
+                    'executed_at' => $now->toIso8601String(),
                 ],
             ]),
         ]);
 
+        $this->processDueItems($plan);
+
         return $plan->fresh(['items.promotionPost']);
+    }
+
+    /**
+     * Creates posts for queued items whose planned time is within the generation lead window.
+     *
+     * @return int Number of posts created
+     */
+    public function processDueItems(?ContentEmployeePlan $onlyPlan = null, int $limit = 25): int
+    {
+        $now = now();
+        $missedBefore = $now->copy()->subMinutes((int) config('promotion.content_employee.missed_grace_minutes', 15));
+
+        $items = ContentEmployeePlanItem::query()
+            ->where('status', ContentEmployeePlanItem::STATUS_QUEUED)
+            ->whereNull('promotion_post_id')
+            ->where('scheduled_for', '<=', $now->copy()->addMinutes($this->generationLeadMinutes()))
+            ->whereHas('plan', fn ($q) => $q->where('status', ContentEmployeePlan::STATUS_SCHEDULED))
+            ->when($onlyPlan, fn ($q) => $q->where('plan_id', $onlyPlan->id))
+            ->orderBy('scheduled_for')
+            ->limit($limit)
+            ->get();
+
+        $created = 0;
+        $contexts = [];
+        $touchedPlans = [];
+
+        foreach ($items as $item) {
+            $claimed = ContentEmployeePlanItem::query()
+                ->whereKey($item->id)
+                ->where('status', ContentEmployeePlanItem::STATUS_QUEUED)
+                ->update(['status' => ContentEmployeePlanItem::STATUS_GENERATING]);
+
+            if ($claimed === 0) {
+                continue;
+            }
+
+            $item->refresh();
+            $touchedPlans[$item->plan_id] = true;
+
+            if ($item->scheduled_for === null || $item->scheduled_for->lt($missedBefore)) {
+                $this->markMissed($item, 'Planned time passed before the post could be created.');
+
+                continue;
+            }
+
+            try {
+                $context = $contexts[$item->plan_id] ??= $this->itemCreationContext($item->plan);
+
+                if ($this->createPostForItem($item, $context)) {
+                    $created++;
+                }
+            } catch (\Throwable $e) {
+                report($e);
+                $this->markItemFailed($item, 'Could not create the post: '.$e->getMessage());
+            }
+        }
+
+        foreach (array_keys($touchedPlans) as $planId) {
+            $plan = ContentEmployeePlan::query()->find($planId);
+            if ($plan) {
+                $this->refreshPlanProgress($plan);
+            }
+        }
+
+        return $created;
+    }
+
+    public function generationLeadMinutes(): int
+    {
+        return max(0, (int) config('promotion.content_employee.generation_lead_minutes', 60));
+    }
+
+    /**
+     * @return array{plan: ContentEmployeePlan, user: User, funnel: Funnel, cta: array<string, mixed>, connected: list<string>, generation_base: array<string, mixed>}
+     */
+    private function itemCreationContext(ContentEmployeePlan $plan): array
+    {
+        $user = User::query()->findOrFail($plan->user_id);
+        $funnel = Funnel::query()->findOrFail($plan->funnel_id);
+        $funnel->loadMissing('campaign', 'settings', 'user');
+
+        return [
+            'plan' => $plan,
+            'user' => $user,
+            'funnel' => $funnel,
+            'cta' => $this->ctaResolver->resolve($funnel),
+            'connected' => $this->platformCatalog->connectedPlatformKeys((int) $user->id),
+            'generation_base' => $this->generationContextBase($funnel, $plan),
+        ];
+    }
+
+    /**
+     * @param  array{plan: ContentEmployeePlan, user: User, funnel: Funnel, cta: array<string, mixed>, connected: list<string>, generation_base: array<string, mixed>}  $context
+     */
+    private function createPostForItem(ContentEmployeePlanItem $item, array $context): bool
+    {
+        $formatKey = $item->format_key;
+        $spec = $this->formatCatalog->format($formatKey);
+        if ($spec === null) {
+            $this->markItemFailed($item, 'Unknown content format '.$formatKey);
+
+            return false;
+        }
+
+        $platform = $this->mapPlatformForPromotion((string) ($spec['platform'] ?? $item->platform));
+        if (! in_array($platform, $context['connected'], true)) {
+            $this->markItemFailed($item, 'No connected account for '.$platform);
+
+            return false;
+        }
+
+        $contentType = $this->formatCatalog->mapToPromotionContentType($formatKey);
+
+        $post = FunnelPromotionPost::query()->create([
+            'user_id' => $context['user']->id,
+            'funnel_id' => $context['funnel']->id,
+            'topic' => $item->topic,
+            'content_type' => $contentType,
+            'platforms' => [$platform],
+            'publish_mode' => FunnelPromotionPost::MODE_AUTO_PUBLISH,
+            'status' => FunnelPromotionPost::STATUS_GENERATING,
+            'cta_url' => $context['cta']['url'],
+            'cta_label' => $context['cta']['label'],
+            'scheduled_for' => $item->scheduled_for,
+            'timezone' => (string) config('promotion.default_timezone', 'UTC'),
+            'generation_context' => array_merge($context['generation_base'], [
+                'content_format' => $formatKey,
+                'angle' => $item->angle,
+                'include_text' => true,
+                'include_image' => $contentType === FunnelPromotionPost::TYPE_IMAGE,
+                'source' => 'content_employee',
+                'conversion_goal' => 'Drive measurable growth — clicks, saves, and sign-ups. Specific beats generic.',
+            ]),
+            'metadata' => [
+                'format_key' => $formatKey,
+                'content_employee_plan_id' => $context['plan']->id,
+                'content_employee_item_id' => $item->id,
+                'format_spec' => $spec,
+                'media_spec' => $this->formatCatalog->mediaSpec($spec),
+            ],
+        ]);
+
+        $item->update([
+            'promotion_post_id' => $post->id,
+            'status' => ContentEmployeePlanItem::STATUS_GENERATING,
+        ]);
+
+        $this->generationDispatcher->dispatch(
+            $post,
+            $this->generationDispatcher->generationTypesForPost($post),
+        );
+
+        return true;
+    }
+
+    private function markMissed(ContentEmployeePlanItem $item, string $reason): void
+    {
+        $item->update([
+            'status' => ContentEmployeePlanItem::STATUS_MISSED,
+            'metadata' => array_merge((array) ($item->metadata ?? []), ['error' => $reason]),
+        ]);
+    }
+
+    private function markItemFailed(ContentEmployeePlanItem $item, string $reason): void
+    {
+        $item->update([
+            'status' => ContentEmployeePlanItem::STATUS_FAILED,
+            'metadata' => array_merge((array) ($item->metadata ?? []), ['error' => $reason]),
+        ]);
+    }
+
+    private function refreshPlanProgress(ContentEmployeePlan $plan): void
+    {
+        $counts = $plan->items()
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        $pending = (int) ($counts[ContentEmployeePlanItem::STATUS_QUEUED] ?? 0);
+        $summary = array_merge((array) data_get($plan->meta, 'execute_summary', []), [
+            'queued' => $pending,
+            'created' => $plan->items()->whereNotNull('promotion_post_id')->count(),
+            'missed' => (int) ($counts[ContentEmployeePlanItem::STATUS_MISSED] ?? 0),
+            'skipped' => (int) ($counts[ContentEmployeePlanItem::STATUS_FAILED] ?? 0),
+        ]);
+
+        $plan->update([
+            'status' => $pending === 0 ? ContentEmployeePlan::STATUS_COMPLETED : ContentEmployeePlan::STATUS_SCHEDULED,
+            'meta' => array_merge((array) ($plan->meta ?? []), ['execute_summary' => $summary]),
+        ]);
     }
 
     /**
@@ -263,7 +403,7 @@ final class ContentEmployeePlanService
      */
     public function planPayload(ContentEmployeePlan $plan): array
     {
-        $plan->loadMissing(['items', 'campaign', 'funnel']);
+        $plan->loadMissing(['items.promotionPost:id,status', 'campaign', 'funnel']);
 
         return [
             'id' => $plan->id,
@@ -285,6 +425,8 @@ final class ContentEmployeePlanService
                 'angle' => $item->angle,
                 'scheduled_for' => $item->scheduled_for?->toIso8601String(),
                 'status' => $item->status,
+                'post_status' => $item->promotionPost?->status,
+                'error' => data_get($item->metadata, 'error'),
                 'promotion_post_id' => $item->promotion_post_id,
                 'format_label' => $this->formatCatalog->format($item->format_key)['label'] ?? $item->format_key,
             ])->values()->all(),

@@ -28,6 +28,8 @@ type PlanItem = {
     angle: string | null;
     scheduled_for: string | null;
     status: string;
+    post_status?: string | null;
+    error?: string | null;
     format_label: string;
     promotion_post_id: number | null;
 };
@@ -44,6 +46,13 @@ type Plan = {
         topic_source_label?: string;
         has_campaign_knowledge?: boolean;
         planning_brief?: string | null;
+        execute_summary?: {
+            queued?: number;
+            created?: number;
+            missed?: number;
+            skipped?: number;
+            lead_minutes?: number;
+        };
     };
     campaign: { id: number; name: string } | null;
     items: PlanItem[];
@@ -279,13 +288,23 @@ function approvePlan(plan: Plan): void {
 }
 
 function executePlan(plan: Plan): void {
+    const now = Date.now();
+    const pastCount = plan.items.filter((item) => !item.scheduled_for || new Date(item.scheduled_for).getTime() <= now).length;
+    const pastNote = pastCount > 0
+        ? `\n\n${pastCount} item(s) are already past their planned time and will be skipped.`
+        : '';
+
+    if (!confirm(`Schedule this plan? Each post is created about 1 hour before its planned time and published automatically.${pastNote}`)) {
+        return;
+    }
+
     executingPlanId.value = plan.id;
     router.post(
         `/growth/content-employee/plans/${plan.id}/execute`,
         {},
         {
             preserveScroll: true,
-            onSuccess: () => toast.success('Posts created — generation queued in background.'),
+            onSuccess: () => toast.success('Plan scheduled — posts will be created and published at their planned times.'),
             onError: (errors) => {
                 const msg = (errors as Record<string, string>).plan;
                 if (msg) toast.error(msg);
@@ -302,8 +321,55 @@ function deletePlan(plan: Plan): void {
 
 function statusBadgeClass(status: string): string {
     if (status === 'completed' || status === 'approved') return 'border-blue-200 bg-blue-50 text-blue-700';
-    if (status === 'executing') return 'border-indigo-200 bg-indigo-50 text-indigo-700';
+    if (status === 'executing' || status === 'scheduled') return 'border-indigo-200 bg-indigo-50 text-indigo-700';
     return 'border-amber-200 bg-amber-50 text-amber-700';
+}
+
+function itemStatus(item: PlanItem): { label: string; classes: string } {
+    const muted = 'border-slate-200 bg-slate-50 text-slate-600';
+    const active = 'border-indigo-200 bg-indigo-50 text-indigo-700';
+    const done = 'border-blue-200 bg-blue-50 text-blue-700';
+    const bad = 'border-rose-200 bg-rose-50 text-rose-700';
+
+    if (item.promotion_post_id && item.post_status) {
+        const map: Record<string, { label: string; classes: string }> = {
+            generating: { label: 'Creating…', classes: active },
+            scheduled: { label: 'Ready · publishes on time', classes: active },
+            ready: { label: 'Ready', classes: done },
+            publishing: { label: 'Publishing…', classes: active },
+            published: { label: 'Published', classes: done },
+            failed: { label: 'Failed', classes: bad },
+        };
+
+        return map[item.post_status] ?? { label: item.post_status, classes: muted };
+    }
+
+    switch (item.status) {
+        case 'queued':
+            return { label: 'Scheduled', classes: active };
+        case 'missed':
+            return { label: 'Missed', classes: muted };
+        case 'failed':
+            return { label: 'Failed', classes: bad };
+        case 'planned':
+            return { label: 'Planned', classes: muted };
+        default:
+            return { label: item.status, classes: muted };
+    }
+}
+
+function planProgress(plan: Plan): string | null {
+    const summary = plan.meta?.execute_summary;
+    if (!summary || !['scheduled', 'completed'].includes(plan.status)) return null;
+
+    const parts = [
+        `${summary.queued ?? 0} waiting`,
+        `${summary.created ?? 0} created`,
+    ];
+    if (summary.missed) parts.push(`${summary.missed} missed`);
+    if (summary.skipped) parts.push(`${summary.skipped} failed`);
+
+    return parts.join(' · ');
 }
 
 function dayLabel(iso: string | null): string {
@@ -678,7 +744,13 @@ function contextHintClasses(tone: 'teal' | 'amber' | 'slate'): string {
                         </Badge>
                         <Badge v-else variant="outline" class="text-[0.6rem]">Traffic formats</Badge>
                     </div>
-                    <p class="mt-1 text-xs text-muted-foreground">{{ plan.items.length }} content items</p>
+                    <p class="mt-1 text-xs text-muted-foreground">
+                        {{ plan.items.length }} content items
+                        <template v-if="planProgress(plan)"> · {{ planProgress(plan) }}</template>
+                    </p>
+                    <p v-if="plan.status === 'scheduled'" class="mt-0.5 text-[0.65rem] text-muted-foreground">
+                        Each post is created about {{ plan.meta?.execute_summary?.lead_minutes ?? 60 }} minutes before its time and published automatically.
+                    </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <Button
@@ -696,7 +768,7 @@ function contextHintClasses(tone: 'teal' | 'amber' | 'slate'): string {
                         :disabled="executingPlanId === plan.id || !hasConnectedAccounts"
                         @click="executePlan(plan)"
                     >
-                        {{ executingPlanId === plan.id ? 'Queuing posts…' : 'Create posts' }}
+                        {{ executingPlanId === plan.id ? 'Scheduling…' : 'Schedule posts' }}
                     </Button>
                     <Button
                         v-if="plan.status !== 'executing'"
@@ -738,7 +810,14 @@ function contextHintClasses(tone: 'teal' | 'amber' | 'slate'): string {
                                 <p v-if="item.angle" class="mt-0.5 line-clamp-1 text-[0.65rem] text-muted-foreground">{{ item.angle }}</p>
                             </td>
                             <td class="px-4 py-2.5">
-                                <Badge variant="outline" class="text-[0.6rem] capitalize">{{ item.status }}</Badge>
+                                <Badge
+                                    variant="outline"
+                                    class="text-[0.6rem]"
+                                    :class="itemStatus(item).classes"
+                                    :title="item.error ?? undefined"
+                                >
+                                    {{ itemStatus(item).label }}
+                                </Badge>
                             </td>
                         </tr>
                     </tbody>

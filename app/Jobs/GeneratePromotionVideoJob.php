@@ -102,7 +102,7 @@ class GeneratePromotionVideoJob implements ShouldQueue
 
         $post->update([
             'primary_asset_id' => $videoAsset->id,
-            'status' => $isReady ? FunnelPromotionPost::STATUS_READY : FunnelPromotionPost::STATUS_GENERATING,
+            'status' => $isReady ? $post->generatedStatus() : FunnelPromotionPost::STATUS_GENERATING,
             'last_error' => null,
             'text_body' => $post->text_body ?: ($result['script'] ?? null),
         ]);

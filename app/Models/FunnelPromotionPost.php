@@ -78,6 +78,20 @@ class FunnelPromotionPost extends Model
         ];
     }
 
+    /**
+     * Status once generation finishes. Scheduled posts are picked up by DispatchDuePromotionPostsJob;
+     * auto-publish posts whose time already passed still publish on the next dispatch run.
+     */
+    public function generatedStatus(): string
+    {
+        if ($this->scheduled_for !== null
+            && ($this->scheduled_for->isFuture() || $this->publish_mode === self::MODE_AUTO_PUBLISH)) {
+            return self::STATUS_SCHEDULED;
+        }
+
+        return self::STATUS_READY;
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
