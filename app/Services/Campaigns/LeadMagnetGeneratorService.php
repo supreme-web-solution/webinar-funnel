@@ -298,9 +298,8 @@ class LeadMagnetGeneratorService
         $ctx = $this->knowledge->contextForGeneration($campaign);
         $timeout = $this->openRouter->leadMagnetTimeout();
 
-        $affiliateUrl = $this->trackedLinks
-            ->createForCampaignAffiliate($campaign, 'Lead magnet footer CTA')
-            ->publicUrl();
+        $cloaked = $this->trackedLinks->createForCampaignAffiliate($campaign, 'Lead magnet footer CTA');
+        $affiliateUrl = $cloaked->publicUrl();
 
         $state = [
             'status' => $existing['status'] ?? 'generating',
