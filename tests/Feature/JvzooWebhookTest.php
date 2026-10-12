@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AccessGrantedMail;
 use App\Mail\WelcomeMail;
 use App\Models\User;
 use Database\Seeders\JvzooAccessSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Sleep;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -136,7 +139,44 @@ class JvzooWebhookTest extends TestCase
         $this->assertTrue($user->hasRole('Reseller'));
         $this->assertTrue($user->can('view_app_features'));
         $this->assertTrue($user->can('access_reseller'));
-        Mail::assertSentCount(1);
+        Mail::assertSent(WelcomeMail::class, 1);
+        Mail::assertSent(AccessGrantedMail::class, fn (AccessGrantedMail $mail): bool => $mail->hasTo('stack@example.com')
+            && $mail->roleName === 'Reseller');
+    }
+
+    public function test_welcome_email_is_retried_after_a_transient_failure(): void
+    {
+        Sleep::fake();
+        $attempts = 0;
+        $mailer = \Mockery::mock();
+        $mailer->shouldReceive('send')->andReturnUsing(function () use (&$attempts): void {
+            $attempts++;
+            if ($attempts === 1) {
+                throw new \RuntimeException('Too many requests');
+            }
+        });
+        Mail::shouldReceive('to')->andReturn($mailer);
+
+        $this->post('/ipn/jvzoo', $this->sale('retry@example.com', '455425'))
+            ->assertOk()
+            ->assertJson(['email_sent' => true]);
+
+        $this->assertSame(2, $attempts);
+    }
+
+    public function test_resend_welcome_command_sets_new_password_and_emails_it(): void
+    {
+        Mail::fake();
+        $this->post('/ipn/jvzoo', $this->sale('again@example.com', '455425'))->assertOk();
+        $oldHash = User::query()->where('email', 'again@example.com')->value('password');
+
+        $this->artisan('jvzoo:resend-welcome', ['email' => 'again@example.com', '--force' => true])
+            ->expectsOutputToContain('Login details sent')
+            ->assertSuccessful();
+
+        $user = User::query()->where('email', 'again@example.com')->firstOrFail();
+        $this->assertNotSame($oldHash, $user->password);
+        Mail::assertSent(WelcomeMail::class, fn (WelcomeMail $mail): bool => Hash::check($mail->password, $user->password));
     }
 
     public function test_refund_only_revokes_the_refunded_product_role(): void
@@ -193,8 +233,9 @@ class JvzooWebhookTest extends TestCase
 
     public function test_sale_still_succeeds_when_welcome_email_fails(): void
     {
+        Sleep::fake();
         Mail::shouldReceive('to')
-            ->once()
+            ->times(3)
             ->andThrow(new \RuntimeException('Resend API error'));
 
         $this->post('/ipn/jvzoo', $this->sale('mail-fail@example.com', '455425'))

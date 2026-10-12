@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\AccessGrantedMail;
 use App\Mail\WelcomeMail;
 use App\Models\Product;
 use App\Models\User;
@@ -9,6 +10,7 @@ use App\Services\Jvzoo\JvzooIpnVerifier;
 use App\Services\Jvzoo\JvzooUserProvisioner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
@@ -23,14 +25,26 @@ class JVZooWebhookController extends Controller
     public function handle(Request $request): JsonResponse
     {
         if (! $this->verifier->verify($request)) {
+            Log::warning('[JVZoo IPN] Verification failed', [
+                'product' => $request->input('cproditem'),
+                'email' => $request->input('ccustemail'),
+            ]);
+
             return response()->json(['message' => 'Verification Failed!'], 403);
         }
 
         $data = $request->all();
         $type = isset($data['ctransaction']) ? (string) $data['ctransaction'] : 'SALE';
-        $email = isset($data['ccustemail']) ? (string) $data['ccustemail'] : null;
+        $email = isset($data['ccustemail']) ? trim((string) $data['ccustemail']) : null;
         $transactionId = isset($data['ctransreceipt']) ? (string) $data['ctransreceipt'] : null;
         $productId = isset($data['cproditem']) ? (int) $data['cproditem'] : null;
+
+        Log::info('[JVZoo IPN] Received', [
+            'type' => $type,
+            'product' => $productId,
+            'email' => $email,
+            'transaction' => $transactionId,
+        ]);
 
         if (! $productId || ! $email || ! $transactionId) {
             return response()->json(['message' => 'Item does not exist.'], 422);
@@ -52,43 +66,67 @@ class JVZooWebhookController extends Controller
     private function handleSale(string $email, string $roleName): JsonResponse
     {
         $result = $this->provisioner->provision($email, $roleName);
+        $user = $result['user'];
 
         if ($result['created'] && is_string($result['password'])) {
-            $emailSent = $this->sendWelcomeEmails($result['user'], $result['password'], $email);
+            $error = $this->sendMail($email, new WelcomeMail($user, $result['password']));
+
+            $notifyEmail = config('jvzoo.welcome_notify_email');
+            if (is_string($notifyEmail) && $notifyEmail !== '') {
+                $this->sendMail($notifyEmail, new WelcomeMail($user, $result['password']));
+            }
+
+            Log::info('[JVZoo IPN] Sale — account created', [
+                'email' => $email,
+                'role' => $roleName,
+                'user_id' => $user->id,
+                'welcome_email_sent' => $error === null,
+            ]);
 
             return response()->json([
-                'message' => $emailSent
+                'message' => $error === null
                     ? 'User created successfully!'
                     : 'User created successfully, but the welcome email could not be sent.',
-                'email_sent' => $emailSent,
+                'email_sent' => $error === null,
             ]);
         }
 
-        return response()->json(['message' => 'User role updated successfully!']);
+        $error = $this->sendMail($email, new AccessGrantedMail($user, $roleName));
+
+        Log::info('[JVZoo IPN] Sale — access added to existing account', [
+            'email' => $email,
+            'role' => $roleName,
+            'user_id' => $user->id,
+            'access_email_sent' => $error === null,
+        ]);
+
+        return response()->json([
+            'message' => 'User role updated successfully!',
+            'email_sent' => $error === null,
+        ]);
     }
 
-    private function sendWelcomeEmails(User $user, string $password, string $buyerEmail): bool
+    /**
+     * Retries briefly so a transient mail API error (e.g. Resend rate limit) doesn't lose the buyer's login details.
+     *
+     * @return string|null The final error message, or null when sent.
+     */
+    private function sendMail(string $to, Mailable $mail): ?string
     {
         try {
-            Mail::to($buyerEmail)->send(new WelcomeMail($user, $password));
+            retry(3, fn () => Mail::to($to)->send($mail), fn (int $attempt): int => $attempt * 1000);
 
-            $notifyEmail = config('jvzoo.welcome_notify_email');
-
-            if (is_string($notifyEmail) && $notifyEmail !== '') {
-                Mail::to($notifyEmail)->send(new WelcomeMail($user, $password));
-            }
-
-            return true;
+            return null;
         } catch (Throwable $exception) {
-            Log::error('JVZoo welcome email failed to send.', [
-                'buyer_email' => $buyerEmail,
-                'user_id' => $user->id,
+            Log::error('[JVZoo IPN] Email failed to send.', [
+                'to' => $to,
+                'mail' => class_basename($mail),
                 'exception' => $exception->getMessage(),
             ]);
 
             report($exception);
 
-            return false;
+            return $exception->getMessage();
         }
     }
 
