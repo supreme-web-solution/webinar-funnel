@@ -34,6 +34,18 @@ return [
             'title' => 'Webinar Room & Chat',
             'video_url' => 'https://youtu.be/Fuc9hDYyZio',
         ],
+        [
+            'title' => 'Dashboard, Command Center & Campaigns',
+            'video_url' => 'https://vimeo.com/1234814633',
+        ],
+        [
+            'title' => 'Webinar Funnel, Leads & Link Cloaking',
+            'video_url' => 'https://vimeo.com/1234979748',
+        ],
+        [
+            'title' => 'Opportunities, Domains, Traffic Hub & Content Employee',
+            'video_url' => 'https://vimeo.com/1234981167',
+        ],
     ],
 
 ];

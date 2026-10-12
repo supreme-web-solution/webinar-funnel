@@ -21,6 +21,7 @@ type NavGroup = { label: string; items: NavItem[] };
 const appName = useAppName();
 
 const mainNav: NavItem[] = [
+    { title: 'Tutorial', href: '/tutorial', icon: 'heroicons:academic-cap' },
     { title: 'Dashboard', href: '/dashboard', icon: 'heroicons:squares-2x2' },
     { title: 'Command Center', href: '/command-center', icon: 'heroicons:chat-bubble-left-right' },
     { title: 'Campaigns', href: '/campaigns', icon: 'heroicons:rocket-launch' },
@@ -46,7 +47,6 @@ const growthNav: NavItem[] = [
 
 const connectNav: NavItem[] = [
     { title: 'Integrations', href: '/integrations', icon: 'heroicons:puzzle-piece' },
-    { title: 'Tutorial', href: '/tutorial', icon: 'heroicons:academic-cap' },
 ];
 
 const upgradesNav: Array<NavItem & { permission: string }> = [
