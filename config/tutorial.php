@@ -19,22 +19,6 @@ return [
 
     'sections' => [
         [
-            'title' => 'Desktop & Settings',
-            'video_url' => 'https://youtu.be/CtonhLehd20',
-        ],
-        [
-            'title' => 'Templates, Funnel & Webinar Intro',
-            'video_url' => 'https://youtu.be/ylLN6q-zpNY',
-        ],
-        [
-            'title' => 'Integration, Promotion & Ads',
-            'video_url' => 'https://youtu.be/Do50lfQzryI',
-        ],
-        [
-            'title' => 'Webinar Room & Chat',
-            'video_url' => 'https://youtu.be/Fuc9hDYyZio',
-        ],
-        [
             'title' => 'Dashboard, Command Center & Campaigns',
             'video_url' => 'https://vimeo.com/1234814633',
         ],
