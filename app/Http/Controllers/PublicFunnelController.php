@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Campaign;
+use App\Models\Funnel;
 use App\Models\FunnelVideoViewStat;
+use App\Services\Campaigns\CampaignPublicUrlService;
 use App\Services\Funnels\FunnelPageViewRecorder;
 use App\Services\Funnels\PublicFunnelResolver;
 use App\Services\Funnels\WebinarPublicChatService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
@@ -36,11 +40,23 @@ class PublicFunnelController extends Controller
         Request $request,
         string $username,
         string $slug,
-        PublicFunnelResolver $resolver
-    ): Response|HttpResponse {
+        PublicFunnelResolver $resolver,
+        CampaignPublicUrlService $publicUrls,
+    ): Response|HttpResponse|RedirectResponse {
         $funnel = $resolver->resolve($username, $slug);
 
+        // Campaign traffic-hub URLs were wrongly published to social posts.
+        // Redirect them to the real campaign squeeze page so old LinkedIn links still work.
+        if ($funnel && ($funnel->meta['campaign_variant'] ?? null) === 'traffic') {
+            return $this->redirectTrafficHubToCampaign($funnel, $username, $publicUrls);
+        }
+
         if (! $funnel) {
+            $trafficHub = $this->findTrafficHubFunnel($username, $slug);
+            if ($trafficHub) {
+                return $this->redirectTrafficHubToCampaign($trafficHub, $username, $publicUrls);
+            }
+
             abort(404);
         }
 
@@ -163,5 +179,33 @@ class PublicFunnelController extends Controller
         $stat->save();
 
         return response()->json(['ok' => true]);
+    }
+
+    protected function findTrafficHubFunnel(string $username, string $slug): ?Funnel
+    {
+        return Funnel::query()
+            ->where('slug', $slug)
+            ->where('meta->campaign_variant', 'traffic')
+            ->whereHas('user', fn ($query) => $query->where('username', $username))
+            ->with(['campaign', 'user:id,username'])
+            ->first();
+    }
+
+    protected function redirectTrafficHubToCampaign(
+        Funnel $funnel,
+        string $username,
+        CampaignPublicUrlService $publicUrls,
+    ): RedirectResponse {
+        $funnel->loadMissing(['campaign', 'user']);
+        $campaign = $funnel->campaign;
+
+        abort_unless($campaign instanceof Campaign, 404);
+        abort_unless($campaign->status === 'published', 404);
+
+        $owner = is_string($funnel->user?->username) && $funnel->user->username !== ''
+            ? $funnel->user->username
+            : $username;
+
+        return redirect()->away($publicUrls->pageUrl($campaign, $owner, 'squeeze'));
     }
 }
