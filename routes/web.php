@@ -16,6 +16,7 @@ use App\Http\Controllers\FunnelPromotionController;
 use App\Http\Controllers\FunnelPromotionTopicController;
 use App\Http\Controllers\FunnelTrafficController;
 use App\Http\Controllers\GrowthToolsController;
+use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\IntegrationCoachingController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\JVZooWebhookController;
@@ -324,6 +325,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('users', [UserManagementController::class, 'store'])->name('users.store');
     Route::patch('users/{user}', [UserManagementController::class, 'update'])->name('users.update');
     Route::delete('users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
+    Route::post('users/{user}/impersonate', [ImpersonationController::class, 'start'])->name('users.impersonate');
+    Route::post('impersonation/leave', [ImpersonationController::class, 'leave'])->name('impersonation.leave');
 });
 
 require __DIR__.'/settings.php';

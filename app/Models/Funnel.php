@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasPublicUuid;
+use App\Services\Campaigns\CampaignPublicUrlService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -122,6 +123,11 @@ class Funnel extends Model
             return false;
         }
 
+        // Traffic hub is an internal draft workspace — public CTAs must use the campaign squeeze page.
+        if ($variant === 'traffic') {
+            return true;
+        }
+
         return $this->campaign->type === Campaign::TYPE_WEBINAR && $variant === 'webinar';
     }
 
@@ -137,15 +143,12 @@ class Funnel extends Model
 
         if ($this->usesCampaignSqueezeOptin()) {
             if (! $this->relationLoaded('campaign')) {
-                $this->load('campaign:id,slug,type');
+                $this->load('campaign:id,slug,type,meta');
             }
 
             if ($this->campaign) {
-                return route('public.campaign.page', [
-                    'username' => $username,
-                    'slug' => $this->campaign->slug,
-                    'page' => 'squeeze',
-                ]);
+                return app(CampaignPublicUrlService::class)
+                    ->pageUrl($this->campaign, $username, 'squeeze');
             }
         }
 

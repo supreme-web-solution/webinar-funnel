@@ -63,6 +63,7 @@ const search = ref(props.filters.search ?? '');
 const showCreate = ref(false);
 const editingUser = ref<UserRow | null>(null);
 const deletingId = ref<number | null>(null);
+const impersonatingId = ref<number | null>(null);
 
 let debounce: ReturnType<typeof setTimeout>;
 
@@ -174,6 +175,19 @@ function deleteUser(user: UserRow): void {
         preserveScroll: true,
         onFinish: () => {
             deletingId.value = null;
+        },
+    });
+}
+
+function impersonateUser(user: UserRow): void {
+    if (!confirm(`Impersonate "${user.name}" (${user.email})?\n\nYou will see the app as them until you click Back to admin.`)) {
+        return;
+    }
+
+    impersonatingId.value = user.id;
+    router.post(`/users/${user.id}/impersonate`, {}, {
+        onFinish: () => {
+            impersonatingId.value = null;
         },
     });
 }
@@ -302,6 +316,21 @@ function deleteUser(user: UserRow): void {
                             <td class="px-4 py-3 text-xs text-muted-foreground">{{ fmtDate(user.created_at) }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-2">
+                                    <Button
+                                        variant="brand-outline"
+                                        size="sm"
+                                        class="h-7 text-xs"
+                                        :disabled="impersonatingId === user.id"
+                                        title="Open the app as this user"
+                                        @click="impersonateUser(user)"
+                                    >
+                                        <Icon
+                                            :icon="impersonatingId === user.id ? 'heroicons:arrow-path' : 'heroicons:eye'"
+                                            class="size-3.5"
+                                            :class="impersonatingId === user.id ? 'animate-spin' : ''"
+                                        />
+                                        Impersonate
+                                    </Button>
                                     <Button variant="brand-outline" size="sm" class="h-7 text-xs" @click="openEdit(user)">
                                         <Icon icon="heroicons:pencil-square" class="size-3.5" />
                                         Edit

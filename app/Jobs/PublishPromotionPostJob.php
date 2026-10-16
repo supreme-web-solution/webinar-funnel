@@ -4,9 +4,10 @@ namespace App\Jobs;
 
 use App\Models\FunnelPromotionPost;
 use App\Models\FunnelPromotionScheduleEvent;
+use App\Services\Promotion\PromotionCtaResolverService;
 use App\Services\Promotion\PromotionGenerationCoordinator;
-use App\Services\Promotion\PromotionPublishGuard;
 use App\Services\Promotion\PromotionPublisherService;
+use App\Services\Promotion\PromotionPublishGuard;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -29,11 +30,14 @@ class PublishPromotionPostJob implements ShouldQueue
         PromotionPublisherService $publisherService,
         PromotionPublishGuard $publishGuard,
         PromotionGenerationCoordinator $generation,
+        PromotionCtaResolverService $ctaResolver,
     ): void {
-        $post = FunnelPromotionPost::query()->with(['funnel.settings', 'primaryAsset'])->find($this->postId);
+        $post = FunnelPromotionPost::query()->with(['funnel.settings', 'funnel.campaign', 'funnel.user', 'primaryAsset'])->find($this->postId);
         if (! $post) {
             return;
         }
+
+        $post = $ctaResolver->ensurePostCta($post);
 
         $republish = $generation->canRepublish($post);
         if ($post->status === FunnelPromotionPost::STATUS_PUBLISHED && ! $republish) {

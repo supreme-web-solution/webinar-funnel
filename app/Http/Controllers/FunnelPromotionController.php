@@ -73,6 +73,15 @@ class FunnelPromotionController extends Controller
 
         $posts = $query->paginate(15)->withQueryString();
 
+        $ctaResolver = app(PromotionCtaResolverService::class);
+        if (($funnel->meta['campaign_variant'] ?? null) === 'traffic') {
+            foreach ($posts as $post) {
+                if ($post instanceof FunnelPromotionPost) {
+                    $ctaResolver->ensurePostCta($post);
+                }
+            }
+        }
+
         $this->refreshStaleCampaignTopicSuggestions($funnel, app(PromotionTopicSuggestionService::class));
 
         $statsBase = FunnelPromotionPost::query()->where('funnel_id', $funnel->id);
@@ -101,7 +110,7 @@ class FunnelPromotionController extends Controller
                 'name' => $funnel->name,
                 'status' => $funnel->status,
             ],
-            'defaultCta' => app(PromotionCtaResolverService::class)->resolve($funnel->loadMissing('user')),
+            'defaultCta' => $ctaResolver->resolve($funnel->loadMissing(['user', 'campaign'])),
             'posts' => $posts,
             'stats' => [
                 'total' => (clone $statsBase)->count(),

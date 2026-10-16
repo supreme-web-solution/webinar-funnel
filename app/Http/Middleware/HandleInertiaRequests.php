@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\ImpersonationController;
 use App\Services\Auth\UserRoleAssigner;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -53,6 +54,7 @@ class HandleInertiaRequests extends Middleware
                 'is_admin' => $currentEmail !== '' && $adminEmails->contains($currentEmail),
                 'permissions' => $permissions,
                 'can_view_app_features' => in_array('view_app_features', $permissions, true),
+                'impersonating' => $request->session()->has(ImpersonationController::SESSION_KEY),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'commandCenter' => $user ? [

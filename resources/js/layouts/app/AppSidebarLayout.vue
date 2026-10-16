@@ -4,6 +4,7 @@ import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppSidebarHeader from '@/components/AppSidebarHeader.vue';
 import CommandCenterWidget from '@/components/command-center/CommandCenterWidget.vue';
+import ImpersonationBanner from '@/components/ImpersonationBanner.vue';
 import { Toaster } from '@/components/ui/sonner';
 import type { BreadcrumbItem } from '@/types';
 
@@ -20,6 +21,7 @@ withDefaults(defineProps<Props>(), {
     <AppShell variant="sidebar">
         <AppSidebar />
         <AppContent variant="sidebar" class="min-h-0 flex-1 overflow-x-hidden">
+            <ImpersonationBanner />
             <AppSidebarHeader :breadcrumbs="breadcrumbs" />
             <div class="flex min-h-0 flex-1 flex-col">
                 <slot />
