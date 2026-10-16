@@ -147,11 +147,7 @@ return [
         Features::registration(),
         Features::resetPasswords(),
         Features::emailVerification(),
-        Features::twoFactorAuthentication([
-            'confirm' => true,
-            'confirmPassword' => true,
-            // 'window' => 0
-        ]),
+        // Two-factor auth disabled — several buyers hit a broken challenge screen and could not log in.
     ],
 
 ];
