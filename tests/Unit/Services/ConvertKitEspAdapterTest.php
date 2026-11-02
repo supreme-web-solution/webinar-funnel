@@ -28,7 +28,7 @@ class ConvertKitEspAdapterTest extends TestCase
                 && $request->hasHeader('X-Kit-Api-Key', 'kit_live_test_key')
                 && $request['email_address'] === 'lead@example.com'
                 && $request['first_name'] === 'Ada'
-                && $request['state'] === 'inactive';
+                && $request['state'] === 'active';
         });
 
         Http::assertSent(function ($request) {

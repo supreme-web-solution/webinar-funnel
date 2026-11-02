@@ -158,8 +158,9 @@ class ConvertKitEspAdapter implements EspProviderAdapter, EspSequenceAdapter
             ->post(self::V4.'/subscribers', array_filter([
                 'email_address' => $email,
                 'first_name' => $firstName,
-                // Inactive lets the form send its confirmation email. Kit ignores state on updates.
-                'state' => 'inactive',
+                // Confirmed on create. Kit will not change state later, and unconfirmed
+                // subscribers stay off the form's subscriber count.
+                'state' => 'active',
             ], fn ($value) => $value !== ''));
 
         if (! $create->successful()) {

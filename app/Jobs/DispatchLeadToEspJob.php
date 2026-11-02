@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class DispatchLeadToEspJob implements ShouldQueue
@@ -61,14 +62,24 @@ class DispatchLeadToEspJob implements ShouldQueue
                 $funnelIntegration->provider_list_config ?? []
             );
 
+            $accepted = (bool) ($result['ok'] ?? false);
+
             DispatchJobLog::query()->create([
                 'lead_event_id' => $leadEvent->id,
                 'provider' => $integration->provider,
-                'status' => ($result['ok'] ?? false) ? 'success' : 'failed',
+                'status' => $accepted ? 'success' : 'failed',
                 'attempt' => $this->attempts(),
                 'request_payload' => $payload,
                 'response_payload' => $result,
-                'error_message' => ($result['ok'] ?? false) ? null : ($result['message'] ?? null),
+                'error_message' => $accepted ? null : ($result['message'] ?? null),
+            ]);
+
+            Log::log($accepted ? 'info' : 'warning', '[EspDispatch] '.($accepted ? 'Subscriber accepted' : 'Subscriber rejected'), [
+                'provider' => $integration->provider,
+                'lead_id' => $leadEvent->lead->id,
+                'lead_event_id' => $leadEvent->id,
+                'message' => $result['message'] ?? null,
+                'status' => $result['status'] ?? null,
             ]);
         } catch (\Throwable $exception) {
             DispatchJobLog::query()->create([

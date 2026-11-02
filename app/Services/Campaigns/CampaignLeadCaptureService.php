@@ -116,7 +116,7 @@ class CampaignLeadCaptureService
             }
         }
 
-        Log::info('[CampaignLeadCapture] Lead synced to /leads + ESP', [
+        Log::info('[CampaignLeadCapture] Lead saved; ESP dispatch queued', [
             'campaign_id' => $campaign->id,
             'funnel_id' => $funnel->id,
             'lead_id' => $lead->id,
