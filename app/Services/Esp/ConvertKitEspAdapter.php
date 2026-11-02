@@ -180,11 +180,55 @@ class ConvertKitEspAdapter implements EspProviderAdapter, EspSequenceAdapter
             return $this->failure($add, 'Subscriber was created but could not be added to Kit form '.$formId.'.');
         }
 
+        $formName = $this->formName($apiKey, $formId);
+
         return [
             'ok' => true,
-            'message' => 'Subscribed to Kit form '.$formId.'.',
+            'message' => $formName !== null
+                ? 'Subscribed to '.$formName.'.'
+                : 'Subscribed to Kit form '.$formId.'.',
             'status' => $add->status(),
         ];
+    }
+
+    private function formName(string $apiKey, string $formId): ?string
+    {
+        $response = Http::timeout(8)
+            ->withHeaders($this->v4Headers($apiKey))
+            ->acceptJson()
+            ->get(self::V4.'/forms/'.$formId);
+
+        $name = $response->json('form.name') ?? $response->json('name');
+
+        if (is_string($name) && trim($name) !== '') {
+            return trim($name);
+        }
+
+        $list = Http::timeout(8)
+            ->withHeaders($this->v4Headers($apiKey))
+            ->acceptJson()
+            ->get(self::V4.'/forms', [
+                'status' => 'all',
+                'per_page' => 500,
+            ]);
+
+        $forms = $list->json('forms');
+
+        if (! is_array($forms)) {
+            return null;
+        }
+
+        foreach ($forms as $form) {
+            if (! is_array($form) || (string) ($form['id'] ?? '') !== $formId) {
+                continue;
+            }
+
+            $listedName = $form['name'] ?? null;
+
+            return is_string($listedName) && trim($listedName) !== '' ? trim($listedName) : null;
+        }
+
+        return null;
     }
 
     private function createV4Broadcast(string $apiKey, string $subject, string $html): Response
