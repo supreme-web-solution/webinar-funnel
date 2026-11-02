@@ -73,15 +73,15 @@ const PROVIDERS = [
     },
     {
         id: 'convertkit',
-        label: 'ConvertKit',
+        label: 'Kit (ConvertKit)',
         icon: 'simple-icons:kit',
         logo: 'https://cdn.simpleicons.org/kit/FB6970',
         color: '#FB6970',
         bg: '#1a1a1a',
         desc: 'Creator-focused email platform',
         fields: [
-            { key: 'api_secret', label: 'API Secret', type: 'password', hint: 'Account Settings → Advanced → API secret' },
-            { key: 'form_id',    label: 'Form ID',    type: 'text',     hint: 'The numeric ID of the form to subscribe to' },
+            { key: 'api_key', label: 'API Key', type: 'password', hint: 'Kit → Settings → Developer → V4 Keys → Add a new key. Copy it immediately; Kit hides it after you leave the page.' },
+            { key: 'form_id', label: 'Form ID', type: 'text', hint: 'The number in the form URL under Grow → Landing Pages & Forms. A legacy V3 API secret still works if it was saved earlier.' },
         ],
     },
     {

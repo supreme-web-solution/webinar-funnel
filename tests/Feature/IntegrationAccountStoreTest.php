@@ -62,4 +62,25 @@ class IntegrationAccountStoreTest extends TestCase
 
         $this->assertSame('secret-token', $account->credentials['api_key'] ?? null);
     }
+
+    public function test_convertkit_can_be_saved_with_a_v4_api_key(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $this->post('/integrations', [
+            'provider' => 'convertkit',
+            'name' => 'Kit',
+            'credentials' => [
+                'api_key' => 'kit_live_test_key',
+                'form_id' => '42',
+            ],
+            'config' => [],
+        ])->assertRedirect();
+
+        $account = IntegrationAccount::query()->where('user_id', $user->id)->first();
+
+        $this->assertSame('kit_live_test_key', $account->credentials['api_key'] ?? null);
+        $this->assertSame('42', $account->credentials['form_id'] ?? null);
+    }
 }

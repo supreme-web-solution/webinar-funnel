@@ -30,7 +30,8 @@ class IntegrationAccountStoreRequest extends FormRequest
 
             // ── Shared API key (ESP providers + optional webhook auth token) ─
             'credentials.api_key' => [
-                Rule::requiredIf(in_array($provider, ['mailchimp', 'getresponse', 'sendinblue', 'brevo', 'activecampaign'], true)),
+                Rule::requiredIf(fn () => in_array($provider, ['mailchimp', 'getresponse', 'sendinblue', 'brevo', 'activecampaign'], true)
+                    || ($provider === 'convertkit' && blank($this->input('credentials.api_secret')))),
                 'nullable', 'string', 'max:500',
             ],
 
@@ -48,7 +49,7 @@ class IntegrationAccountStoreRequest extends FormRequest
 
             // ── ConvertKit ───────────────────────────────────────────────────
             'credentials.api_secret' => [
-                Rule::requiredIf($provider === 'convertkit'),
+                Rule::requiredIf(fn () => $provider === 'convertkit' && blank($this->input('credentials.api_key'))),
                 'nullable', 'string', 'max:500',
             ],
             'credentials.form_id' => [
