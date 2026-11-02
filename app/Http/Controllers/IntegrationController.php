@@ -31,6 +31,7 @@ class IntegrationController extends Controller
                 'status',
                 'attempt',
                 'error_message',
+                'response_payload',
                 'lead_event_id',
                 'created_at',
             ]);
@@ -49,15 +50,20 @@ class IntegrationController extends Controller
 
         return Inertia::render('integrations/Index', [
             'accounts' => $accounts,
-            'dispatchLogs' => $dispatchLogs->map(fn ($log) => [
-                'id' => $log->id,
-                'provider' => $log->provider,
-                'status' => $log->status,
-                'attempt' => $log->attempt,
-                'error_message' => $log->error_message,
-                'funnel_name' => $log->leadEvent?->lead?->funnel?->name,
-                'created_at' => $log->created_at?->toIso8601String(),
-            ])->values(),
+            'dispatchLogs' => $dispatchLogs->map(function ($log) {
+                $response = is_array($log->response_payload) ? $log->response_payload : [];
+
+                return [
+                    'id' => $log->id,
+                    'provider' => $log->provider,
+                    'status' => $log->status,
+                    'attempt' => $log->attempt,
+                    'error_message' => $log->error_message,
+                    'message' => $log->error_message ?: ($response['message'] ?? null),
+                    'funnel_name' => $log->leadEvent?->lead?->funnel?->name,
+                    'created_at' => $log->created_at?->toIso8601String(),
+                ];
+            })->values(),
             'queueHealth' => $queueHealth,
         ]);
     }

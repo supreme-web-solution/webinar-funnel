@@ -31,6 +31,7 @@ interface DispatchLog {
     status: string;
     attempt: number;
     error_message: string | null;
+    message: string | null;
     funnel_name: string | null;
     created_at: string | null;
 }
@@ -608,31 +609,25 @@ const statCards = computed(() => [
             <Card class="border border-border/60 bg-white shadow-sm">
                 <CardHeader class="pb-3">
                     <CardTitle class="text-sm font-semibold">Dispatch monitor</CardTitle>
-                    <CardDescription class="text-xs">Track queued, successful, and failed ESP deliveries in real time.</CardDescription>
+                    <CardDescription class="text-xs">Queued, accepted, and failed deliveries for every connected provider.</CardDescription>
                 </CardHeader>
-                <!-- <CardContent class="space-y-3">
-                    <div class="rounded-lg border bg-muted/20 p-3 text-xs">
-                        <p class="font-semibold text-foreground">Queue worker reminder</p>
-                        <p class="mt-1 text-muted-foreground">
-                            Run <code class="font-mono text-[11px]">php artisan queue:work</code> in production so queued lead sync jobs are processed.
-                        </p>
-                        <div class="mt-2 flex items-center gap-2">
-                            <Badge class="bg-amber-50 text-amber-700 border-amber-200">Queued: {{ queueHealth.queued }}</Badge>
-                            <Badge
-                                :class="queueHealth.failed_last_24h > 0
-                                    ? 'bg-red-50 text-red-700 border-red-200'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200'"
-                            >
-                                Failed (24h): {{ queueHealth.failed_last_24h }}
-                            </Badge>
-                        </div>
+                <CardContent class="space-y-3">
+                    <div class="flex items-center gap-2">
+                        <Badge class="bg-amber-50 text-amber-700 border-amber-200">Queued: {{ queueHealth.queued }}</Badge>
+                        <Badge
+                            :class="queueHealth.failed_last_24h > 0
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : 'bg-blue-50 text-blue-700 border-blue-200'"
+                        >
+                            Failed (24h): {{ queueHealth.failed_last_24h }}
+                        </Badge>
                     </div>
 
                     <div v-if="dispatchLogs.length === 0" class="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
                         No dispatch activity yet.
                     </div>
 
-                    <div v-else class="space-y-2">
+                    <div v-else class="max-h-80 space-y-2 overflow-y-auto overscroll-contain">
                         <div
                             v-for="log in dispatchLogs"
                             :key="log.id"
@@ -658,10 +653,16 @@ const statCards = computed(() => [
                                     {{ log.status }}
                                 </Badge>
                             </div>
-                            <p v-if="log.error_message" class="mt-2 text-xs text-destructive">{{ log.error_message }}</p>
+                            <p
+                                v-if="log.message"
+                                class="mt-2 text-xs"
+                                :class="log.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'"
+                            >
+                                {{ log.message }}
+                            </p>
                         </div>
                     </div>
-                </CardContent> -->
+                </CardContent>
             </Card>
 
             <Card class="border border-border/60 bg-white shadow-sm">
