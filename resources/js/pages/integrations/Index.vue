@@ -12,6 +12,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import PasswordInput from '@/components/PasswordInput.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -319,8 +320,8 @@ const statCards = computed(() => [
 
             <!-- ── Connect integration modal ── -->
             <Dialog :open="showForm" @update:open="onConnectDialogChange">
-                <DialogContent class="max-h-[90vh] max-w-2xl gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-xl">
-                    <div class="bg-linear-to-br from-blue-50 via-blue-50/60 to-white px-5 py-4">
+                <DialogContent class="flex max-h-[90vh] max-w-2xl flex-col gap-0 overflow-hidden rounded-xl border border-border/60 p-0 shadow-xl">
+                    <div class="shrink-0 bg-linear-to-br from-blue-50 via-blue-50/60 to-white px-5 py-4">
                         <DialogHeader class="text-left">
                             <DialogTitle class="text-base">Connect a new integration</DialogTitle>
                             <DialogDescription class="text-xs">
@@ -329,7 +330,7 @@ const statCards = computed(() => [
                         </DialogHeader>
                     </div>
 
-                    <div class="space-y-5 bg-white px-5 py-4">
+                    <div class="min-h-0 max-h-[calc(90vh-5.5rem)] space-y-5 overflow-y-auto overscroll-contain bg-white px-5 py-4">
                         <!-- Step 1: Provider grid -->
                         <div>
                             <p class="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
@@ -426,7 +427,17 @@ const statCards = computed(() => [
                                         {{ field.label }}
                                         <span v-if="!('optional' in field && field.optional)" class="text-destructive">*</span>
                                     </Label>
+                                    <PasswordInput
+                                        v-if="field.type === 'password'"
+                                        :key="`${selectedId}-${field.key}`"
+                                        v-model="form.credentials[field.key]"
+                                        :placeholder="field.label"
+                                        autocomplete="off"
+                                        class="h-9 text-sm font-mono"
+                                        :required="!('optional' in field && field.optional)"
+                                    />
                                     <Input
+                                        v-else
                                         v-model="form.credentials[field.key]"
                                         :type="field.type"
                                         :placeholder="field.label"
