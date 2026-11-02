@@ -12,7 +12,7 @@ class ConvertKitEspAdapterTest extends TestCase
     {
         Http::fake([
             'https://api.kit.com/v4/subscribers' => Http::response(['subscriber' => ['id' => 1]], 201),
-            'https://api.kit.com/v4/forms/42/subscribers' => Http::response(['subscriber' => ['id' => 1]], 201),
+            'https://api.kit.com/v4/forms/42/subscribers/1' => Http::response(['subscriber' => ['id' => 1]], 201),
         ]);
 
         $result = (new ConvertKitEspAdapter())->subscribe(
@@ -22,6 +22,7 @@ class ConvertKitEspAdapterTest extends TestCase
         );
 
         $this->assertTrue($result['ok']);
+        $this->assertSame('Subscribed to Kit form 42.', $result['message']);
 
         Http::assertSent(function ($request) {
             return $request->url() === 'https://api.kit.com/v4/subscribers'
@@ -32,8 +33,8 @@ class ConvertKitEspAdapterTest extends TestCase
         });
 
         Http::assertSent(function ($request) {
-            return $request->url() === 'https://api.kit.com/v4/forms/42/subscribers'
-                && $request['email_address'] === 'lead@example.com';
+            return $request->url() === 'https://api.kit.com/v4/forms/42/subscribers/1'
+                && $request->method() === 'POST';
         });
 
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'api.convertkit.com/v2'));

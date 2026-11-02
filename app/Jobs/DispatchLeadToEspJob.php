@@ -61,26 +61,23 @@ class DispatchLeadToEspJob implements ShouldQueue
                 $funnelIntegration->provider_list_config ?? []
             );
 
-            $accepted = (bool) ($result['ok'] ?? false);
-
-            DispatchJobLog::query()->create([
-                'lead_event_id' => $leadEvent->id,
-                'provider' => $integration->provider,
-                'status' => $accepted ? 'success' : 'failed',
-                'attempt' => $this->attempts(),
-                'request_payload' => $payload,
-                'response_payload' => $result,
-                'error_message' => $accepted ? null : ($result['message'] ?? null),
-            ]);
+            $this->recordDispatch(
+                $leadEvent->id,
+                $integration->provider,
+                (bool) ($result['ok'] ?? false) ? 'success' : 'failed',
+                $payload,
+                $result,
+                (bool) ($result['ok'] ?? false) ? null : ($result['message'] ?? null),
+            );
         } catch (\Throwable $exception) {
-            DispatchJobLog::query()->create([
-                'lead_event_id' => $leadEvent->id,
-                'provider' => $integration->provider,
-                'status' => 'failed',
-                'attempt' => $this->attempts(),
-                'request_payload' => $payload,
-                'error_message' => $exception->getMessage(),
-            ]);
+            $this->recordDispatch(
+                $leadEvent->id,
+                $integration->provider,
+                'failed',
+                $payload,
+                null,
+                $exception->getMessage(),
+            );
 
             throw $exception;
         }
@@ -97,19 +94,56 @@ class DispatchLeadToEspJob implements ShouldQueue
             ->with('integrationAccount:id,provider')
             ->find($this->funnelIntegrationId)?->integrationAccount?->provider ?? 'unknown';
 
-        DispatchJobLog::query()->create([
-            'lead_event_id' => $leadEvent->id,
-            'provider' => $provider,
-            'status' => 'failed',
-            'attempt' => $this->attempts(),
-            'request_payload' => [
+        $this->recordDispatch(
+            $leadEvent->id,
+            $provider,
+            'failed',
+            [
                 'funnel_integration_id' => $this->funnelIntegrationId,
                 'lead_event_id' => $this->leadEventId,
             ],
-            'error_message' => $exception->getMessage(),
-            'response_payload' => [
-                'message' => 'Queue job exhausted all retries.',
-            ],
+            ['message' => 'Queue job exhausted all retries.'],
+            $exception->getMessage(),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $requestPayload
+     * @param  array<string, mixed>|null  $responsePayload
+     */
+    private function recordDispatch(
+        int $leadEventId,
+        string $provider,
+        string $status,
+        array $requestPayload,
+        ?array $responsePayload,
+        ?string $errorMessage,
+    ): void {
+        $attributes = [
+            'status' => $status,
+            'attempt' => $this->attempts(),
+            'request_payload' => $requestPayload,
+            'response_payload' => $responsePayload,
+            'error_message' => $errorMessage,
+        ];
+
+        $queued = DispatchJobLog::query()
+            ->where('lead_event_id', $leadEventId)
+            ->where('provider', $provider)
+            ->where('status', 'queued')
+            ->latest('id')
+            ->first();
+
+        if ($queued) {
+            $queued->update($attributes);
+
+            return;
+        }
+
+        DispatchJobLog::query()->create([
+            'lead_event_id' => $leadEventId,
+            'provider' => $provider,
+            ...$attributes,
         ]);
     }
 }

@@ -22,6 +22,7 @@ class IntegrationController extends Controller
 
         $dispatchLogs = DispatchJobLog::query()
             ->whereHas('leadEvent.lead.funnel', fn ($q) => $q->where('user_id', auth()->id()))
+            ->withoutSettledQueueRows()
             ->with(['leadEvent.lead.funnel:id,name'])
             ->latest()
             ->limit(25)
@@ -39,6 +40,7 @@ class IntegrationController extends Controller
         $queueHealth = [
             'queued' => DispatchJobLog::query()
                 ->whereHas('leadEvent.lead.funnel', fn ($q) => $q->where('user_id', auth()->id()))
+                ->withoutSettledQueueRows()
                 ->where('status', 'queued')
                 ->count(),
             'failed_last_24h' => DispatchJobLog::query()

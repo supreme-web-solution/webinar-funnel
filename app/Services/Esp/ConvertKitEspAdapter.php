@@ -155,32 +155,34 @@ class ConvertKitEspAdapter implements EspProviderAdapter, EspSequenceAdapter
         $create = Http::timeout(10)
             ->withHeaders($this->v4Headers($apiKey))
             ->acceptJson()
+            ->asJson()
             ->post(self::V4.'/subscribers', array_filter([
                 'email_address' => $email,
                 'first_name' => $firstName,
-                // Confirmed on create. Kit will not change state later, and unconfirmed
-                // subscribers stay off the form's subscriber count.
+                // Confirmed on create so they show in Kit's subscriber list.
+                // Kit will not change this state on a later request.
                 'state' => 'active',
             ], fn ($value) => $value !== ''));
 
-        if (! $create->successful()) {
+        $subscriberId = $create->json('subscriber.id');
+
+        if (! $create->successful() || ! is_numeric($subscriberId)) {
             return $this->failure($create, 'Could not create the Kit subscriber.');
         }
 
         $add = Http::timeout(10)
             ->withHeaders($this->v4Headers($apiKey))
             ->acceptJson()
-            ->post(self::V4."/forms/{$formId}/subscribers", [
-                'email_address' => $email,
-            ]);
+            ->withBody('{}', 'application/json')
+            ->post(self::V4."/forms/{$formId}/subscribers/{$subscriberId}");
 
-        if (! $add->successful()) {
-            return $this->failure($add, 'Subscriber was created but could not be added to the Kit form.');
+        if (! $add->successful() || ! is_numeric($add->json('subscriber.id'))) {
+            return $this->failure($add, 'Subscriber was created but could not be added to Kit form '.$formId.'.');
         }
 
         return [
             'ok' => true,
-            'message' => 'Subscribed.',
+            'message' => 'Subscribed to Kit form '.$formId.'.',
             'status' => $add->status(),
         ];
     }
