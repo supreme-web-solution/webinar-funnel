@@ -131,6 +131,7 @@ type ProviderId = (typeof PROVIDERS)[number]['id'];
 
 /* ─── State ──────────────────────────────────────────────────────────────── */
 const showForm      = ref(false);
+const showDispatchMonitor = ref(false);
 const selectedId    = ref<ProviderId | null>(null);
 const testResults   = ref<Record<number, { ok: boolean; message: string } | null>>({});
 const testingId     = ref<number | null>(null);
@@ -605,24 +606,66 @@ const statCards = computed(() => [
                 </div>
             </div>
 
-            <!-- ── Provider reference ── -->
             <Card class="border border-border/60 bg-white shadow-sm">
                 <CardHeader class="pb-3">
-                    <CardTitle class="text-sm font-semibold">Dispatch monitor</CardTitle>
-                    <CardDescription class="text-xs">Queued, accepted, and failed deliveries for every connected provider.</CardDescription>
+                    <CardTitle class="text-sm font-semibold">Supported providers</CardTitle>
+                    <CardDescription class="text-xs">All providers use API key authentication — no OAuth redirects required.</CardDescription>
                 </CardHeader>
-                <CardContent class="space-y-3">
-                    <div class="flex items-center gap-2">
-                        <Badge class="bg-amber-50 text-amber-700 border-amber-200">Queued: {{ queueHealth.queued }}</Badge>
-                        <Badge
-                            :class="queueHealth.failed_last_24h > 0
-                                ? 'bg-red-50 text-red-700 border-red-200'
-                                : 'bg-blue-50 text-blue-700 border-blue-200'"
+                <CardContent>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                        <div
+                            v-for="p in PROVIDERS"
+                            :key="p.id"
+                            class="flex items-center gap-2.5 rounded-xl border border-border/60 bg-white px-3 py-2 shadow-sm"
                         >
-                            Failed (24h): {{ queueHealth.failed_last_24h }}
-                        </Badge>
+                            <div
+                                class="flex size-7 items-center justify-center rounded-md shrink-0"
+                                :style="{ background: p.bg }"
+                            >
+                                <img
+                                    v-if="providerLogo(p)"
+                                    :src="providerLogo(p)!"
+                                    :alt="p.label"
+                                    class="size-3.5 object-contain"
+                                />
+                                <Icon v-else :icon="p.icon" class="size-3.5" :style="{ color: p.color }" />
+                            </div>
+                            <span class="text-xs font-medium truncate text-foreground">{{ p.label }}</span>
+                        </div>
                     </div>
+                </CardContent>
+            </Card>
 
+            <Card class="border border-border/60 bg-white shadow-sm">
+                <CardHeader class="pb-3">
+                    <button
+                        type="button"
+                        class="flex w-full flex-wrap items-center justify-between gap-3 text-left"
+                        :aria-expanded="showDispatchMonitor"
+                        @click="showDispatchMonitor = !showDispatchMonitor"
+                    >
+                        <div class="min-w-0">
+                            <CardTitle class="text-sm font-semibold">Dispatch monitor</CardTitle>
+                            <CardDescription class="text-xs">Queued, accepted, and failed deliveries for every connected provider.</CardDescription>
+                        </div>
+                        <span class="flex flex-wrap items-center gap-2">
+                            <Badge class="bg-amber-50 text-amber-700 border-amber-200">Queued: {{ queueHealth.queued }}</Badge>
+                            <Badge
+                                :class="queueHealth.failed_last_24h > 0
+                                    ? 'bg-red-50 text-red-700 border-red-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'"
+                            >
+                                Failed (24h): {{ queueHealth.failed_last_24h }}
+                            </Badge>
+                            <Icon
+                                icon="heroicons:chevron-down"
+                                class="size-4 text-muted-foreground transition-transform"
+                                :class="showDispatchMonitor ? 'rotate-180' : ''"
+                            />
+                        </span>
+                    </button>
+                </CardHeader>
+                <CardContent v-if="showDispatchMonitor" class="space-y-3">
                     <div v-if="dispatchLogs.length === 0" class="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
                         No dispatch activity yet.
                     </div>
@@ -660,36 +703,6 @@ const statCards = computed(() => [
                             >
                                 {{ log.message }}
                             </p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card class="border border-border/60 bg-white shadow-sm">
-                <CardHeader class="pb-3">
-                    <CardTitle class="text-sm font-semibold">Supported providers</CardTitle>
-                    <CardDescription class="text-xs">All providers use API key authentication — no OAuth redirects required.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                        <div
-                            v-for="p in PROVIDERS"
-                            :key="p.id"
-                            class="flex items-center gap-2.5 rounded-xl border border-border/60 bg-white px-3 py-2 shadow-sm"
-                        >
-                            <div
-                                class="flex size-7 items-center justify-center rounded-md shrink-0"
-                                :style="{ background: p.bg }"
-                            >
-                                <img
-                                    v-if="providerLogo(p)"
-                                    :src="providerLogo(p)!"
-                                    :alt="p.label"
-                                    class="size-3.5 object-contain"
-                                />
-                                <Icon v-else :icon="p.icon" class="size-3.5" :style="{ color: p.color }" />
-                            </div>
-                            <span class="text-xs font-medium truncate text-foreground">{{ p.label }}</span>
                         </div>
                     </div>
                 </CardContent>
